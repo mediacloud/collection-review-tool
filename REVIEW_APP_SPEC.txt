@@ -1,0 +1,183 @@
+Review App Prototype – Specification (MediaCloud API client)
+1. Purpose / Scope
+Goal: A small, standalone web app that lets users review sources in a MediaCloud collection and export the results as CSV for ingestion by the existing MediaCloud web-search app.
+Key behaviors:
+User enters a MediaCloud collection ID.
+On starting a review:
+If a review for that collection already exists and is not completed, load it.
+Otherwise, create a new review, and fetch the current source list for that collection via the official MediaCloud API client, then seed the review with those sources.
+User steps through sources and marks them keep/remove, and can propose new sources.
+At the end, user can download a CSV summarizing all decisions (keep/remove/add) for later use (scripts/operators updating the main app).
+Out of scope:
+Any automated write-back to MediaCloud (this app only reads via the client and outputs CSV).
+Complex auth/permissions integration with MediaCloud users.
+Comments, multi-stage approvals, or real-time collaboration.
+2. Stack & High-Level Architecture
+Backend: Flask + SQLAlchemy
+DB: SQLite (dev) with easy switch to Postgres (prod).
+Responsibilities:
+Managing review and review-item state.
+Using the MediaCloud Python API client to fetch collection sources.
+Serving JSON APIs to the frontend.
+Generating CSV exports.
+Frontend: Svelte SPA
+Talks to the Flask JSON API.
+Provides:
+“Start / Resume Review” by MediaCloud collection ID.
+A review UI to walk through sources and record decisions.
+UI for proposing new sources.
+CSV download when done.
+3. Integration with MediaCloud (via API client)
+3.1 Library
+Use the official MediaCloud Python API client:
+https://github.com/mediacloud/api-client
+Install in the backend (e.g., pip install mediacloud or as per repo instructions).
+3.2 Auth
+Configure an API key/token via environment variable, e.g. MEDIACLOUD_API_KEY.
+In Flask app startup:
+Create a MediaCloud API client instance with that key.
+For the prototype, assume this key has sufficient read permissions to fetch sources for the relevant collections.
+3.3 Fetching sources for a collection
+Use the API client to fetch all sources in a given collection by collection_id.
+Exact method / call will depend on the client, but the interface should look roughly like:
+  # pseudo-code – agent should replace with actual client call  mc = MediaCloud(api_key)  sources = mc.sources_in_collection(collection_id)
+The important part: for each returned source we need at least:
+source_id (MediaCloud’s source id)
+label or name
+homepage (URL)
+Seed ReviewItems from this list:
+source_id = source['id']
+source_label = source['label'] or source['name']
+source_homepage = source['homepage']
+decision = 'undecided'
+is_new_source = false
+4. Data Model
+4.1 Review
+id (PK, int)
+collection_id (int, required) – MediaCloud collection ID
+status (enum string): pending, in_progress, completed
+created_at (datetime)
+updated_at (datetime)
+name (string, optional)
+notes (text, optional)
+Uniqueness/semantics:
+At most one active review per collection_id:
+If any review exists with this collection_id and status != 'completed', reuse it on /start.
+Otherwise, create a new one.
+4.2 ReviewItem
+id (PK, int)
+review_id (FK → Review)
+source_id (int, nullable) – MediaCloud source ID (null for proposed-new ones).
+source_label (string, optional)
+source_homepage (string, optional)
+is_new_source (bool, default false)
+decision (enum string): undecided, keep, remove, add
+decided_at (datetime, nullable)
+4.3 User (optional)
+Can be omitted for v0; treat this as a single-user internal tool, or front it with simple basic auth/reverse-proxy.
+5. Backend API Endpoints
+All JSON except CSV export.
+5.1 Start or get review
+POST /api/reviews/start
+Body:
+    { "collection_id": 123 }
+Behavior:
+Look up existing review for collection_id=123 with status != 'completed'.
+If found: return it.
+Else:
+Create new Review with status='in_progress'.
+Use the MediaCloud API client to fetch all sources in that collection.
+For each source, create ReviewItem as described in 3.3.
+Return the new Review.
+Response:
+    {      "review": {        "id": 1,        "collection_id": 123,        "status": "in_progress",        "created_at": "...",        "updated_at": "...",        "name": null,        "notes": null      }    }
+Error cases:
+If the MediaCloud API call fails (invalid collection ID, auth, network):
+Return 400 or 502 with a simple JSON error message.
+5.2 Get review & stats
+GET /api/reviews/<review_id>
+Response:
+    {      "review": {        "id": 1,        "collection_id": 123,        "status": "in_progress",        "created_at": "...",        "updated_at": "...",        "stats": {          "total": 100,          "keep": 10,          "remove": 5,          "add": 2,          "undecided": 83        }      }    }
+5.3 List items
+GET /api/reviews/<review_id>/items
+Query params:
+page, page_size (optional)
+decision (optional filter: undecided, keep, remove, add)
+Response:
+    {      "items": [        {          "id": 10,          "source_id": 42,          "source_label": "Example News",          "source_homepage": "https://example.com",          "is_new_source": false,          "decision": "undecided",          "decided_at": null        },        ...      ],      "total": 100    }
+5.4 Decide on an item
+POST /api/reviews/<review_id>/items/<item_id>/decide
+Body:
+    { "decision": "keep" }
+Allowed decisions:
+Existing sources: keep or remove.
+New/proposed sources: add (and optionally remove/keep if desired).
+Updates decision and decided_at.
+Returns updated item.
+5.5 Propose a new source
+POST /api/reviews/<review_id>/items
+Body:
+    {      "source_label": "New Outlet",      "source_homepage": "https://new-outlet.example"    }
+Behavior:
+Create ReviewItem with:
+source_id = null
+is_new_source = true
+decision = "add" (or undecided, simple is add)
+Response: created item JSON.
+5.6 Complete a review
+POST /api/reviews/<review_id>/complete
+Behavior:
+Optionally verify that there are no undecided items.
+Set status='completed'.
+Update updated_at; recompute and store stats if you cache them.
+Response: updated review JSON.
+5.7 Export CSV
+GET /api/reviews/<review_id>/export
+Returns CSV with headers similar to:
+collection_id
+review_id
+source_id
+source_label
+source_homepage
+decision
+is_new_source
+This file is for operators/scripts to apply changes in MediaCloud via its own APIs or workflows.
+6. Frontend (Svelte) UX
+6.1 Start / Resume Review (/)
+Input: “MediaCloud Collection ID” (text or number).
+Button: “Start / Resume Review”.
+On submit:
+POST /api/reviews/start.
+On success, navigate to /reviews/:reviewId.
+6.2 Review page (/reviews/:reviewId)
+On load:
+GET /api/reviews/:reviewId.
+GET /api/reviews/:reviewId/items?decision=undecided&page=1.
+UI:
+Header with collection_id, status, and stats.
+Current undecided item viewer:
+Show source_label and source_homepage (link).
+Buttons:
+Keep → POST decide with decision="keep" and then load next undecided.
+Remove → POST decide with decision="remove" and then next.
+Propose new source form:
+source_label, source_homepage.
+On submit, POST /items to create a new add item.
+Complete review button:
+POST /complete.
+After success, show “Download CSV” button.
+6.3 Completed review
+If status='completed':
+Show link/button to /api/reviews/:reviewId/export.
+Optionally show a read-only table of decisions.
+7. Configuration & Ops
+Env vars:
+DATABASE_URL
+MEDIACLOUD_API_KEY
+On startup:
+Instantiate a MediaCloud API client with MEDIACLOUD_API_KEY.
+Error handling:
+Surface simple, clear JSON errors when:
+MC client fails (bad key, network).
+Collection ID not found / no sources.
+d
