@@ -16,9 +16,11 @@ APP_BASE=undp-collections-review
 # Git remote name used for Dokku
 DOKKU_GIT_REMOTE=dokku
 
-# Dokku SSH host (adjust to match your Dokku host).
-# Can be overridden at runtime: FQDN=my-dokku-host ./dokku-scripts/push.sh
-FQDN=${FQDN:-mcweb.mediacloud.org}
+# Dokku SSH host (for git pushes).
+# Default assumes you are running these scripts *on the Dokku host itself*,
+# so we talk to dokku@localhost. You can override, e.g.:
+#   FQDN=my-dokku-host ./dokku-scripts/push.sh
+FQDN=${FQDN:-localhost}
 
 # INSTANCE is provided by the caller (prod, staging, or username)
 if [ -z "$INSTANCE" ]; then
