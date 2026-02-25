@@ -123,6 +123,67 @@ npm run dev
 ```
 Frontend runs on `http://localhost:5173` (proxies API to backend)
 
+## Dokku Deployment
+
+The app includes Dokku deployment scripts modeled after the MediaCloud `web-search` project ([`instance.sh`](https://github.com/mediacloud/web-search/blob/main/dokku-scripts/instance.sh), [`push.sh`](https://github.com/mediacloud/web-search/blob/main/dokku-scripts/push.sh)) and the `deploy-dokku.sh` script from SourceInspector ([link](https://github.com/mediacloud/SourceInspector/blob/main/scripts/deploy-dokku.sh)).
+
+### Runtime Model
+
+- Single Dokku app per environment (prod, staging, per-developer).
+- Flask serves both:
+  - API under `/api/*`
+  - Built Svelte SPA from `frontend/dist` for all other routes.
+- Dokku process types (from `Procfile`):
+  - `web`: `cd backend && gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 3`
+  - `release`: `cd backend && flask --app app:create_app db upgrade`
+- Frontend build is run via `app.json`:
+  - `scripts.dokku.predeploy`: `cd frontend && npm ci && npm run build`
+
+### Environments
+
+- `prod` git branch → `INSTANCE=prod` → Dokku app `undp-collections-review-prod`
+- `staging` git branch → `INSTANCE=staging` → Dokku app `undp-collections-review-staging`
+- any other git branch → `INSTANCE=$USER` → Dokku app `undp-collections-review-$USER`
+
+Domains (`ALLOWED_HOSTS`) are derived from `INSTANCE` in `dokku-scripts/common.sh` and applied via `dokku domains:add`.
+
+### Scripts
+
+- `dokku-scripts/common.sh`
+  - Computes `APP`, `PG_SVC`, `ALLOWED_HOSTS` from `INSTANCE`.
+  - Defines `APP_BASE`, `DOKKU_GIT_REMOTE`, and `FQDN` (Dokku SSH host).
+  - Provides `check_not_root` helper.
+
+- `dokku-scripts/instance.sh`
+  - Usage: `instance.sh create|destroy prod|staging|USERNAME`
+  - On `create`:
+    - Ensures Dokku app `$APP` exists.
+    - Ensures postgres service `$PG_SVC` exists and is linked to `$APP`.
+    - Configures domains based on `ALLOWED_HOSTS`.
+    - Ensures the local git remote `$DOKKU_GIT_REMOTE` points at `dokku@$FQDN:$APP`.
+  - On `destroy`:
+    - Destroys the Dokku app and the associated postgres service.
+
+- `dokku-scripts/push.sh`
+  - Determines `INSTANCE` from the current git branch:
+    - `prod` / `staging` → same-named instance.
+    - anything else → `$USER`.
+  - Sources `common.sh` to compute `APP` and related settings.
+  - Verifies the current branch is pushed and in sync with its upstream (unless `--unpushed` is used).
+  - Sets Dokku deploy branch for the app to `main` and pushes the current branch to `main` on the Dokku remote.
+
+### Typical Workflow
+
+1. One-time per environment:
+   - `dokku-scripts/instance.sh create prod`
+   - `dokku-scripts/instance.sh create staging`
+   - `dokku-scripts/instance.sh create $USER` (optional per-dev instance)
+2. On the Dokku host, set required env vars for each app (`MEDIACLOUD_API_KEY`, `SECRET_KEY`, etc.).
+3. For each deploy:
+   - Check out the target branch (`prod`, `staging`, or your feature branch).
+   - Ensure it is pushed to GitHub.
+   - Run `./dokku-scripts/push.sh`.
+
 ## Dependencies
 
 ### Backend (requirements.txt)

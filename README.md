@@ -80,7 +80,7 @@ The frontend will run on `http://localhost:5173` and proxy API requests to the b
 
 3. Open your browser and navigate to `http://localhost:5173`
 
-### Production Build
+### Production Build (Local)
 
 1. **Build the frontend**:
 ```bash
@@ -92,6 +92,81 @@ npm run build
 ```bash
 npm run preview
 ```
+
+### Dokku Deployment
+
+This project is designed to deploy to Dokku using helper scripts modeled after MediaCloud's `web-search` app ([`instance.sh`](https://github.com/mediacloud/web-search/blob/main/dokku-scripts/instance.sh), [`push.sh`](https://github.com/mediacloud/web-search/blob/main/dokku-scripts/push.sh)) and the simple Streamlit deploy script from SourceInspector ([`deploy-dokku.sh`](https://github.com/mediacloud/SourceInspector/blob/main/scripts/deploy-dokku.sh)).
+
+#### Overview
+
+- Backend (Flask) and frontend (Svelte) are deployed as a **single Dokku app**.
+- Flask serves the built Svelte SPA from `frontend/dist` and exposes the API under `/api/*`.
+- Dokku runs the app via a root-level `Procfile` using `gunicorn`.
+- Environments are mapped from git branches:
+  - `prod` branch → production instance
+  - `staging` branch → staging instance
+  - any other branch → per-developer instance (based on `$USER`)
+
+#### Key Files
+
+- `Procfile`
+  - `web: cd backend && gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 3`
+  - `release: cd backend && flask --app app:create_app db upgrade`
+- `app.json`
+  - Runs `npm ci && npm run build` in `frontend/` during Dokku's `predeploy` phase.
+- `dokku-scripts/common.sh`
+  - Shared config: `APP_BASE`, `DOKKU_GIT_REMOTE`, `FQDN`, `ALLOWED_HOSTS`, `PG_SVC`, etc.
+- `dokku-scripts/instance.sh`
+  - Creates/destroys Dokku apps and Postgres services for `prod`, `staging`, or a given username.
+  - Sets up domains and the Dokku git remote.
+- `dokku-scripts/push.sh`
+  - Chooses the Dokku instance based on the current git branch.
+  - Verifies the branch is pushed to its upstream (unless `--unpushed` is used).
+  - Pushes the current branch to the Dokku app's `main` deploy branch.
+
+#### One-Time Setup (per environment)
+
+On a machine with SSH access to the Dokku host:
+
+```bash
+cd UNDP_collections_inspector
+
+# Create production instance
+dokku-scripts/instance.sh create prod
+
+# Create staging instance
+dokku-scripts/instance.sh create staging
+
+# Optionally create a per-user dev instance
+dokku-scripts/instance.sh create $USER
+```
+
+Then, on the Dokku host, configure any required environment variables, for example:
+
+```bash
+dokku config:set undp-collections-review-prod MEDIACLOUD_API_KEY=... SECRET_KEY=...
+```
+
+#### Deploying
+
+1. Commit and push your changes to GitHub.
+2. Check out the branch you want to deploy:
+   - `prod` for production
+   - `staging` for staging
+   - any other branch for your per-user instance
+3. Run:
+
+```bash
+./dokku-scripts/push.sh
+```
+
+This will:
+
+- Verify the branch is pushed and in sync with its upstream (unless `--unpushed` is used).
+- Push the branch to the Dokku remote for the appropriate app.
+- Trigger a build that:
+  - Installs backend dependencies and runs database migrations (`release` process).
+  - Builds the frontend via `app.json`'s `predeploy` script.
 
 ## Usage
 
