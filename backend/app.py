@@ -2,6 +2,7 @@
 import os
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
+from flask_migrate import Migrate
 from config import get_config
 from database import init_db, db
 from routes.api import api_bp
@@ -25,6 +26,9 @@ def create_app():
     
     # Initialize database
     init_db(app)
+
+    # Initialize Flask-Migrate so `flask db` commands are available
+    Migrate(app, db)
     
     # Enable CORS for frontend
     CORS(app, resources={r"/api/*": {"origins": "*"}})
