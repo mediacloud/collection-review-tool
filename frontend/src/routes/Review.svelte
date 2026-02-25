@@ -5,7 +5,6 @@
     getReviewItems, 
     decideItem, 
     proposeNewSource, 
-    completeReview,
     getExportUrl,
     getRemovedSourcesExportUrl,
     getAddedSourcesExportUrl
@@ -60,9 +59,10 @@
 
     try {
       review = await getReview(reviewId);
-      if (review.status === 'completed') {
-        await loadAllItems();
-      } else {
+      // Always load all items so they're available for the "Show All Decisions" panel
+      await loadAllItems();
+      // Also load next undecided item if review is not completed
+      if (review.status !== 'completed') {
         await loadNextUndecidedItem();
       }
     } catch (err) {
@@ -178,25 +178,6 @@
     }
   }
 
-  async function handleComplete() {
-    if (!reviewId || loading) return;
-
-    if (!confirm('Are you sure you want to complete this review? You can still download the CSV after completion.')) {
-      return;
-    }
-
-    loading = true;
-    error = null;
-
-    try {
-      review = await completeReview(reviewId);
-    } catch (err) {
-      error = err.response?.data?.error || err.message || 'Failed to complete review';
-      console.error('Error completing review:', err);
-    } finally {
-      loading = false;
-    }
-  }
 </script>
 
 <div class="container">
@@ -219,117 +200,15 @@
       <div class="completed-message">
         <p>✓ Review completed! Download the CSV export below.</p>
       </div>
+    {/if}
 
-      <div class="export-section">
-        <h3>Export Files</h3>
-        <div class="export-links">
-          <a 
-            href={getExportUrl(reviewId)} 
-            download 
-            class="btn-download"
-          >
-            Download Main Export (Keep & Add Sources)
-          </a>
-          {#if review.stats && review.stats.remove > 0}
-            <a 
-              href={getRemovedSourcesExportUrl(reviewId)} 
-              download 
-              class="btn-download btn-download-secondary"
-            >
-              Download Removed Sources ({review.stats.remove})
-            </a>
-          {/if}
-          {#if review.stats && review.stats.add > 0}
-            <a 
-              href={getAddedSourcesExportUrl(reviewId)} 
-              download 
-              class="btn-download btn-download-secondary"
-            >
-              Download Added Sources ({review.stats.add})
-            </a>
-          {/if}
-        </div>
-      </div>
-
-      <div class="items-section">
-        <button 
-          class="btn-toggle" 
-          on:click={() => showAllItems = !showAllItems}
-        >
-          {showAllItems ? 'Hide' : 'Show'} All Decisions ({allItems.length})
-        </button>
-
-        {#if showAllItems && allItems.length > 0}
-          <div class="items-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Source Label</th>
-                  <th>Homepage</th>
-                  <th>MediaCloud</th>
-                  <th>Decision</th>
-                  <th>Type</th>
-                  <th>Removal Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each allItems as item}
-                  <tr>
-                    <td>{item.source_label || 'N/A'}</td>
-                    <td>
-                      {#if item.source_homepage}
-                        <a href={item.source_homepage} target="_blank" rel="noopener noreferrer">
-                          {item.source_homepage}
-                        </a>
-                      {:else}
-                        N/A
-                      {/if}
-                    </td>
-                    <td>
-                      {#if !item.is_new_source && item.source_id}
-                        <a 
-                          href={`https://search.mediacloud.org/sources/${item.source_id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="mediacloud-table-link"
-                        >
-                          View ↗
-                        </a>
-                      {:else}
-                        <span class="no-link">—</span>
-                      {/if}
-                    </td>
-                    <td>
-                      <span class="decision-badge decision-{item.decision}">
-                        {item.decision}
-                      </span>
-                    </td>
-                    <td>
-                      {item.is_new_source ? 'New Source' : 'Existing'}
-                    </td>
-                    <td>
-                      {#if item.decision === 'remove' && item.removal_reason}
-                        <span class="removal-reason" title={item.removal_reason}>
-                          {item.removal_reason}
-                        </span>
-                      {:else}
-                        <span class="no-reason">—</span>
-                      {/if}
-                    </td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
-        {/if}
-      </div>
-      {:else}
-        <SourceViewer 
-          item={currentItem}
-          onKeep={handleKeep}
-          onRemove={handleRemove}
-          {loading}
-        />
+    {#if review.status !== 'completed'}
+      <SourceViewer 
+        item={currentItem}
+        onKeep={handleKeep}
+        onRemove={handleRemove}
+        {loading}
+      />
 
       <NewSourceForm 
         onSubmit={handleNewSource}
@@ -342,17 +221,111 @@
         on:confirm={(e) => handleRemoveConfirm(e.detail)}
         on:close={handleRemoveCancel}
       />
-
-      <div class="actions">
-        <button 
-          class="btn-complete" 
-          on:click={handleComplete}
-          disabled={loading}
-        >
-          Complete Review
-        </button>
-      </div>
     {/if}
+
+    <div class="export-section">
+      <h3>Export Files</h3>
+      <div class="export-links">
+        <a 
+          href={getExportUrl(reviewId)} 
+          download 
+          class="btn-download"
+        >
+          Download Main Export (Keep & Add Sources)
+        </a>
+        {#if review.stats && review.stats.remove > 0}
+          <a 
+            href={getRemovedSourcesExportUrl(reviewId)} 
+            download 
+            class="btn-download btn-download-secondary"
+          >
+            Download Removed Sources ({review.stats.remove})
+          </a>
+        {/if}
+        {#if review.stats && review.stats.add > 0}
+          <a 
+            href={getAddedSourcesExportUrl(reviewId)} 
+            download 
+            class="btn-download btn-download-secondary"
+          >
+            Download Added Sources ({review.stats.add})
+          </a>
+        {/if}
+      </div>
+    </div>
+
+    <div class="items-section">
+      <button 
+        class="btn-toggle" 
+        on:click={() => showAllItems = !showAllItems}
+      >
+        {showAllItems ? 'Hide' : 'Show'} All Decisions ({allItems.length})
+      </button>
+
+      {#if showAllItems && allItems.length > 0}
+        <div class="items-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Source Label</th>
+                <th>Homepage</th>
+                <th>MediaCloud</th>
+                <th>Decision</th>
+                <th>Type</th>
+                <th>Removal Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each allItems as item}
+                <tr>
+                  <td>{item.source_label || 'N/A'}</td>
+                  <td>
+                    {#if item.source_homepage}
+                      <a href={item.source_homepage} target="_blank" rel="noopener noreferrer">
+                        {item.source_homepage}
+                      </a>
+                    {:else}
+                      N/A
+                    {/if}
+                  </td>
+                  <td>
+                    {#if !item.is_new_source && item.source_id}
+                      <a 
+                        href={`https://search.mediacloud.org/sources/${item.source_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="mediacloud-table-link"
+                      >
+                        View ↗
+                      </a>
+                    {:else}
+                      <span class="no-link">—</span>
+                    {/if}
+                  </td>
+                  <td>
+                    <span class="decision-badge decision-{item.decision}">
+                      {item.decision}
+                    </span>
+                  </td>
+                  <td>
+                    {item.is_new_source ? 'New Source' : 'Existing'}
+                  </td>
+                  <td>
+                    {#if item.decision === 'remove' && item.removal_reason}
+                      <span class="removal-reason" title={item.removal_reason}>
+                        {item.removal_reason}
+                      </span>
+                    {:else}
+                      <span class="no-reason">—</span>
+                    {/if}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/if}
+    </div>
   {/if}
 </div>
 
@@ -419,31 +392,6 @@
     margin: 0;
   }
 
-  .actions {
-    margin-top: 20px;
-  }
-
-  .btn-complete {
-    width: 100%;
-    padding: 14px 24px;
-    background-color: #27ae60;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.3s;
-  }
-
-  .btn-complete:hover:not(:disabled) {
-    background-color: #229954;
-  }
-
-  .btn-complete:disabled {
-    background-color: #95a5a6;
-    cursor: not-allowed;
-  }
 
   .export-section {
     background: white;
