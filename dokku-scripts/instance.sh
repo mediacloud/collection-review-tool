@@ -95,11 +95,12 @@ create_app() {
         fi
     done
 
-    # Ensure git remote exists in this repo
+    # Ensure git remote exists in this repo and points at the current FQDN/app
     if git remote | grep -Fqx "$DOKKU_GIT_REMOTE"; then
-        echo "found git remote $DOKKU_GIT_REMOTE"
+        echo "updating git remote $DOKKU_GIT_REMOTE to dokku@$FQDN:$APP"
+        git remote set-url "$DOKKU_GIT_REMOTE" "dokku@$FQDN:$APP"
     else
-        echo "adding git remote $DOKKU_GIT_REMOTE"
+        echo "adding git remote $DOKKU_GIT_REMOTE -> dokku@$FQDN:$APP"
         git remote add "$DOKKU_GIT_REMOTE" "dokku@$FQDN:$APP"
     fi
 
