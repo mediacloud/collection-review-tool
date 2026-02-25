@@ -1,0 +1,9 @@
+# Root requirements file for Dokku / Herokuish buildpack detection.
+# This delegates to the real backend requirements in backend/ so that
+# the Python buildpack sees a requirements.txt at the repo root.
+
+-r backend/requirements.txt
+
+streamlit>=1.33
+mediacloud
+
