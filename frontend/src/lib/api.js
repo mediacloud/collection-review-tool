@@ -1,0 +1,138 @@
+/** API client for backend communication */
+import axios from 'axios';
+
+// Default to same-origin /api, so the built app served by Flask does not need CORS.
+// VITE_API_BASE_URL can override this in special cases, but should normally be unset.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+/**
+ * Start or resume a review for a collection
+ * @param {number} collectionId - MediaCloud collection ID
+ * @returns {Promise} Review object
+ */
+export async function startReview(collectionId) {
+  const response = await api.post('/reviews/start', {
+    collection_id: collectionId
+  });
+  return response.data.review;
+}
+
+/**
+ * Get all in-progress reviews
+ * @returns {Promise} Array of review objects with completeness percentage
+ */
+export async function getInProgressReviews() {
+  const response = await api.get('/reviews/in-progress');
+  return response.data.reviews;
+}
+
+/**
+ * Get all completed reviews
+ * @returns {Promise} Array of review objects with completeness percentage
+ */
+export async function getCompletedReviews() {
+  const response = await api.get('/reviews/completed');
+  return response.data.reviews;
+}
+
+/**
+ * Get a review by ID
+ * @param {number} reviewId - Review ID
+ * @returns {Promise} Review object with stats
+ */
+export async function getReview(reviewId) {
+  const response = await api.get(`/reviews/${reviewId}`);
+  return response.data.review;
+}
+
+/**
+ * Get review items with optional filters
+ * @param {number} reviewId - Review ID
+ * @param {Object} options - Query options (page, page_size, decision)
+ * @returns {Promise} Object with items array and total count
+ */
+export async function getReviewItems(reviewId, options = {}) {
+  const params = new URLSearchParams();
+  if (options.page) params.append('page', options.page);
+  if (options.page_size) params.append('page_size', options.page_size);
+  if (options.decision) params.append('decision', options.decision);
+  
+  const response = await api.get(`/reviews/${reviewId}/items?${params.toString()}`);
+  return response.data;
+}
+
+/**
+ * Make a decision on a review item
+ * @param {number} reviewId - Review ID
+ * @param {number} itemId - Item ID
+ * @param {string} decision - Decision (keep, remove, add, undecided)
+ * @param {string} removalReason - Reason for removal (required when decision is 'remove')
+ * @returns {Promise} Updated item object
+ */
+export async function decideItem(reviewId, itemId, decision, removalReason = null) {
+  const body = { decision };
+  if (decision === 'remove' && removalReason) {
+    body.removal_reason = removalReason;
+  }
+  const response = await api.post(`/reviews/${reviewId}/items/${itemId}/decide`, body);
+  return response.data;
+}
+
+/**
+ * Propose a new source for a review
+ * @param {number} reviewId - Review ID
+ * @param {string} sourceLabel - Source label/name
+ * @param {string} sourceHomepage - Source homepage URL
+ * @returns {Promise} Created item object
+ */
+export async function proposeNewSource(reviewId, sourceLabel, sourceHomepage) {
+  const response = await api.post(`/reviews/${reviewId}/items`, {
+    source_label: sourceLabel,
+    source_homepage: sourceHomepage
+  });
+  return response.data;
+}
+
+/**
+ * Complete a review
+ * @param {number} reviewId - Review ID
+ * @returns {Promise} Updated review object
+ */
+export async function completeReview(reviewId) {
+  const response = await api.post(`/reviews/${reviewId}/complete`);
+  return response.data.review;
+}
+
+/**
+ * Get CSV export URL for a review (keep and add sources)
+ * @param {number} reviewId - Review ID
+ * @returns {string} Export URL
+ */
+export function getExportUrl(reviewId) {
+  return `${API_BASE_URL}/reviews/${reviewId}/export`;
+}
+
+/**
+ * Get CSV export URL for removed sources
+ * @param {number} reviewId - Review ID
+ * @returns {string} Export URL
+ */
+export function getRemovedSourcesExportUrl(reviewId) {
+  return `${API_BASE_URL}/reviews/${reviewId}/export/removed`;
+}
+
+/**
+ * Get CSV export URL for added sources
+ * @param {number} reviewId - Review ID
+ * @returns {string} Export URL
+ */
+export function getAddedSourcesExportUrl(reviewId) {
+  return `${API_BASE_URL}/reviews/${reviewId}/export/added`;
+}

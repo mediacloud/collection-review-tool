@@ -10,7 +10,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/ #Removed since the node package has a lib folder
 lib64/
 parts/
 sdist/
