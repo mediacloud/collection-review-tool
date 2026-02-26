@@ -3,13 +3,39 @@ from flask import Blueprint, request, jsonify, Response
 from database import db
 from models import Review, ReviewItem, ReviewStatus, Decision
 from services.mediacloud import get_mediacloud_service
+from services.guidelines import get_guidelines_service
 from datetime import datetime
 from urllib.parse import urlparse
 import csv
 import io
 import os
+import json
 
 api_bp = Blueprint('api', __name__)
+
+
+@api_bp.route('/guidelines/templates', methods=['GET'])
+def get_guideline_templates():
+    """Get list of available guideline templates."""
+    try:
+        service = get_guidelines_service()
+        templates = service.get_available_templates()
+        return jsonify({'templates': templates}), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch templates: {str(e)}'}), 500
+
+
+@api_bp.route('/reviews/<int:review_id>/guidelines', methods=['GET'])
+def get_review_guidelines(review_id):
+    """Get rendered guidelines for a review."""
+    try:
+        review = Review.query.get_or_404(review_id)
+        service = get_guidelines_service()
+        template_name = review.guidelines_template or 'default'
+        guidelines = service.render_guidelines(template_name, review)
+        return jsonify({'guidelines': guidelines}), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch guidelines: {str(e)}'}), 500
 
 
 @api_bp.route('/reviews/start', methods=['POST'])
@@ -28,6 +54,7 @@ def start_review():
             return jsonify({'error': 'collection_id is required'}), 400
         
         collection_id = data['collection_id']
+        guidelines_template = data.get('guidelines_template', 'default')
         
         # Check for existing active review (status != 'completed')
         existing_review = Review.query.filter_by(
@@ -37,16 +64,21 @@ def start_review():
         ).first()
         
         if existing_review:
-            # If collection_name is not set, try to fetch it
-            if not existing_review.collection_name:
+            # If collection_name or name is not set, try to fetch them from MediaCloud
+            if not existing_review.collection_name or not existing_review.name:
                 try:
                     mediacloud = get_mediacloud_service()
                     collection_details = mediacloud.fetch_collection_details(collection_id)
-                    existing_review.collection_name = collection_details.get('name', f'Collection {collection_id}')
+                    collection_name = collection_details.get('name', f'Collection {collection_id}')
+                    if not existing_review.collection_name:
+                        existing_review.collection_name = collection_name
+                    if not existing_review.name:
+                        existing_review.name = collection_name
                     db.session.commit()
                 except Exception:
-                    # If fetching fails, use default
+                    # If fetching fails, ensure we at least have sensible defaults
                     existing_review.collection_name = existing_review.collection_name or f'Collection {collection_id}'
+                    existing_review.name = existing_review.name or existing_review.collection_name
             
             # Return existing review with stats
             return jsonify({
@@ -64,11 +96,13 @@ def start_review():
             # If fetching collection name fails, use default
             collection_name = f'Collection {collection_id}'
         
-        # Create new review
+        # Create new review, using the collection name as the human-friendly review name
         new_review = Review(
             collection_id=collection_id,
             collection_name=collection_name,
-            status=ReviewStatus.IN_PROGRESS
+            name=collection_name,
+            status=ReviewStatus.IN_PROGRESS,
+            guidelines_template=guidelines_template
         )
         db.session.add(new_review)
         db.session.flush()  # Get the review ID
@@ -83,7 +117,7 @@ def start_review():
                 'error': f'Failed to fetch sources from MediaCloud: {str(e)}'
             }), 502
         
-        # Create ReviewItems from sources
+        # Create ReviewItems from sources, capturing full source metadata for later use
         for source in sources:
             review_item = ReviewItem(
                 review_id=new_review.id,
@@ -91,7 +125,8 @@ def start_review():
                 source_label=source.get('label', ''),
                 source_homepage=source.get('homepage', ''),
                 is_new_source=False,
-                decision=Decision.UNDECIDED
+                decision=Decision.UNDECIDED,
+                source_metadata=json.dumps(source)
             )
             db.session.add(review_item)
         

@@ -3,6 +3,9 @@
 </script>
 
 <div class="header">
+  <div class="top-row">
+    <a href="/" class="back-link">← Back to Home</a>
+  </div>
   <div class="info">
     <div class="collection-info">
       <h2>{review.collection_name || `Collection #${review.collection_id}`}</h2>
@@ -50,7 +53,23 @@
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
+  }
+
+  .top-row {
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: 8px;
+  }
+
+  .back-link {
+    font-size: 13px;
+    color: #3498db;
+    text-decoration: none;
+  }
+
+  .back-link:hover {
+    text-decoration: underline;
+    color: #2980b9;
   }
 
   .info {
@@ -69,8 +88,9 @@
 
   h2 {
     margin: 0;
-    font-size: 24px;
+    font-size: 20px;
     color: #2c3e50;
+    line-height: 1.3;
   }
 
   .mediacloud-link {
@@ -110,8 +130,9 @@
 
   .stats {
     display: flex;
-    gap: 20px;
+    gap: 12px;
     flex-wrap: wrap;
+    justify-content: space-between;
   }
 
   .stat {
@@ -128,7 +149,7 @@
   }
 
   .stat-value {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 600;
     color: #2c3e50;
   }

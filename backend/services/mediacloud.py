@@ -32,7 +32,46 @@ class MediaCloudService:
         Note: If the API method is not available, returns a default name.
         """
         try:
-            # Try to fetch collection details using available API methods
+            # Prefer a direct .collection(collection_id) endpoint if available.
+            # Newer MediaCloud clients may expose this on either DirectoryApi or SearchApi.
+            collection_obj = None
+
+            # Try DirectoryApi.collection(collection_id=...)
+            if hasattr(self.directory, "collection"):
+                try:
+                    collection_obj = self.directory.collection(collection_id=collection_id)
+                except TypeError:
+                    # Some client versions may use tags_id instead of collection_id
+                    try:
+                        collection_obj = self.directory.collection(tags_id=collection_id)
+                    except Exception:
+                        collection_obj = None
+                except Exception:
+                    collection_obj = None
+
+            # Fallback: try SearchApi.collection if available
+            if collection_obj is None and hasattr(self.search, "collection"):
+                try:
+                    collection_obj = self.search.collection(collection_id=collection_id)
+                except TypeError:
+                    try:
+                        collection_obj = self.search.collection(tags_id=collection_id)
+                    except Exception:
+                        collection_obj = None
+                except Exception:
+                    collection_obj = None
+
+            if isinstance(collection_obj, dict) and collection_obj:
+                return {
+                    "id": collection_id,
+                    "name": collection_obj.get("name")
+                    or collection_obj.get("label")
+                    or f"Collection {collection_id}",
+                    "description": collection_obj.get("description", ""),
+                    "tags_id": collection_obj.get("tags_id", collection_id),
+                }
+
+            # Try to fetch collection details using existing list-style API methods
             # Check if collection_list method exists
             if hasattr(self.directory, 'collection_list'):
                 try:

@@ -3,6 +3,24 @@
   export let onKeep;
   export let onRemove;
   export let loading = false;
+
+  function formatNumber(value) {
+    if (value === null || value === undefined || isNaN(Number(value))) {
+      return null;
+    }
+    return Number(value).toLocaleString("en-US");
+  }
+
+  function formatDateTime(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (isNaN(date.getTime())) return null;
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  }
 </script>
 
 {#if item}
@@ -32,6 +50,31 @@
       {:else if item.source_id}
         <div class="source-metadata">
           <span class="metadata-item">Source ID: {item.source_id}</span>
+          {#if item.source_metadata}
+            {#if item.source_metadata.stories_per_week}
+              {#if formatNumber(item.source_metadata.stories_per_week)}
+                <span class="metadata-item">
+                  {formatNumber(item.source_metadata.stories_per_week)} stories/week
+                </span>
+              {/if}
+            {/if}
+
+            {#if item.source_metadata.num_stories}
+              {#if formatNumber(item.source_metadata.num_stories)}
+                <span class="metadata-item">
+                  {formatNumber(item.source_metadata.num_stories)} total stories
+                </span>
+              {/if}
+            {/if}
+
+            {#if item.source_metadata.last_story}
+              {#if formatDateTime(item.source_metadata.last_story)}
+                <span class="metadata-item">
+                  Last story: {formatDateTime(item.source_metadata.last_story)}
+                </span>
+              {/if}
+            {/if}
+          {/if}
         </div>
       {/if}
     </div>

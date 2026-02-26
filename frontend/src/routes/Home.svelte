@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { startReview, getInProgressReviews, getCompletedReviews } from '../lib/api.js';
+  import { startReview, getInProgressReviews, getCompletedReviews, getGuidelineTemplates } from '../lib/api.js';
 
   let collectionId = '';
   let loading = false;
@@ -10,10 +10,28 @@
   let completedReviews = [];
   let loadingCompleted = false;
   let showCompleted = false;
+  let guidelineTemplates = [];
+  let selectedTemplate = 'default';
+  let loadingTemplates = false;
 
   onMount(async () => {
     await loadInProgressReviews();
+    await loadGuidelineTemplates();
   });
+
+  async function loadGuidelineTemplates() {
+    loadingTemplates = true;
+    try {
+      guidelineTemplates = await getGuidelineTemplates();
+      if (guidelineTemplates.length > 0 && !guidelineTemplates.includes(selectedTemplate)) {
+        selectedTemplate = guidelineTemplates[0];
+      }
+    } catch (err) {
+      console.error('Error loading templates:', err);
+    } finally {
+      loadingTemplates = false;
+    }
+  }
 
   async function loadInProgressReviews() {
     loadingReviews = true;
@@ -85,7 +103,7 @@
     error = null;
 
     try {
-      const review = await startReview(id);
+      const review = await startReview(id, selectedTemplate);
       await loadInProgressReviews(); // Refresh the list
       window.navigate(`/reviews/${review.id}`);
     } catch (err) {
@@ -115,6 +133,21 @@
           />
         </div>
 
+        {#if guidelineTemplates.length > 0}
+          <div class="form-group">
+            <label for="guideline-template">Annotation Guidelines Template</label>
+            <select
+              id="guideline-template"
+              bind:value={selectedTemplate}
+              disabled={loading || loadingTemplates}
+            >
+              {#each guidelineTemplates as template}
+                <option value={template}>{template}</option>
+              {/each}
+            </select>
+          </div>
+        {/if}
+
         {#if error}
           <div class="error">{error}</div>
         {/if}
@@ -141,7 +174,9 @@
                 tabindex="0"
               >
                 <div class="review-header">
-                  <span class="review-id">Collection #{review.collection_id}</span>
+                  <span class="review-id">
+                    {review.name || review.collection_name || `Collection #${review.collection_id}`}
+                  </span>
                   <span class="completeness">{review.completeness}%</span>
                 </div>
                 <div class="review-meta">
@@ -186,7 +221,9 @@
                 tabindex="0"
               >
                 <div class="review-header">
-                  <span class="review-id">Collection #{review.collection_id}</span>
+                  <span class="review-id">
+                    {review.name || review.collection_name || `Collection #${review.collection_id}`}
+                  </span>
                   <span class="completeness completed-badge">{review.completeness}%</span>
                 </div>
                 <div class="review-meta">
@@ -251,7 +288,7 @@
     color: #34495e;
   }
 
-  input {
+  input, select {
     width: 100%;
     padding: 12px;
     border: 1px solid #ddd;
@@ -260,12 +297,12 @@
     transition: border-color 0.3s;
   }
 
-  input:focus {
+  input:focus, select:focus {
     outline: none;
     border-color: #3498db;
   }
 
-  input:disabled {
+  input:disabled, select:disabled {
     background-color: #f5f5f5;
     cursor: not-allowed;
   }

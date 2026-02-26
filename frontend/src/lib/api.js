@@ -15,11 +15,13 @@ const api = axios.create({
 /**
  * Start or resume a review for a collection
  * @param {number} collectionId - MediaCloud collection ID
+ * @param {string} guidelinesTemplate - Guidelines template name (default: 'default')
  * @returns {Promise} Review object
  */
-export async function startReview(collectionId) {
+export async function startReview(collectionId, guidelinesTemplate = 'default') {
   const response = await api.post('/reviews/start', {
-    collection_id: collectionId
+    collection_id: collectionId,
+    guidelines_template: guidelinesTemplate
   });
   return response.data.review;
 }
@@ -135,4 +137,23 @@ export function getRemovedSourcesExportUrl(reviewId) {
  */
 export function getAddedSourcesExportUrl(reviewId) {
   return `${API_BASE_URL}/reviews/${reviewId}/export/added`;
+}
+
+/**
+ * Get available guideline templates
+ * @returns {Promise} Array of template names
+ */
+export async function getGuidelineTemplates() {
+  const response = await api.get('/guidelines/templates');
+  return response.data.templates;
+}
+
+/**
+ * Get rendered guidelines for a review
+ * @param {number} reviewId - Review ID
+ * @returns {Promise} Guidelines text (markdown)
+ */
+export async function getReviewGuidelines(reviewId) {
+  const response = await api.get(`/reviews/${reviewId}/guidelines`);
+  return response.data.guidelines;
 }

@@ -2,6 +2,7 @@
 from datetime import datetime
 from database import db
 import enum
+import json
 
 
 class ReviewStatus(enum.Enum):
@@ -35,6 +36,7 @@ class Review(db.Model, TimestampMixin):
     status = db.Column(db.Enum(ReviewStatus), default=ReviewStatus.PENDING, nullable=False)
     name = db.Column(db.String(255), nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    guidelines_template = db.Column(db.String(100), nullable=True, default='default')  # Template name for annotation guidelines
     
     # Relationship to review items
     items = db.relationship('ReviewItem', backref='review', lazy=True, cascade='all, delete-orphan')
@@ -49,7 +51,8 @@ class Review(db.Model, TimestampMixin):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'name': self.name,
-            'notes': self.notes
+            'notes': self.notes,
+            'guidelines_template': self.guidelines_template or 'default'
         }
         
         if include_stats:
@@ -87,9 +90,19 @@ class ReviewItem(db.Model, TimestampMixin):
     decision = db.Column(db.Enum(Decision), default=Decision.UNDECIDED, nullable=False)
     decided_at = db.Column(db.DateTime, nullable=True)
     removal_reason = db.Column(db.Text, nullable=True)  # Reason for removal (required when decision is REMOVE)
+    # Optional JSON-encoded metadata about the source as returned by MediaCloud.
+    # This can include fields like stories_per_week, last_story, media_type, etc.
+    source_metadata = db.Column(db.Text, nullable=True)
     
     def to_dict(self):
         """Convert review item to dictionary."""
+        metadata = None
+        if self.source_metadata:
+            try:
+                metadata = json.loads(self.source_metadata)
+            except Exception:
+                metadata = None
+
         return {
             'id': self.id,
             'review_id': self.review_id,
@@ -99,5 +112,6 @@ class ReviewItem(db.Model, TimestampMixin):
             'is_new_source': self.is_new_source,
             'decision': self.decision.value,
             'decided_at': self.decided_at.isoformat() if self.decided_at else None,
-            'removal_reason': self.removal_reason
+            'removal_reason': self.removal_reason,
+            'source_metadata': metadata
         }
