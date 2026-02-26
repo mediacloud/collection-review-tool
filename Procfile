@@ -1,1 +1,2 @@
 web: gunicorn "app:create_app()" --chdir backend --bind 0.0.0.0:$PORT --workers 3
+release: python backend/run_migrations.py
