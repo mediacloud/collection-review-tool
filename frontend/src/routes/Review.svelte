@@ -8,12 +8,14 @@
     getExportUrl,
     getRemovedSourcesExportUrl,
     getAddedSourcesExportUrl,
-    getReviewGuidelines
+    getReviewGuidelines,
+    getSourceDetails
   } from '../lib/api.js';
   import ReviewHeader from '../components/ReviewHeader.svelte';
   import SourceViewer from '../components/SourceViewer.svelte';
-  import NewSourceForm from '../components/NewSourceForm.svelte';
   import RemovalReasonModal from '../components/RemovalReasonModal.svelte';
+  import NewSourceModal from '../components/NewSourceModal.svelte';
+  import AllDecisionsModal from '../components/AllDecisionsModal.svelte';
 
   let review = null;
   let currentItem = null;
@@ -24,7 +26,10 @@
   let showAllItems = false;
   let currentPath = window.location.pathname;
   let showRemovalModal = false;
+  let showNewSourceModal = false;
   let guidelines = null;
+  let showContextPanel = false;
+  let showAllItemsModal = false;
 
   // Get review ID from URL
   function getReviewIdFromUrl() {
@@ -113,6 +118,7 @@
 
       if (response.items && response.items.length > 0) {
         currentItem = response.items[0];
+        await refreshCurrentItemMetadata();
       } else {
         currentItem = null;
       }
@@ -120,6 +126,35 @@
       console.error('Error loading next item:', err);
     }
   }
+
+  async function refreshCurrentItemMetadata() {
+    if (!currentItem || currentItem.is_new_source || !currentItem.source_id) return;
+
+    try {
+      const liveSource = await getSourceDetails(currentItem.source_id);
+      const mergedMetadata = {
+        ...(currentItem.source_metadata || {}),
+        ...liveSource
+      };
+      currentItem = {
+        ...currentItem,
+        source_metadata: mergedMetadata
+      };
+    } catch (err) {
+      console.error('Error refreshing source metadata:', err);
+    }
+  }
+
+  $: completionPercent = (review && review.stats)
+    ? (() => {
+        const total = review.stats.total || 0;
+        if (!total) return 0;
+        const undecided = review.stats.undecided || 0;
+        const skipped = review.stats.skip || 0;
+        const decided = total - undecided - skipped;
+        return Math.round((decided / total) * 1000) / 10; // one decimal place
+      })()
+    : null;
 
   async function handleKeep() {
     if (!currentItem || loading) return;
@@ -129,6 +164,26 @@
 
     try {
       await decideItem(reviewId, currentItem.id, 'keep');
+      // Reload review to get updated stats
+      review = await getReview(reviewId);
+      // Load next undecided item
+      await loadNextUndecidedItem();
+    } catch (err) {
+      error = err.response?.data?.error || err.message || 'Failed to update decision';
+      console.error('Error making decision:', err);
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function handleSkip() {
+    if (!currentItem || loading) return;
+
+    loading = true;
+    error = null;
+
+    try {
+      await decideItem(reviewId, currentItem.id, 'skip');
       // Reload review to get updated stats
       review = await getReview(reviewId);
       // Load next undecided item
@@ -170,6 +225,22 @@
 
   function handleRemoveCancel() {
     showRemovalModal = false;
+  }
+
+  function handleOpenNewSourceModal() {
+    if (loading) return;
+    showNewSourceModal = true;
+  }
+
+  async function handleNewSourceModalConfirm(event) {
+    const { label, homepage } = event.detail || {};
+    showNewSourceModal = false;
+    await handleNewSource(label, homepage);
+  }
+
+  function openAllDecisionsModal() {
+    if (!allItems || allItems.length === 0) return;
+    showAllItemsModal = true;
   }
 
   async function handleNewSource(sourceLabel, sourceHomepage) {
@@ -260,114 +331,6 @@
     <div class="error-message">{error}</div>
   {:else if review}
     <div class="review-layout">
-      <div class="left-column">
-        <ReviewHeader {review} />
-        
-        <div class="export-section">
-          <h3>Export Files</h3>
-          <div class="export-links">
-            <a 
-              href={getExportUrl(reviewId)} 
-              download 
-              class="btn-download"
-            >
-              Download Main Export (Keep & Add Sources)
-            </a>
-            {#if review.stats && review.stats.remove > 0}
-              <a 
-                href={getRemovedSourcesExportUrl(reviewId)} 
-                download 
-                class="btn-download btn-download-secondary"
-              >
-                Download Removed Sources ({review.stats.remove})
-              </a>
-            {/if}
-            {#if review.stats && review.stats.add > 0}
-              <a 
-                href={getAddedSourcesExportUrl(reviewId)} 
-                download 
-                class="btn-download btn-download-secondary"
-              >
-                Download Added Sources ({review.stats.add})
-              </a>
-            {/if}
-          </div>
-        </div>
-
-        <div class="items-section">
-          <button 
-            class="btn-toggle" 
-            on:click={() => showAllItems = !showAllItems}
-          >
-            {showAllItems ? 'Hide' : 'Show'} All Decisions ({allItems.length})
-          </button>
-
-          {#if showAllItems && allItems.length > 0}
-            <div class="items-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Source Label</th>
-                    <th>Homepage</th>
-                    <th>MediaCloud</th>
-                    <th>Decision</th>
-                    <th>Type</th>
-                    <th>Removal Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each allItems as item}
-                    <tr>
-                      <td>{item.source_label || 'N/A'}</td>
-                      <td>
-                        {#if item.source_homepage}
-                          <a href={item.source_homepage} target="_blank" rel="noopener noreferrer">
-                            {item.source_homepage}
-                          </a>
-                        {:else}
-                          N/A
-                        {/if}
-                      </td>
-                      <td>
-                        {#if !item.is_new_source && item.source_id}
-                          <a 
-                            href={`https://search.mediacloud.org/sources/${item.source_id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="mediacloud-table-link"
-                          >
-                            View ↗
-                          </a>
-                        {:else}
-                          <span class="no-link">—</span>
-                        {/if}
-                      </td>
-                      <td>
-                        <span class="decision-badge decision-{item.decision}">
-                          {item.decision}
-                        </span>
-                      </td>
-                      <td>
-                        {item.is_new_source ? 'New Source' : 'Existing'}
-                      </td>
-                      <td>
-                        {#if item.decision === 'remove' && item.removal_reason}
-                          <span class="removal-reason" title={item.removal_reason}>
-                            {item.removal_reason}
-                          </span>
-                        {:else}
-                          <span class="no-reason">—</span>
-                        {/if}
-                      </td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          {/if}
-        </div>
-      </div>
-
       <div class="right-column">
         {#if error}
           <div class="error-banner">{error}</div>
@@ -392,23 +355,125 @@
             item={currentItem}
             onKeep={handleKeep}
             onRemove={handleRemove}
+            onSkip={handleSkip}
             {loading}
           />
-
-          <NewSourceForm 
-            onSubmit={handleNewSource}
-            {loading}
-          />
-
+          
           <RemovalReasonModal
             show={showRemovalModal}
             sourceLabel={currentItem?.source_label}
             on:confirm={(e) => handleRemoveConfirm(e.detail)}
             on:close={handleRemoveCancel}
           />
+
+          <NewSourceModal
+            show={showNewSourceModal}
+            {loading}
+            on:confirm={handleNewSourceModalConfirm}
+            on:close={() => (showNewSourceModal = false)}
+          />
         {/if}
       </div>
     </div>
+
+    <div class="review-footer">
+      <div class="review-footer-inner">
+        <div class="footer-section footer-left">
+          <button
+            type="button"
+            class="back-home"
+            on:click={() => window.navigate('/')}
+            title="Return to home"
+            aria-label="Return to home"
+          >
+            ↩
+          </button>
+          <button
+            type="button"
+            class="sidebar-toggle"
+            on:click={() => (showContextPanel = !showContextPanel)}
+          >
+            {showContextPanel ? 'Hide details' : 'See more'}
+          </button>
+          <div class="footer-title">
+            Review: {review.collection_name || `Collection #${review.collection_id}`}
+            {#if completionPercent !== null}
+              &nbsp;({completionPercent}% complete)
+            {/if}
+          </div>
+        </div>
+        <div class="footer-section footer-right">
+          <button
+            type="button"
+            class="propose-button"
+            on:click={handleOpenNewSourceModal}
+            disabled={loading}
+          >
+            + Propose new source
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    {#if showContextPanel}
+      <div class="context-panel">
+        <div class="context-inner">
+          <div class="context-header">
+            <span class="context-title">Review context</span>
+            <button
+              type="button"
+              class="context-close"
+              on:click={() => (showContextPanel = false)}
+            >
+              Close
+            </button>
+          </div>
+
+          <div class="context-section">
+            <ReviewHeader {review} onShowAllDecisions={openAllDecisionsModal} />
+          </div>
+
+          <div class="context-section">
+            <div class="export-section">
+              <h3>Export Files</h3>
+              <div class="export-links">
+                <a 
+                  href={getExportUrl(reviewId)} 
+                  download 
+                  class="btn-download"
+                >
+                  Download Main Export (Keep & Add Sources)
+                </a>
+                {#if review.stats && review.stats.remove > 0}
+                  <a 
+                    href={getRemovedSourcesExportUrl(reviewId)} 
+                    download 
+                    class="btn-download btn-download-secondary"
+                  >
+                    Download Removed Sources ({review.stats.remove})
+                  </a>
+                {/if}
+                {#if review.stats && review.stats.add > 0}
+                  <a 
+                    href={getAddedSourcesExportUrl(reviewId)} 
+                    download 
+                    class="btn-download btn-download-secondary"
+                  >
+                    Download Added Sources ({review.stats.add})
+                  </a>
+                {/if}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    <AllDecisionsModal
+      show={showAllItemsModal}
+      items={allItems}
+      on:close={() => (showAllItemsModal = false)}
+    />
   {/if}
 </div>
 
@@ -416,6 +481,7 @@
   .container {
     margin: 0 auto;
     padding: 20px;
+    padding-bottom: 72px; /* space for fixed footer */
   }
 
   .loading {
@@ -440,23 +506,201 @@
     align-items: flex-start;
   }
 
-  .left-column {
-    flex: 0 0 380px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    position: sticky;
-    top: 20px;
-    max-height: calc(100vh - 40px);
-    overflow-y: auto;
-  }
-
   .right-column {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 20px;
+  }
+  
+  .review-footer {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    background: white;
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.06);
+    z-index: 900;
+  }
+
+  .review-footer-inner {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .footer-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .footer-left {
+    min-width: 0;
+  }
+
+  .footer-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #2c3e50;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+
+  .footer-right {
+    justify-content: flex-end;
+  }
+
+  .completion-pill {
+    padding: 6px 12px;
+    border-radius: 999px;
+    background-color: #f0f3f6;
+    color: #2c3e50;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .sidebar-toggle {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid #d0d7de;
+    background-color: white;
+    font-size: 13px;
+    font-weight: 500;
+    color: #34495e;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+
+  .sidebar-toggle:hover {
+    background-color: #f6f8fa;
+    border-color: #c0c7d0;
+  }
+
+  .propose-button {
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid #27ae60;
+    background-color: #27ae60;
+    color: white;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+  }
+
+  .propose-button:hover:enabled {
+    background-color: #229954;
+    border-color: #229954;
+  }
+
+  .propose-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .back-home {
+    padding: 4px 8px;
+    border: none;
+    background: transparent;
+    color: #2c3e50;
+    font-size: 16px;
+    font-weight: 400;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .back-home:hover {
+    text-decoration: underline;
+  }
+
+  .context-panel {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 44px; /* sit just under the footer */
+    max-height: 60vh;
+    z-index: 850;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .context-inner {
+    pointer-events: auto;
+    max-width: 100%;
+    width: 100%;
+    margin: 0 0 8px;
+    background: white;
+    border-radius: 10px 10px 0 0;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.16);
+    border: 1px solid #d0d7de;
+    padding: 16px 20px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .context-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .context-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #2c3e50;
+  }
+
+  .context-close {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #d0d7de;
+    background-color: white;
+    font-size: 12px;
+    font-weight: 500;
+    color: #34495e;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+
+  .context-close:hover {
+    background-color: #f6f8fa;
+    border-color: #c0c7d0;
+  }
+
+  .context-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .context-action {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #d0d7de;
+    background-color: #f6f8fa;
+    font-size: 12px;
+    font-weight: 500;
+    color: #34495e;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+
+  .context-action:hover:enabled {
+    background-color: #e1e4e8;
+    border-color: #c0c7d0;
+  }
+
+  .context-action:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   .error-banner {
@@ -534,6 +778,39 @@
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  }
+
+  .left-actions {
+    background: white;
+    padding: 12px 16px 16px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+
+  .left-actions .btn-primary {
+    width: 100%;
+    padding: 10px 14px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.05s;
+  }
+
+  .left-actions .btn-primary:hover:not(:disabled) {
+    background-color: #2980b9;
+  }
+
+  .left-actions .btn-primary:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .left-actions .btn-primary:disabled {
+    background-color: #95a5a6;
+    cursor: not-allowed;
   }
 
   .export-section h3 {

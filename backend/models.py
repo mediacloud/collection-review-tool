@@ -18,6 +18,7 @@ class Decision(enum.Enum):
     KEEP = 'keep'
     REMOVE = 'remove'
     ADD = 'add'
+    SKIP = 'skip'
 
 
 class TimestampMixin:
@@ -67,13 +68,15 @@ class Review(db.Model, TimestampMixin):
         remove = sum(1 for item in self.items if item.decision == Decision.REMOVE)
         add = sum(1 for item in self.items if item.decision == Decision.ADD)
         undecided = sum(1 for item in self.items if item.decision == Decision.UNDECIDED)
+        skip = sum(1 for item in self.items if item.decision == Decision.SKIP)
         
         return {
             'total': total,
             'keep': keep,
             'remove': remove,
             'add': add,
-            'undecided': undecided
+            'undecided': undecided,
+            'skip': skip
         }
 
 

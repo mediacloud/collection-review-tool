@@ -1,24 +1,24 @@
 <script>
   export let review;
+  export let onShowAllDecisions;
 </script>
 
 <div class="header">
-  <div class="top-row">
-    <a href="/" class="back-link">← Back to Home</a>
-  </div>
   <div class="info">
     <div class="collection-info">
       <h2>{review.collection_name || `Collection #${review.collection_id}`}</h2>
-      <a 
-        href={`https://search.mediacloud.org/collections/${review.collection_id}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="mediacloud-link"
-      >
-        View in MediaCloud ↗
-      </a>
+      <span class="status status-{review.status}">{review.status}</span>
     </div>
-    <span class="status status-{review.status}">{review.status}</span>
+    <a 
+      href={`https://search.mediacloud.org/collections/${review.collection_id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      class="mediacloud-icon-link"
+      aria-label="Open collection in MediaCloud"
+      title="Open this collection in MediaCloud"
+    >
+      ↗
+    </a>
   </div>
   
   {#if review.stats}
@@ -44,6 +44,15 @@
         <span class="stat-value stat-undecided">{review.stats.undecided}</span>
       </div>
     </div>
+    {#if onShowAllDecisions}
+      <button
+        type="button"
+        class="all-decisions-button"
+        on:click={onShowAllDecisions}
+      >
+        Show all decisions
+      </button>
+    {/if}
   {/if}
 </div>
 
@@ -55,35 +64,18 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
-  .top-row {
-    display: flex;
-    justify-content: flex-start;
-    margin-bottom: 8px;
-  }
-
-  .back-link {
-    font-size: 13px;
-    color: #3498db;
-    text-decoration: none;
-  }
-
-  .back-link:hover {
-    text-decoration: underline;
-    color: #2980b9;
-  }
-
   .info {
     display: flex;
-    align-items: center;
-    gap: 15px;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
     margin-bottom: 15px;
-    flex-wrap: wrap;
   }
 
   .collection-info {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
   }
 
   h2 {
@@ -93,16 +85,25 @@
     line-height: 1.3;
   }
 
-  .mediacloud-link {
+  .mediacloud-icon-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    font-size: 13px;
     color: #3498db;
+    border: 1px solid rgba(52, 152, 219, 0.2);
+    background-color: #f5fbff;
     text-decoration: none;
-    font-size: 14px;
-    transition: color 0.3s;
+    transition: background-color 0.2s, border-color 0.2s, color 0.2s;
   }
 
-  .mediacloud-link:hover {
+  .mediacloud-icon-link:hover {
+    background-color: #e3f3ff;
+    border-color: rgba(52, 152, 219, 0.5);
     color: #2980b9;
-    text-decoration: underline;
   }
 
   .status {
@@ -111,6 +112,7 @@
     font-size: 12px;
     font-weight: 500;
     text-transform: uppercase;
+    width: fit-content;
   }
 
   .status-pending {
@@ -119,8 +121,8 @@
   }
 
   .status-in_progress {
-    background-color: #3498db;
-    color: white;
+    background-color: #fff3cd;
+    color: #856404;
   }
 
   .status-completed {
@@ -133,6 +135,26 @@
     gap: 12px;
     flex-wrap: wrap;
     justify-content: space-between;
+  }
+
+  .all-decisions-button {
+    margin-top: 8px;
+    align-self: stretch;
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid #3498db;
+    background-color: #3498db;
+    color: white;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+
+  .all-decisions-button:hover {
+    background-color: #2980b9;
+    border-color: #2980b9;
   }
 
   .stat {

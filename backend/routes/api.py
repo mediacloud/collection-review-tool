@@ -164,8 +164,10 @@ def get_in_progress_reviews():
             total = stats['total']
             
             # Calculate completeness: (decided items / total items) * 100
-            # Decided items = total - undecided
-            decided = total - stats['undecided']
+            # Decided items = total - undecided - skip
+            undecided = stats.get('undecided', 0)
+            skipped = stats.get('skip', 0)
+            decided = total - undecided - skipped
             completeness = (decided / total * 100) if total > 0 else 0
             
             review_data = review.to_dict(include_stats=False)
@@ -201,8 +203,10 @@ def get_completed_reviews():
             total = stats['total']
             
             # Calculate completeness: (decided items / total items) * 100
-            # Decided items = total - undecided
-            decided = total - stats['undecided']
+            # Decided items = total - undecided - skip
+            undecided = stats.get('undecided', 0)
+            skipped = stats.get('skip', 0)
+            decided = total - undecided - skipped
             completeness = (decided / total * 100) if total > 0 else 0
             
             review_data = review.to_dict(include_stats=False)
@@ -245,6 +249,23 @@ def get_review(review_id):
         }), 200
     except Exception as e:
         return jsonify({'error': f'Failed to fetch review: {str(e)}'}), 500
+
+
+@api_bp.route('/sources/<int:source_id>', methods=['GET'])
+def get_source(source_id):
+    """
+    Get the latest source metadata from MediaCloud for a given source ID.
+    
+    GET /api/sources/<source_id>
+    
+    Returns: { "source": { ...full source data... } }
+    """
+    try:
+        mediacloud = get_mediacloud_service()
+        source = mediacloud.fetch_source_by_id(source_id)
+        return jsonify({'source': source}), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch source {source_id}: {str(e)}'}), 502
 
 
 @api_bp.route('/reviews/<int:review_id>/items', methods=['GET'])
@@ -319,17 +340,17 @@ def decide_item(review_id, item_id):
         try:
             decision_enum = Decision(decision_str)
         except ValueError:
-            return jsonify({'error': f'Invalid decision: {decision_str}. Must be one of: keep, remove, add, undecided'}), 400
+            return jsonify({'error': f'Invalid decision: {decision_str}. Must be one of: keep, remove, add, undecided, skip'}), 400
         
         # Validate decision based on item type
         if not item.is_new_source:
-            # Existing sources can only be kept or removed
-            if decision_enum not in [Decision.KEEP, Decision.REMOVE]:
+            # Existing sources can be kept, removed, or skipped
+            if decision_enum not in [Decision.KEEP, Decision.REMOVE, Decision.SKIP]:
                 return jsonify({
-                    'error': f'Existing sources can only be marked as "keep" or "remove", not "{decision_str}"'
+                    'error': f'Existing sources can only be marked as "keep", "remove", or "skip", not "{decision_str}"'
                 }), 400
         else:
-            # New sources can be added (or removed/keep if desired)
+            # New sources can be added (or removed/keep/skip if desired)
             # The spec says new sources default to "add", but allows other decisions
             pass
         
@@ -347,7 +368,9 @@ def decide_item(review_id, item_id):
         
         # Update item
         item.decision = decision_enum
-        item.decided_at = datetime.utcnow()
+        # Mark decided_at for concrete decisions; leave as-is for undecided/skip
+        if decision_enum in [Decision.KEEP, Decision.REMOVE, Decision.ADD]:
+            item.decided_at = datetime.utcnow()
         
         db.session.commit()
         

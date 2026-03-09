@@ -157,3 +157,13 @@ export async function getReviewGuidelines(reviewId) {
   const response = await api.get(`/reviews/${reviewId}/guidelines`);
   return response.data.guidelines;
 }
+
+/**
+ * Get live source details from MediaCloud via backend
+ * @param {number} sourceId - MediaCloud source ID
+ * @returns {Promise} Source object with latest metadata
+ */
+export async function getSourceDetails(sourceId) {
+  const response = await api.get(`/sources/${sourceId}`);
+  return response.data.source;
+}
