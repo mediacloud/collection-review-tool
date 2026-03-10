@@ -3,10 +3,18 @@
   export let onKeep;
   export let onRemove;
   export let onSkip;
+  export let editMetadata = false;
+  export let onEditLanguage;
+  export let onEditPubCountry;
+  export let onEditPubState;
   export let loading = false;
 
   let faviconUrl = null;
   let metadata = {};
+  let correctLanguage = false;
+  let correctPubCountry = false;
+  let correctPubState = false;
+  let lastItemId = null;
 
   function formatNumber(value) {
     if (value === null || value === undefined || isNaN(Number(value))) {
@@ -39,6 +47,31 @@
   } else {
     faviconUrl = null;
   }
+
+  // Reset "correct" flags when the review item changes
+  $: if (item && item.id !== lastItemId) {
+    lastItemId = item.id;
+    correctLanguage = false;
+    correctPubCountry = false;
+    correctPubState = false;
+  }
+
+  function handleEditLanguage() {
+    correctLanguage = true;
+    if (onEditLanguage) onEditLanguage();
+  }
+
+  function handleEditPubCountry() {
+    correctPubCountry = true;
+    if (onEditPubCountry) onEditPubCountry();
+  }
+
+  function handleEditPubState() {
+    correctPubState = true;
+    if (onEditPubState) onEditPubState();
+  }
+
+  $: canKeep = !loading && (!editMetadata || (correctLanguage && correctPubCountry && correctPubState));
 </script>
 
 {#if item}
@@ -62,18 +95,25 @@
               </a>
             {/if}
           </div>
+          {#if metadata.stories_per_week && formatNumber(metadata.stories_per_week)}
+            <span class="stories-pill">
+              {formatNumber(metadata.stories_per_week)} stories per week
+            </span>
+          {/if}
         </div>
-        {#if !item.is_new_source && item.source_id}
-          <a 
-            href={`https://search.mediacloud.org/sources/${item.source_id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="mediacloud-link"
-            title="Review source in MediaCloud"
-          >
-            Review in MediaCloud ↗
-          </a>
-        {/if}
+        <div class="header-right">
+          {#if !item.is_new_source && item.source_id}
+            <a 
+              href={`https://search.mediacloud.org/sources/${item.source_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="mediacloud-link"
+              title="Review source in MediaCloud"
+            >
+              Review in MediaCloud ↗
+            </a>
+          {/if}
+        </div>
       </div>
       {#if item.is_new_source}
         <span class="badge new-source">New Source</span>
@@ -82,29 +122,64 @@
           <div class="metadata-grid">
             <div class="meta-card">
               <div class="meta-label">Language</div>
-              <div class="meta-value">
-                {metadata.primary_language || metadata.language || '—'}
+              <div class="meta-row">
+                <div class="meta-value">
+                  {metadata.primary_language || metadata.language || '—'}
+                </div>
+                {#if editMetadata}
+                  <div class="meta-controls">
+                    <button type="button" class="meta-correct-button">
+                      <label class="meta-checkbox-label">
+                        <input type="checkbox" bind:checked={correctLanguage} />
+                        <span>Correct</span>
+                      </label>
+                    </button>
+                    <button type="button" class="meta-edit-button" on:click={handleEditLanguage}>
+                      Edit
+                    </button>
+                  </div>
+                {/if}
               </div>
             </div>
             <div class="meta-card">
               <div class="meta-label">Pub country</div>
-              <div class="meta-value">
-                {metadata.pub_country || '—'}
+              <div class="meta-row">
+                <div class="meta-value">
+                  {metadata.pub_country || '—'}
+                </div>
+                {#if editMetadata}
+                  <div class="meta-controls">
+                    <button type="button" class="meta-correct-button">
+                      <label class="meta-checkbox-label">
+                        <input type="checkbox" bind:checked={correctPubCountry} />
+                        <span>Correct</span>
+                      </label>
+                    </button>
+                    <button type="button" class="meta-edit-button" on:click={handleEditPubCountry}>
+                      Edit
+                    </button>
+                  </div>
+                {/if}
               </div>
             </div>
             <div class="meta-card">
               <div class="meta-label">Pub state</div>
-              <div class="meta-value">
-                {metadata.pub_state || '—'}
-              </div>
-            </div>
-            <div class="meta-card">
-              <div class="meta-label">Stories / week</div>
-              <div class="meta-value">
-                {#if metadata.stories_per_week && formatNumber(metadata.stories_per_week)}
-                  {formatNumber(metadata.stories_per_week)}
-                {:else}
-                  —
+              <div class="meta-row">
+                <div class="meta-value">
+                  {metadata.pub_state || '—'}
+                </div>
+                {#if editMetadata}
+                  <div class="meta-controls">
+                    <button type="button" class="meta-correct-button">
+                      <label class="meta-checkbox-label">
+                        <input type="checkbox" bind:checked={correctPubState} />
+                        <span>Correct</span>
+                      </label>
+                    </button>
+                    <button type="button" class="meta-edit-button" on:click={handleEditPubState}>
+                      Edit
+                    </button>
+                  </div>
                 {/if}
               </div>
             </div>
@@ -114,27 +189,31 @@
     </div>
     
     <div class="actions">
-      <button 
-        class="btn btn-keep" 
-        on:click={onKeep} 
-        disabled={loading}
-      >
-        Keep
-      </button>
-      <button 
-        class="btn btn-remove" 
-        on:click={onRemove} 
-        disabled={loading}
-      >
-        Remove
-      </button>
-      <button 
-        class="btn btn-skip" 
-        on:click={onSkip} 
-        disabled={loading}
-      >
-        Skip for now
-      </button>
+      <div class="actions-left">
+        <button 
+          class="btn btn-remove" 
+          on:click={onRemove} 
+          disabled={loading}
+        >
+          Remove
+        </button>
+      </div>
+      <div class="actions-right">
+        <button 
+          class="btn btn-skip" 
+          on:click={onSkip} 
+          disabled={loading}
+        >
+          Skip for now
+        </button>
+        <button 
+          class="btn btn-keep" 
+          on:click={onKeep} 
+          disabled={!canKeep}
+        >
+          Keep
+        </button>
+      </div>
     </div>
   </div>
 {:else}
@@ -149,7 +228,8 @@
     padding: 30px;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
+    margin: 0 auto 20px;
+    width: 80%;
   }
 
   .source-info {
@@ -165,9 +245,16 @@
     flex-wrap: wrap;
   }
 
+  .header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
   .source-title-row {
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 12px;
   }
 
@@ -176,6 +263,7 @@
     flex-direction: column;
     gap: 4px;
     min-width: 0;
+    flex: 1;
   }
 
   h3 {
@@ -201,6 +289,20 @@
     transition: color 0.3s;
   }
 
+  .stories-pill {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid #e0e4e8;
+    background-color: #f8f9fa;
+    color: #2c3e50;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
   .mediacloud-link:hover {
     color: #2980b9;
     text-decoration: underline;
@@ -214,7 +316,7 @@
 
   .metadata-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
   }
 
@@ -226,6 +328,13 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+
+  .meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
   }
 
   .meta-label {
@@ -240,6 +349,56 @@
     font-size: 15px;
     color: #2c3e50;
     word-break: break-word;
+  }
+
+  .meta-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .meta-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #34495e;
+  }
+
+  .meta-checkbox-label input {
+    width: 14px;
+    height: 14px;
+  }
+
+  .meta-correct-button {
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid #d0d7de;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+
+  .meta-correct-button:hover {
+    background-color: #e1e4e8;
+    border-color: #c0c7d0;
+  }
+
+  .meta-edit-button {
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid #d0d7de;
+    background-color: white;
+    font-size: 12px;
+    font-weight: 500;
+    color: #34495e;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+
+  .meta-edit-button:hover {
+    background-color: #f6f8fa;
+    border-color: #c0c7d0;
   }
 
   .monospace {
@@ -273,11 +432,26 @@
 
   .actions {
     display: flex;
+    justify-content: space-between;
     gap: 12px;
   }
 
-  .btn {
+  .actions-left,
+  .actions-right {
+    display: flex;
+    gap: 12px;
     flex: 1;
+  }
+
+  .actions-left {
+    justify-content: flex-start;
+  }
+
+  .actions-right {
+    justify-content: flex-end;
+  }
+
+  .btn {
     padding: 14px 24px;
     border: none;
     border-radius: 6px;
@@ -293,6 +467,7 @@
   }
 
   .btn-keep {
+    min-width: 50%;
     background-color: #27ae60;
     color: white;
   }
@@ -302,12 +477,14 @@
   }
 
   .btn-remove {
-    background-color: #e74c3c;
-    color: white;
+    min-width: 50%;
+    background-color: transparent;
+    color: #e74c3c;
+    border: 1px solid #e74c3c;
   }
 
   .btn-remove:hover:not(:disabled) {
-    background-color: #c0392b;
+    background-color: rgba(231, 76, 60, 0.08);
   }
 
   .btn-skip {

@@ -38,6 +38,8 @@ class Review(db.Model, TimestampMixin):
     name = db.Column(db.String(255), nullable=True)
     notes = db.Column(db.Text, nullable=True)
     guidelines_template = db.Column(db.String(100), nullable=True, default='default')  # Template name for annotation guidelines
+    # When true, UI should allow editing of per-source language and geography metadata
+    edit_metadata = db.Column(db.Boolean, default=False, nullable=False)
     
     # Relationship to review items
     items = db.relationship('ReviewItem', backref='review', lazy=True, cascade='all, delete-orphan')
@@ -53,7 +55,8 @@ class Review(db.Model, TimestampMixin):
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'name': self.name,
             'notes': self.notes,
-            'guidelines_template': self.guidelines_template or 'default'
+            'guidelines_template': self.guidelines_template or 'default',
+            'edit_metadata': bool(self.edit_metadata)
         }
         
         if include_stats:

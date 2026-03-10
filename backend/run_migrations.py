@@ -130,6 +130,28 @@ def run_all_migrations():
                     conn.execute(text("ALTER TABLE reviews ADD COLUMN guidelines_template TEXT DEFAULT 'default'"))
                     print("Successfully added 'guidelines_template' column.")
             
+            # Migration 5: edit_metadata flag on reviews
+            print("\nRunning migration: edit_metadata")
+            if is_sqlite:
+                result = conn.execute(text("PRAGMA table_info(reviews)"))
+                columns = [row[1] for row in result]
+                if 'edit_metadata' in columns:
+                    print("Column 'edit_metadata' already exists. No migration needed.")
+                else:
+                    conn.execute(text("ALTER TABLE reviews ADD COLUMN edit_metadata BOOLEAN DEFAULT 0"))
+                    print("Successfully added 'edit_metadata' column.")
+            else:
+                result = conn.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name='reviews' AND column_name='edit_metadata'
+                """))
+                if result.fetchone():
+                    print("Column 'edit_metadata' already exists. No migration needed.")
+                else:
+                    conn.execute(text("ALTER TABLE reviews ADD COLUMN edit_metadata BOOLEAN DEFAULT FALSE"))
+                    print("Successfully added 'edit_metadata' column.")
+            
             trans.commit()
             print("\n✓ All migrations completed successfully.")
             

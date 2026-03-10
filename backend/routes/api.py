@@ -55,6 +55,7 @@ def start_review():
         
         collection_id = data['collection_id']
         guidelines_template = data.get('guidelines_template', 'default')
+        edit_metadata = bool(data.get('edit_metadata', False))
         
         # Check for existing active review (status != 'completed')
         existing_review = Review.query.filter_by(
@@ -80,6 +81,11 @@ def start_review():
                     existing_review.collection_name = existing_review.collection_name or f'Collection {collection_id}'
                     existing_review.name = existing_review.name or existing_review.collection_name
             
+            # Optionally update edit_metadata if provided
+            if 'edit_metadata' in data:
+                existing_review.edit_metadata = edit_metadata
+                db.session.commit()
+            
             # Return existing review with stats
             return jsonify({
                 'review': existing_review.to_dict(include_stats=True)
@@ -102,7 +108,8 @@ def start_review():
             collection_name=collection_name,
             name=collection_name,
             status=ReviewStatus.IN_PROGRESS,
-            guidelines_template=guidelines_template
+            guidelines_template=guidelines_template,
+            edit_metadata=edit_metadata
         )
         db.session.add(new_review)
         db.session.flush()  # Get the review ID
@@ -249,6 +256,31 @@ def get_review(review_id):
         }), 200
     except Exception as e:
         return jsonify({'error': f'Failed to fetch review: {str(e)}'}), 500
+
+
+@api_bp.route('/reviews/<int:review_id>', methods=['PATCH'])
+def update_review(review_id):
+    """
+    Update mutable properties on a review (currently: edit_metadata).
+    
+    PATCH /api/reviews/<review_id>
+    Body: { "edit_metadata": true }
+    """
+    try:
+        review = Review.query.get_or_404(review_id)
+        data = request.get_json() or {}
+        
+        if 'edit_metadata' in data:
+            review.edit_metadata = bool(data['edit_metadata'])
+        
+        db.session.commit()
+        
+        return jsonify({
+            'review': review.to_dict(include_stats=True)
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to update review: {str(e)}'}), 500
 
 
 @api_bp.route('/sources/<int:source_id>', methods=['GET'])

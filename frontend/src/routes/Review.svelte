@@ -9,13 +9,16 @@
     getRemovedSourcesExportUrl,
     getAddedSourcesExportUrl,
     getReviewGuidelines,
-    getSourceDetails
+    getSourceDetails,
+    updateReview
   } from '../lib/api.js';
+  import iso3166 from 'iso-3166-2';
   import ReviewHeader from '../components/ReviewHeader.svelte';
   import SourceViewer from '../components/SourceViewer.svelte';
   import RemovalReasonModal from '../components/RemovalReasonModal.svelte';
   import NewSourceModal from '../components/NewSourceModal.svelte';
   import AllDecisionsModal from '../components/AllDecisionsModal.svelte';
+  import EditMetadataModal from '../components/EditMetadataModal.svelte';
 
   let review = null;
   let currentItem = null;
@@ -30,6 +33,53 @@
   let guidelines = null;
   let showContextPanel = false;
   let showAllItemsModal = false;
+  let showEditMetadataError = null;
+  let showEditMetadataModal = false;
+  let editFieldKey = null;
+  let editFieldLabel = '';
+  let editFieldCurrentValue = '';
+  let editFieldOptions = [];
+
+  const LANGUAGE_OPTIONS = [
+    { value: 'en', label: 'en – English' },
+    { value: 'es', label: 'es – Spanish' },
+    { value: 'fr', label: 'fr – French' },
+    { value: 'de', label: 'de – German' },
+    { value: 'pt', label: 'pt – Portuguese' },
+    { value: 'ru', label: 'ru – Russian' },
+    { value: 'ar', label: 'ar – Arabic' },
+    { value: 'zh', label: 'zh – Chinese' },
+    { value: 'hi', label: 'hi – Hindi' },
+    { value: 'bn', label: 'bn – Bengali' },
+    { value: 'id', label: 'id – Indonesian' },
+    { value: 'tr', label: 'tr – Turkish' },
+    { value: 'vi', label: 'vi – Vietnamese' },
+    { value: 'sw', label: 'sw – Swahili' },
+    { value: 'fa', label: 'fa – Persian' }
+  ];
+
+  const COUNTRY_OPTIONS = [
+    { value: 'US', label: 'US – United States' },
+    { value: 'GB', label: 'GB – United Kingdom' },
+    { value: 'CA', label: 'CA – Canada' },
+    { value: 'AU', label: 'AU – Australia' },
+    { value: 'NZ', label: 'NZ – New Zealand' },
+    { value: 'FR', label: 'FR – France' },
+    { value: 'DE', label: 'DE – Germany' },
+    { value: 'ES', label: 'ES – Spain' },
+    { value: 'IT', label: 'IT – Italy' },
+    { value: 'BR', label: 'BR – Brazil' },
+    { value: 'MX', label: 'MX – Mexico' },
+    { value: 'AR', label: 'AR – Argentina' },
+    { value: 'CN', label: 'CN – China' },
+    { value: 'JP', label: 'JP – Japan' },
+    { value: 'IN', label: 'IN – India' },
+    { value: 'ZA', label: 'ZA – South Africa' },
+    { value: 'NG', label: 'NG – Nigeria' },
+    { value: 'EG', label: 'EG – Egypt' },
+    { value: 'RU', label: 'RU – Russia' },
+    { value: 'TR', label: 'TR – Türkiye' }
+  ];
 
   // Get review ID from URL
   function getReviewIdFromUrl() {
@@ -322,6 +372,62 @@
     return html;
   }
 
+  async function toggleEditMetadata() {
+    if (!review || !reviewId) return;
+    const nextValue = !review.edit_metadata;
+    showEditMetadataError = null;
+    try {
+      const updated = await updateReview(reviewId, { edit_metadata: nextValue });
+      review = updated;
+    } catch (err) {
+      console.error('Error updating edit_metadata:', err);
+      showEditMetadataError = err.response?.data?.error || err.message || 'Failed to update metadata editing setting';
+    }
+  }
+
+  function openEditMetadata(fieldKey, label, currentValue, options = []) {
+    editFieldKey = fieldKey;
+    editFieldLabel = label;
+    editFieldCurrentValue = currentValue || '';
+    editFieldOptions = options;
+    showEditMetadataModal = true;
+  }
+
+  function closeEditMetadata() {
+    showEditMetadataModal = false;
+    editFieldKey = null;
+    editFieldLabel = '';
+    editFieldCurrentValue = '';
+    editFieldOptions = [];
+  }
+
+  function handleEditMetadataSave(event) {
+    const newValue = event.detail;
+    if (currentItem && currentItem.source_metadata && editFieldKey) {
+      // If editing pub_state and we have a country code, validate ISO 3166-2
+      if (editFieldKey === 'pub_state' && currentItem.source_metadata.pub_country && newValue) {
+        const countryCode = currentItem.source_metadata.pub_country;
+        const fullCode = `${countryCode}-${newValue}`;
+        const subdivision = iso3166.subdivision(fullCode);
+        if (!subdivision) {
+          showEditMetadataError = `Invalid subdivision code "${newValue}" for country ${countryCode} (expected ISO 3166-2).`;
+          return;
+        }
+        // Clear any previous error on success
+        showEditMetadataError = null;
+      }
+
+      currentItem = {
+        ...currentItem,
+        source_metadata: {
+          ...currentItem.source_metadata,
+          [editFieldKey]: newValue
+        }
+      };
+    }
+    closeEditMetadata();
+  }
+
 </script>
 
 <div class="container">
@@ -330,53 +436,7 @@
   {:else if error && !review}
     <div class="error-message">{error}</div>
   {:else if review}
-    <div class="review-layout">
-      <div class="right-column">
-        {#if error}
-          <div class="error-banner">{error}</div>
-        {/if}
-
-        {#if guidelines}
-          <div class="guidelines-section">
-            <div class="guidelines-content">
-              {@html formatGuidelines(guidelines)}
-            </div>
-          </div>
-        {/if}
-
-        {#if review.status === 'completed'}
-          <div class="completed-message">
-            <p>✓ Review completed! Download the CSV export below.</p>
-          </div>
-        {/if}
-
-        {#if review.status !== 'completed'}
-          <SourceViewer 
-            item={currentItem}
-            onKeep={handleKeep}
-            onRemove={handleRemove}
-            onSkip={handleSkip}
-            {loading}
-          />
-          
-          <RemovalReasonModal
-            show={showRemovalModal}
-            sourceLabel={currentItem?.source_label}
-            on:confirm={(e) => handleRemoveConfirm(e.detail)}
-            on:close={handleRemoveCancel}
-          />
-
-          <NewSourceModal
-            show={showNewSourceModal}
-            {loading}
-            on:confirm={handleNewSourceModalConfirm}
-            on:close={() => (showNewSourceModal = false)}
-          />
-        {/if}
-      </div>
-    </div>
-
-    <div class="review-footer">
+    <div class="review-header-bar">
       <div class="review-footer-inner">
         <div class="footer-section footer-left">
           <button
@@ -393,7 +453,7 @@
             class="sidebar-toggle"
             on:click={() => (showContextPanel = !showContextPanel)}
           >
-            {showContextPanel ? 'Hide details' : 'See more'}
+            {showContextPanel ? 'Hide details' : 'Show details'}
           </button>
           <div class="footer-title">
             Review: {review.collection_name || `Collection #${review.collection_id}`}
@@ -416,19 +476,8 @@
     </div>
     
     {#if showContextPanel}
-      <div class="context-panel">
-        <div class="context-inner">
-          <div class="context-header">
-            <span class="context-title">Review context</span>
-            <button
-              type="button"
-              class="context-close"
-              on:click={() => (showContextPanel = false)}
-            >
-              Close
-            </button>
-          </div>
-
+      <div class="context-panel" on:click={() => (showContextPanel = false)}>
+        <div class="context-inner" on:click|stopPropagation>
           <div class="context-section">
             <ReviewHeader {review} onShowAllDecisions={openAllDecisionsModal} />
           </div>
@@ -465,9 +514,106 @@
               </div>
             </div>
           </div>
+
+          <div class="context-section">
+            <button
+              type="button"
+              class="context-toggle-button"
+              on:click={toggleEditMetadata}
+            >
+              <span class="toggle-label">
+                <span class="toggle-indicator {review.edit_metadata ? 'on' : 'off'}"></span>
+                Enable metadata editing for this review
+              </span>
+            </button>
+            {#if showEditMetadataError}
+              <div class="error-banner">
+                {showEditMetadataError}
+              </div>
+            {/if}
+          </div>
         </div>
       </div>
     {/if}
+
+    <div class="review-layout">
+      <div class="right-column">
+        {#if error}
+          <div class="error-banner">{error}</div>
+        {/if}
+
+        {#if guidelines}
+          <div class="guidelines-section">
+            <div class="guidelines-content">
+              {@html formatGuidelines(guidelines)}
+            </div>
+          </div>
+        {/if}
+
+        {#if review.status === 'completed'}
+          <div class="completed-message">
+            <p>✓ Review completed! Download the CSV export below.</p>
+          </div>
+        {/if}
+
+        {#if review.status !== 'completed'}
+          <SourceViewer 
+            item={currentItem}
+            onKeep={handleKeep}
+            onRemove={handleRemove}
+            onSkip={handleSkip}
+            editMetadata={review?.edit_metadata}
+            onEditLanguage={() =>
+              openEditMetadata(
+                'primary_language',
+                'Language (ISO 639-1)',
+                currentItem?.source_metadata?.primary_language || currentItem?.source_metadata?.language,
+                LANGUAGE_OPTIONS
+              )
+            }
+            onEditPubCountry={() =>
+              openEditMetadata(
+                'pub_country',
+                'Pub country (ISO 3166-1)',
+                currentItem?.source_metadata?.pub_country,
+                COUNTRY_OPTIONS
+              )
+            }
+            onEditPubState={() =>
+              openEditMetadata(
+                'pub_state',
+                'Pub state (ISO 3166-2)',
+                currentItem?.source_metadata?.pub_state
+              )
+            }
+            {loading}
+          />
+          
+          <RemovalReasonModal
+            show={showRemovalModal}
+            sourceLabel={currentItem?.source_label}
+            on:confirm={(e) => handleRemoveConfirm(e.detail)}
+            on:close={handleRemoveCancel}
+          />
+
+          <NewSourceModal
+            show={showNewSourceModal}
+            {loading}
+            on:confirm={handleNewSourceModalConfirm}
+            on:close={() => (showNewSourceModal = false)}
+          />
+        {/if}
+      </div>
+    </div>
+
+    <EditMetadataModal
+      show={showEditMetadataModal}
+      fieldLabel={editFieldLabel}
+      currentValue={editFieldCurrentValue}
+      options={editFieldOptions}
+      on:save={handleEditMetadataSave}
+      on:close={closeEditMetadata}
+    />
 
     <AllDecisionsModal
       show={showAllItemsModal}
@@ -481,7 +627,7 @@
   .container {
     margin: 0 auto;
     padding: 20px;
-    padding-bottom: 72px; /* space for fixed footer */
+    padding-top: 72px; /* space for fixed header */
   }
 
   .loading {
@@ -514,12 +660,12 @@
     gap: 20px;
   }
   
-  .review-footer {
+  .review-header-bar {
     position: fixed;
     inset-inline: 0;
-    bottom: 0;
+    top: 0;
     background: white;
-    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
     z-index: 900;
   }
 
@@ -544,8 +690,8 @@
   }
 
   .footer-title {
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 16px;
+    font-weight: 600;
     color: #2c3e50;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -622,24 +768,23 @@
   .context-panel {
     position: fixed;
     inset-inline: 0;
-    bottom: 44px; /* sit just under the footer */
-    max-height: 60vh;
+    top: 56px; /* just below header bar */
+    bottom: 0;
     z-index: 850;
     display: flex;
     justify-content: center;
-    pointer-events: none;
+    align-items: flex-start;
   }
 
   .context-inner {
-    pointer-events: auto;
-    max-width: 100%;
-    width: 100%;
-    margin: 0 0 8px;
+    max-width: 1320px;
+    margin: 8px auto 0;
     background: white;
-    border-radius: 10px 10px 0 0;
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.16);
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
     border: 1px solid #d0d7de;
-    padding: 16px 20px 12px;
+    padding: 12px 20px 12px;
+    pointer-events: auto;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -679,6 +824,43 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .context-toggle-button {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid #e0e4e8;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+
+  .context-toggle-button:hover {
+    background-color: #eef2f7;
+    border-color: #d0d7de;
+  }
+
+  .toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #34495e;
+  }
+
+  .toggle-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid #bdc3c7;
+    background-color: white;
+  }
+
+  .toggle-indicator.on {
+    border-color: #27ae60;
+    background-color: #27ae60;
   }
 
   .context-action {

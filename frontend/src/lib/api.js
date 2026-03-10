@@ -18,10 +18,11 @@ const api = axios.create({
  * @param {string} guidelinesTemplate - Guidelines template name (default: 'default')
  * @returns {Promise} Review object
  */
-export async function startReview(collectionId, guidelinesTemplate = 'default') {
+export async function startReview(collectionId, guidelinesTemplate = 'default', editMetadata = false) {
   const response = await api.post('/reviews/start', {
     collection_id: collectionId,
-    guidelines_template: guidelinesTemplate
+    guidelines_template: guidelinesTemplate,
+    edit_metadata: !!editMetadata,
   });
   return response.data.review;
 }
@@ -156,6 +157,17 @@ export async function getGuidelineTemplates() {
 export async function getReviewGuidelines(reviewId) {
   const response = await api.get(`/reviews/${reviewId}/guidelines`);
   return response.data.guidelines;
+}
+
+/**
+ * Update mutable fields on a review
+ * @param {number} reviewId - Review ID
+ * @param {Object} payload - Fields to update (e.g., { edit_metadata: true })
+ * @returns {Promise} Updated review object with stats
+ */
+export async function updateReview(reviewId, payload) {
+  const response = await api.patch(`/reviews/${reviewId}`, payload);
+  return response.data.review;
 }
 
 /**

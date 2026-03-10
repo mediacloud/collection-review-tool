@@ -13,6 +13,7 @@
   let guidelineTemplates = [];
   let selectedTemplate = 'default';
   let loadingTemplates = false;
+  let editMetadata = false;
 
   onMount(async () => {
     await loadInProgressReviews();
@@ -103,7 +104,7 @@
     error = null;
 
     try {
-      const review = await startReview(id, selectedTemplate);
+      const review = await startReview(id, selectedTemplate, editMetadata);
       await loadInProgressReviews(); // Refresh the list
       window.navigate(`/reviews/${review.id}`);
     } catch (err) {
@@ -147,6 +148,20 @@
             </select>
           </div>
         {/if}
+
+        <div class="form-group">
+          <button
+            type="button"
+            class="context-toggle-button"
+            on:click={() => (editMetadata = !editMetadata)}
+            disabled={loading}
+          >
+            <span class="toggle-label">
+              <span class="toggle-indicator {editMetadata ? 'on' : 'off'}"></span>
+              Enable metadata editing in this review
+            </span>
+          </button>
+        </div>
 
         {#if error}
           <div class="error">{error}</div>
@@ -279,6 +294,48 @@
 
   .form-group {
     margin-bottom: 20px;
+  }
+
+  .context-toggle-button {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid #e0e4e8;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+
+  .context-toggle-button:hover:enabled {
+    background-color: #eef2f7;
+    border-color: #d0d7de;
+  }
+
+  .context-toggle-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #34495e;
+  }
+
+  .toggle-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid #bdc3c7;
+    background-color: white;
+  }
+
+  .toggle-indicator.on {
+    border-color: #27ae60;
+    background-color: #27ae60;
   }
 
   label {

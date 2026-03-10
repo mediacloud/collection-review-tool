@@ -149,6 +149,7 @@
 
   textarea {
     width: 100%;
+    box-sizing: border-box;
     padding: 12px;
     border: 1px solid #ddd;
     border-radius: 4px;
