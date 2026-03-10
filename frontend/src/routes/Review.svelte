@@ -39,6 +39,7 @@
   let editFieldLabel = '';
   let editFieldCurrentValue = '';
   let editFieldOptions = [];
+  let editFieldReadonlyMessage = '';
 
   const LANGUAGE_OPTIONS = [
     { value: 'en', label: 'en – English' },
@@ -385,11 +386,12 @@
     }
   }
 
-  function openEditMetadata(fieldKey, label, currentValue, options = []) {
+  function openEditMetadata(fieldKey, label, currentValue, options = [], readonlyMsg = '') {
     editFieldKey = fieldKey;
     editFieldLabel = label;
     editFieldCurrentValue = currentValue || '';
     editFieldOptions = options;
+    editFieldReadonlyMessage = readonlyMsg;
     showEditMetadataModal = true;
   }
 
@@ -399,6 +401,7 @@
     editFieldLabel = '';
     editFieldCurrentValue = '';
     editFieldOptions = [];
+    editFieldReadonlyMessage = '';
   }
 
   function handleEditMetadataSave(event) {
@@ -571,21 +574,47 @@
                 LANGUAGE_OPTIONS
               )
             }
-            onEditPubCountry={() =>
+            onEditPubCountry={() => {
+              const options = [{ value: '', label: 'None / Not set' }, ...COUNTRY_OPTIONS];
               openEditMetadata(
                 'pub_country',
                 'Pub country (ISO 3166-1)',
                 currentItem?.source_metadata?.pub_country,
-                COUNTRY_OPTIONS
-              )
-            }
-            onEditPubState={() =>
+                options
+              );
+            }}
+            onEditPubState={() => {
+              const countryCode = currentItem?.source_metadata?.pub_country;
+              if (!countryCode) {
+                openEditMetadata(
+                  'pub_state',
+                  'Pub state (ISO 3166-2)',
+                  currentItem?.source_metadata?.pub_state,
+                  [],
+                  'Pub state is based on ISO 3166-2 codes and depends on a Pub country value. Please set Pub country first.'
+                );
+                return;
+              }
+
+              let options = [];
+              if (iso3166.data[countryCode] && iso3166.data[countryCode].sub) {
+                options = Object.keys(iso3166.data[countryCode].sub)
+                  .sort()
+                  .map((code) => {
+                    const sub = iso3166.data[countryCode].sub[code];
+                    const shortCode = code.split('-')[1] || code;
+                    return { value: shortCode, label: `${code} – ${sub.name}` };
+                  });
+                options = [{ value: '', label: 'None / Not set' }, ...options];
+              }
+
               openEditMetadata(
                 'pub_state',
-                'Pub state (ISO 3166-2)',
-                currentItem?.source_metadata?.pub_state
-              )
-            }
+                `Pub state (ISO 3166-2 for ${countryCode})`,
+                currentItem?.source_metadata?.pub_state,
+                options
+              );
+            }}
             {loading}
           />
           
@@ -611,6 +640,7 @@
       fieldLabel={editFieldLabel}
       currentValue={editFieldCurrentValue}
       options={editFieldOptions}
+      readonlyMessage={editFieldReadonlyMessage}
       on:save={handleEditMetadataSave}
       on:close={closeEditMetadata}
     />

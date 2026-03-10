@@ -6,6 +6,8 @@
   export let currentValue = '';
   // Optional array of { value, label } for dropdowns
   export let options = [];
+  // Optional read-only info message; when set, no input/select is shown
+  export let readonlyMessage = '';
 
   const dispatch = createEventDispatcher();
 
@@ -36,7 +38,9 @@
       <h2 id="edit-metadata-title">Edit {fieldLabel}</h2>
       <div class="form-group">
         <label for="edit-field">{fieldLabel}</label>
-        {#if options && options.length > 0}
+        {#if readonlyMessage}
+          <p class="readonly-message">{readonlyMessage}</p>
+        {:else if options && options.length > 0}
           <select id="edit-field" bind:value={value}>
             <option value="">-- Select {fieldLabel.toLowerCase()} --</option>
             {#each options as opt}
@@ -55,9 +59,11 @@
         <button type="button" class="btn btn-secondary" on:click={handleClose}>
           Cancel
         </button>
-        <button type="button" class="btn btn-primary" on:click={handleSave}>
-          Save
-        </button>
+        {#if !readonlyMessage}
+          <button type="button" class="btn btn-primary" on:click={handleSave}>
+            Save
+          </button>
+        {/if}
       </div>
     </div>
   </div>
@@ -116,6 +122,13 @@
   input:focus {
     outline: none;
     border-color: #3498db;
+  }
+
+  .readonly-message {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #7f8c8d;
+    line-height: 1.5;
   }
 
   .modal-actions {
