@@ -13,6 +13,7 @@
     updateReview
   } from '../lib/api.js';
   import iso3166 from 'iso-3166-2';
+  import * as rawIso3166 from 'iso-3166';
   import ReviewHeader from '../components/ReviewHeader.svelte';
   import SourceViewer from '../components/SourceViewer.svelte';
   import RemovalReasonModal from '../components/RemovalReasonModal.svelte';
@@ -59,28 +60,16 @@
     { value: 'fa', label: 'fa – Persian' }
   ];
 
-  const COUNTRY_OPTIONS = [
-    { value: 'US', label: 'US – United States' },
-    { value: 'GB', label: 'GB – United Kingdom' },
-    { value: 'CA', label: 'CA – Canada' },
-    { value: 'AU', label: 'AU – Australia' },
-    { value: 'NZ', label: 'NZ – New Zealand' },
-    { value: 'FR', label: 'FR – France' },
-    { value: 'DE', label: 'DE – Germany' },
-    { value: 'ES', label: 'ES – Spain' },
-    { value: 'IT', label: 'IT – Italy' },
-    { value: 'BR', label: 'BR – Brazil' },
-    { value: 'MX', label: 'MX – Mexico' },
-    { value: 'AR', label: 'AR – Argentina' },
-    { value: 'CN', label: 'CN – China' },
-    { value: 'JP', label: 'JP – Japan' },
-    { value: 'IN', label: 'IN – India' },
-    { value: 'ZA', label: 'ZA – South Africa' },
-    { value: 'NG', label: 'NG – Nigeria' },
-    { value: 'EG', label: 'EG – Egypt' },
-    { value: 'RU', label: 'RU – Russia' },
-    { value: 'TR', label: 'TR – Türkiye' }
-  ];
+  const COUNTRY_OPTIONS = Object.keys(iso3166.data)
+    .sort()
+    .map((code2) => {
+      const alpha3 = rawIso3166.iso31661Alpha2ToAlpha3[code2] || code2;
+      return {
+        // Store and use the 3-letter ISO 3166-1 alpha-3 code
+        value: alpha3,
+        label: `${alpha3} – ${iso3166.data[code2].name}`,
+      };
+    });
 
   // Get review ID from URL
   function getReviewIdFromUrl() {
@@ -409,11 +398,20 @@
     if (currentItem && currentItem.source_metadata && editFieldKey) {
       // If editing pub_state and we have a country code, validate ISO 3166-2
       if (editFieldKey === 'pub_state' && currentItem.source_metadata.pub_country && newValue) {
-        const countryCode = currentItem.source_metadata.pub_country;
-        const fullCode = `${countryCode}-${newValue}`;
-        const subdivision = iso3166.subdivision(fullCode);
+        const storedCountry = currentItem.source_metadata.pub_country;
+        const alpha2Country =
+          storedCountry.length === 3
+            ? rawIso3166.iso31661Alpha3ToAlpha2[storedCountry] || storedCountry
+            : storedCountry;
+        // Expect full ISO 3166-2 code like "US-OH"
+        const subdivision = iso3166.subdivision(newValue);
         if (!subdivision) {
-          showEditMetadataError = `Invalid subdivision code "${newValue}" for country ${countryCode} (expected ISO 3166-2).`;
+          showEditMetadataError = `Invalid subdivision code "${newValue}" for country ${storedCountry} (expected ISO 3166-2).`;
+          return;
+        }
+        // Optional: ensure the code's country matches the selected country
+        if (!newValue.startsWith(`${alpha2Country}-`)) {
+          showEditMetadataError = `Subdivision code "${newValue}" does not match country ${storedCountry}.`;
           return;
         }
         // Clear any previous error on success
@@ -578,14 +576,14 @@
               const options = [{ value: '', label: 'None / Not set' }, ...COUNTRY_OPTIONS];
               openEditMetadata(
                 'pub_country',
-                'Pub country (ISO 3166-1)',
+                'Pub country (ISO 3166-1 alpha-3)',
                 currentItem?.source_metadata?.pub_country,
                 options
               );
             }}
             onEditPubState={() => {
-              const countryCode = currentItem?.source_metadata?.pub_country;
-              if (!countryCode) {
+              const storedCountry = currentItem?.source_metadata?.pub_country;
+              if (!storedCountry) {
                 openEditMetadata(
                   'pub_state',
                   'Pub state (ISO 3166-2)',
@@ -596,21 +594,25 @@
                 return;
               }
 
+              const alpha2Country =
+                storedCountry.length === 3
+                  ? rawIso3166.iso31661Alpha3ToAlpha2[storedCountry] || storedCountry
+                  : storedCountry;
+
               let options = [];
-              if (iso3166.data[countryCode] && iso3166.data[countryCode].sub) {
-                options = Object.keys(iso3166.data[countryCode].sub)
+              if (iso3166.data[alpha2Country] && iso3166.data[alpha2Country].sub) {
+                options = Object.keys(iso3166.data[alpha2Country].sub)
                   .sort()
                   .map((code) => {
-                    const sub = iso3166.data[countryCode].sub[code];
-                    const shortCode = code.split('-')[1] || code;
-                    return { value: shortCode, label: `${code} – ${sub.name}` };
+                    const sub = iso3166.data[alpha2Country].sub[code];
+                    return { value: code, label: `${code} – ${sub.name}` };
                   });
                 options = [{ value: '', label: 'None / Not set' }, ...options];
               }
 
               openEditMetadata(
                 'pub_state',
-                `Pub state (ISO 3166-2 for ${countryCode})`,
+                `Pub state (ISO 3166-2 for ${storedCountry})`,
                 currentItem?.source_metadata?.pub_state,
                 options
               );

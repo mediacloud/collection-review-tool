@@ -210,6 +210,9 @@
           class="btn btn-keep" 
           on:click={onKeep} 
           disabled={!canKeep}
+          title={!canKeep && editMetadata
+            ? 'To keep this source, first mark Language, Pub country, and Pub state as correct.'
+            : undefined}
         >
           Keep
         </button>
