@@ -20,6 +20,7 @@
   import NewSourceModal from '../components/NewSourceModal.svelte';
   import AllDecisionsModal from '../components/AllDecisionsModal.svelte';
   import EditMetadataModal from '../components/EditMetadataModal.svelte';
+  import BaseModal from '../components/BaseModal.svelte';
 
   let review = null;
   let currentItem = null;
@@ -468,7 +469,7 @@
             type="button"
             class="propose-button"
             on:click={handleOpenNewSourceModal}
-            disabled={loading}
+            disabled={loading || showContextPanel}
           >
             + Propose new source
           </button>
@@ -476,66 +477,68 @@
       </div>
     </div>
     
-    {#if showContextPanel}
-      <div class="context-panel" on:click={() => (showContextPanel = false)}>
-        <div class="context-inner" on:click|stopPropagation>
-          <div class="context-section">
-            <ReviewHeader {review} onShowAllDecisions={openAllDecisionsModal} />
-          </div>
+    <BaseModal
+      show={showContextPanel}
+      onClose={() => (showContextPanel = false)}
+      variant="below-header"
+    >
+      <div class="context-inner">
+        <div class="context-section">
+          <ReviewHeader {review} onShowAllDecisions={openAllDecisionsModal} />
+        </div>
 
-          <div class="context-section">
-            <div class="export-section">
-              <h3>Export Files</h3>
-              <div class="export-links">
+        <div class="context-section">
+          <div class="export-section">
+            <h3>Export Files</h3>
+            <div class="export-links">
+              <a 
+                href={getExportUrl(reviewId)} 
+                download 
+                class="btn-download"
+              >
+                Download Main Export (Keep & Add Sources)
+              </a>
+              {#if review.stats && review.stats.remove > 0}
                 <a 
-                  href={getExportUrl(reviewId)} 
+                  href={getRemovedSourcesExportUrl(reviewId)} 
                   download 
-                  class="btn-download"
+                  class="btn-download btn-download-secondary"
                 >
-                  Download Main Export (Keep & Add Sources)
+                  Download Removed Sources ({review.stats.remove})
                 </a>
-                {#if review.stats && review.stats.remove > 0}
-                  <a 
-                    href={getRemovedSourcesExportUrl(reviewId)} 
-                    download 
-                    class="btn-download btn-download-secondary"
-                  >
-                    Download Removed Sources ({review.stats.remove})
-                  </a>
-                {/if}
-                {#if review.stats && review.stats.add > 0}
-                  <a 
-                    href={getAddedSourcesExportUrl(reviewId)} 
-                    download 
-                    class="btn-download btn-download-secondary"
-                  >
-                    Download Added Sources ({review.stats.add})
-                  </a>
-                {/if}
-              </div>
+              {/if}
+              {#if review.stats && review.stats.add > 0}
+                <a 
+                  href={getAddedSourcesExportUrl(reviewId)} 
+                  download 
+                  class="btn-download btn-download-secondary"
+                >
+                  Download Added Sources ({review.stats.add})
+                </a>
+              {/if}
             </div>
           </div>
+        </div>
 
-          <div class="context-section">
-            <button
-              type="button"
-              class="context-toggle-button"
-              on:click={toggleEditMetadata}
-            >
-              <span class="toggle-label">
-                <span class="toggle-indicator {review.edit_metadata ? 'on' : 'off'}"></span>
-                Enable metadata editing for this review
-              </span>
-            </button>
-            {#if showEditMetadataError}
-              <div class="error-banner">
-                {showEditMetadataError}
-              </div>
-            {/if}
-          </div>
+        <div class="context-section">
+          <button
+            type="button"
+            class="context-toggle-button"
+            on:click={toggleEditMetadata}
+          >
+            <span class="toggle-label">
+              <span class="toggle-indicator {review.edit_metadata ? 'on' : 'off'}"></span>
+              Enable metadata editing for this review
+            </span>
+          </button>
+          {#if showEditMetadataError}
+            <div class="error-banner">
+              {showEditMetadataError}
+            </div>
+          {/if}
         </div>
       </div>
-    {/if}
+    </BaseModal>
 
     <div class="review-layout">
       <div class="right-column">
@@ -797,26 +800,14 @@
     text-decoration: underline;
   }
 
-  .context-panel {
-    position: fixed;
-    inset-inline: 0;
-    top: 56px; /* just below header bar */
-    bottom: 0;
-    z-index: 850;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-  }
-
   .context-inner {
-    max-width: 1320px;
-    margin: 8px auto 0;
+    margin-top: 8px;
+    width: 100%;
     background: white;
     border-radius: 10px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
     border: 1px solid #d0d7de;
     padding: 12px 20px 12px;
-    pointer-events: auto;
     display: flex;
     flex-direction: column;
     gap: 12px;

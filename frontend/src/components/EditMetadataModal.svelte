@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import BaseModal from './BaseModal.svelte';
 
   export let show = false;
   export let fieldLabel = '';
@@ -26,61 +27,47 @@
   }
 </script>
 
-{#if show}
-  <div class="modal-overlay" on:click={handleClose}>
-    <div
-      class="modal-content"
-      on:click|stopPropagation
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="edit-metadata-title"
-    >
-      <h2 id="edit-metadata-title">Edit {fieldLabel}</h2>
-      <div class="form-group">
-        <label for="edit-field">{fieldLabel}</label>
-        {#if readonlyMessage}
-          <p class="readonly-message">{readonlyMessage}</p>
-        {:else if options && options.length > 0}
-          <select id="edit-field" bind:value={value}>
-            <option value="">-- Select {fieldLabel.toLowerCase()} --</option>
-            {#each options as opt}
-              <option value={opt.value}>{opt.label}</option>
-            {/each}
-          </select>
-        {:else}
-          <input
-            id="edit-field"
-            type="text"
-            bind:value={value}
-          />
-        {/if}
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" on:click={handleClose}>
-          Cancel
+<BaseModal show={show} onClose={handleClose}>
+  <div
+    class="modal-content"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="edit-metadata-title"
+  >
+    <h2 id="edit-metadata-title">Edit {fieldLabel}</h2>
+    <div class="form-group">
+      <label for="edit-field">{fieldLabel}</label>
+      {#if readonlyMessage}
+        <p class="readonly-message">{readonlyMessage}</p>
+      {:else if options && options.length > 0}
+        <select id="edit-field" bind:value={value}>
+          <option value="">-- Select {fieldLabel.toLowerCase()} --</option>
+          {#each options as opt}
+            <option value={opt.value}>{opt.label}</option>
+          {/each}
+        </select>
+      {:else}
+        <input
+          id="edit-field"
+          type="text"
+          bind:value={value}
+        />
+      {/if}
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" on:click={handleClose}>
+        Cancel
+      </button>
+      {#if !readonlyMessage}
+        <button type="button" class="btn btn-primary" on:click={handleSave}>
+          Save
         </button>
-        {#if !readonlyMessage}
-          <button type="button" class="btn btn-primary" on:click={handleSave}>
-            Save
-          </button>
-        {/if}
-      </div>
+      {/if}
     </div>
   </div>
-{/if}
+</BaseModal>
 
 <style>
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1100;
-    padding: 20px;
-  }
-
   .modal-content {
     background: white;
     border-radius: 8px;

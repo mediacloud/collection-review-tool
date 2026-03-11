@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import BaseModal from './BaseModal.svelte';
   
   export let show = false;
   export let sourceLabel = '';
@@ -30,9 +31,7 @@
   }
 
   function handleKeydown(event) {
-    if (event.key === 'Escape') {
-      handleCancel();
-    } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
       handleSubmit();
     }
@@ -49,56 +48,40 @@
   }
 </script>
 
-{#if show}
-  <div class="modal-overlay" on:click={handleCancel} on:keydown={handleKeydown}>
-    <div class="modal-content" on:click|stopPropagation role="dialog" aria-labelledby="modal-title" aria-modal="true">
-      <h2 id="modal-title">Removal Reason Required</h2>
-      <p class="modal-description">
-        Please provide a reason for removing <strong>{sourceLabel || 'this source'}</strong>:
-      </p>
-      
-      <div class="form-group">
-        <label for="removal-reason">Removal Reason *</label>
-        <textarea
-          id="removal-reason"
-          bind:value={removalReason}
-          placeholder="Enter the reason for removing this source..."
-          rows="4"
-          class:error={error}
-          autofocus
-        ></textarea>
-        {#if error}
-          <div class="error-message">{error}</div>
-        {/if}
-      </div>
+<BaseModal show={show} onClose={handleCancel}>
+  <div class="modal-content" role="dialog" aria-labelledby="modal-title" aria-modal="true" on:keydown={handleKeydown}>
+    <h2 id="modal-title">Removal Reason Required</h2>
+    <p class="modal-description">
+      Please provide a reason for removing <strong>{sourceLabel || 'this source'}</strong>:
+    </p>
+    
+    <div class="form-group">
+      <label for="removal-reason">Removal Reason *</label>
+      <textarea
+        id="removal-reason"
+        bind:value={removalReason}
+        placeholder="Enter the reason for removing this source..."
+        rows="4"
+        class:error={error}
+        autofocus
+      ></textarea>
+      {#if error}
+        <div class="error-message">{error}</div>
+      {/if}
+    </div>
 
-      <div class="modal-actions">
-        <button class="btn btn-cancel" on:click={handleCancel} type="button">
-          Cancel
-        </button>
-        <button class="btn btn-confirm" on:click={handleSubmit} type="button">
-          Confirm Removal
-        </button>
-      </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" on:click={handleCancel} type="button">
+        Cancel
+      </button>
+      <button class="btn btn-confirm" on:click={handleSubmit} type="button">
+        Confirm Removal
+      </button>
     </div>
   </div>
-{/if}
+</BaseModal>
 
 <style>
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-    padding: 20px;
-  }
-
   .modal-content {
     background: white;
     border-radius: 8px;
