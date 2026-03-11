@@ -699,8 +699,8 @@
     position: fixed;
     inset-inline: 0;
     top: 0;
-    background: white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+    background: #414a55;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
     z-index: 900;
   }
 
@@ -712,6 +712,7 @@
     justify-content: space-between;
     align-items: center;
     gap: 16px;
+    color: #f6f8fa;
   }
 
   .footer-section {
@@ -727,7 +728,7 @@
   .footer-title {
     font-size: 16px;
     font-weight: 600;
-    color: #2c3e50;
+    color: #f6f8fa;
     white-space: nowrap;
     text-overflow: ellipsis;
     overflow: hidden;
@@ -741,7 +742,7 @@
     padding: 6px 12px;
     border-radius: 999px;
     background-color: #f0f3f6;
-    color: #2c3e50;
+    color: #24292f;
     font-size: 13px;
     font-weight: 500;
   }
@@ -749,25 +750,25 @@
   .sidebar-toggle {
     padding: 6px 12px;
     border-radius: 999px;
-    border: 1px solid #d0d7de;
-    background-color: white;
+    border: 1px solid #cfd2d8;
+    background-color: transparent;
     font-size: 13px;
     font-weight: 500;
-    color: #34495e;
+    color: #f6f8fa;
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s;
   }
 
   .sidebar-toggle:hover {
-    background-color: #f6f8fa;
-    border-color: #c0c7d0;
+    background-color: rgba(255, 255, 255, 0.12);
+    border-color: #e1e4e8;
   }
 
   .propose-button {
     padding: 8px 16px;
     border-radius: 999px;
-    border: 1px solid #27ae60;
-    background-color: #27ae60;
+    border: 1px solid #2ecc71;
+    background-color: #2ecc71;
     color: white;
     font-size: 13px;
     font-weight: 500;
@@ -789,7 +790,7 @@
     padding: 4px 8px;
     border: none;
     background: transparent;
-    color: #2c3e50;
+    color: #f6f8fa;
     font-size: 16px;
     font-weight: 400;
     text-decoration: none;
