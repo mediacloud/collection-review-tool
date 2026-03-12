@@ -152,23 +152,24 @@ def run_all_migrations():
                     conn.execute(text("ALTER TABLE reviews ADD COLUMN edit_metadata BOOLEAN DEFAULT FALSE"))
                     print("Successfully added 'edit_metadata' column.")
 
-            # Migration 6: add 'skip' value to decision enum (PostgreSQL only)
-            print("\nRunning migration: decision enum 'skip' value")
+            # Migration 6: add 'SKIP' value to decision enum (PostgreSQL only)
+            print("\nRunning migration: decision enum 'SKIP' value")
             if is_sqlite:
                 print("SQLite database detected; no enum migration needed.")
             else:
-                # Check if enum value already exists
+                # Our SQLAlchemy Enum(Decision) stores the ENUM *name*, e.g. 'SKIP'
+                # so we only need to ensure the uppercase 'SKIP' label exists.
                 result = conn.execute(text("""
                     SELECT 1
                     FROM pg_type t
                     JOIN pg_enum e ON t.oid = e.enumtypid
-                    WHERE t.typname = 'decision' AND e.enumlabel = 'skip'
+                    WHERE t.typname = 'decision' AND e.enumlabel = 'SKIP'
                 """))
                 if result.fetchone():
-                    print("Enum value 'skip' already exists on type 'decision'. No migration needed.")
+                    print("Enum value 'SKIP' already exists on type 'decision'. No migration needed.")
                 else:
-                    conn.execute(text("ALTER TYPE decision ADD VALUE 'skip'"))
-                    print("Successfully added enum value 'skip' to type 'decision'.")
+                    conn.execute(text("ALTER TYPE decision ADD VALUE 'SKIP'"))
+                    print("Successfully added enum value 'SKIP' to type 'decision'.")
             
             trans.commit()
             print("\n✓ All migrations completed successfully.")
