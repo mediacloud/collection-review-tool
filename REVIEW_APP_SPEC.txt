@@ -1,13 +1,18 @@
 Review App Prototype – Specification (MediaCloud API client)
 1. Purpose / Scope
-Goal: A small, standalone web app that lets users review sources in a MediaCloud collection and export the results as CSV for ingestion by the existing MediaCloud web-search app.
+Goal: A small, standalone web app that lets a manager seed a multi-collection `ReviewProject`, split the work into reviewer queues, and export the resulting decisions as a single aggregated CSV for ingestion by the existing MediaCloud web-search app.
 Key behaviors:
-User enters a MediaCloud collection ID.
-On starting a review:
-If a review for that collection already exists and is not completed, load it.
-Otherwise, create a new review, and fetch the current source list for that collection via the official MediaCloud API client, then seed the review with those sources.
-User steps through sources and marks them keep/remove, and can propose new sources.
-At the end, user can download a CSV summarizing all decisions (keep/remove/add) for later use (scripts/operators updating the main app).
+Home page accepts one or more MediaCloud `collection_id`s (comma-separated).
+Step 1: start a `ReviewProject`:
+- Create the project and fetch deduped sources across all seed collections (stored at the project level, including stored seed collection names).
+Step 2: on the project page, enter `queue_count` to generate reviewer queues:
+- Partition the deduped source set into disjoint reviewer queues.
+Reviewers open queue links and step through sources:
+- Mark sources with KEEP/REMOVE decisions, and can propose new sources to ADD.
+Queue completion is automatic:
+- A queue is completed when exhausted (no undecided items remain); no manual “complete” action is required.
+At the end, managers download the project CSV:
+- Export aggregates the union of KEEP + ADD decisions across all reviewer queues.
 Out of scope:
 Any automated write-back to MediaCloud (this app only reads via the client and outputs CSV).
 Complex auth/permissions integration with MediaCloud users.
@@ -16,17 +21,17 @@ Comments, multi-stage approvals, or real-time collaboration.
 Backend: Flask + SQLAlchemy
 DB: SQLite (dev) with easy switch to Postgres (prod).
 Responsibilities:
-Managing review and review-item state.
-Using the MediaCloud Python API client to fetch collection sources.
+Managing review project state, reviewer queue state, and derived completion (computed on read).
+Using the MediaCloud Python API client to fetch sources for each seed collection, dedupe them, and persist them for later queue splitting.
 Serving JSON APIs to the frontend.
 Generating CSV exports.
 Frontend: Svelte SPA
 Talks to the Flask JSON API.
 Provides:
-“Start / Resume Review” by MediaCloud collection ID.
-A review UI to walk through sources and record decisions.
-UI for proposing new sources.
-CSV download when done.
+ReviewProject creation + a listing of existing projects on `/`.
+A manager view for a specific `ReviewProject` on `/review-projects/:guid` (generate queues + download project CSV).
+A reviewer queue workflow on `/reviews/:queue_guid` (step through sources and record decisions/proposals).
+CSV download via the project page (aggregated project CSV).
 3. Integration with MediaCloud (via API client)
 3.1 Library
 Use the official MediaCloud Python API client:
@@ -37,7 +42,7 @@ Configure an API key/token via environment variable, e.g. MEDIACLOUD_API_KEY.
 In Flask app startup:
 Create a MediaCloud API client instance with that key.
 For the prototype, assume this key has sufficient read permissions to fetch sources for the relevant collections.
-3.3 Fetching sources for a collection
+3.3 Fetching sources for seed collections
 Use the API client to fetch all sources in a given collection by collection_id.
 Exact method / call will depend on the client, but the interface should look roughly like:
   # pseudo-code – agent should replace with actual client call  mc = MediaCloud(api_key)  sources = mc.sources_in_collection(collection_id)
@@ -45,131 +50,137 @@ The important part: for each returned source we need at least:
 source_id (MediaCloud’s source id)
 label or name
 homepage (URL)
-Seed ReviewItems from this list:
+Seed ReviewProjectSource rows from this list:
 source_id = source['id']
 source_label = source['label'] or source['name']
 source_homepage = source['homepage']
-decision = 'undecided'
-is_new_source = false
+source_metadata = full source payload (stored for later CSV export)
+
+Decision state is not assigned at this stage; reviewer queues (Step 2) create ReviewItem rows later with `decision='undecided'`.
 4. Data Model
-4.1 Review
+4.1 ReviewProject (manager-level container)
 id (PK, int)
-collection_id (int, required) – MediaCloud collection ID
-status (enum string): pending, in_progress, completed
-created_at (datetime)
-updated_at (datetime)
-name (string, optional)
-notes (text, optional)
-Uniqueness/semantics:
-At most one active review per collection_id:
-If any review exists with this collection_id and status != 'completed', reuse it on /start.
-Otherwise, create a new one.
-4.2 ReviewItem
+guid (UUID string, unique, required)
+collection_ids (list of ints) – seed MediaCloud collection IDs
+collection_names (list of strings) – seed collection names for display
+name (string, optional), notes (text, optional)
+guidelines_template (string, optional), edit_metadata (bool)
+derived status: computed on read from reviewer queues (queue exhaustion)
+
+4.2 ReviewProjectSource (deduped seed source)
 id (PK, int)
-review_id (FK → Review)
-source_id (int, nullable) – MediaCloud source ID (null for proposed-new ones).
+review_project_id (FK → ReviewProject)
+source_id (int) – deduplication key across all seed collections
+source_label (string, optional)
+source_homepage (string, optional)
+source_metadata (text/json payload for later CSV export)
+
+4.3 Review (reused as a reviewer queue)
+id (PK, int)
+review_project_id (FK → ReviewProject)
+queue_guid (UUID string, unique, required)
+queue_index (int) – stable bucket index for UI/linking
+guidelines_template, edit_metadata
+queue status is derived on read: completed when there are no undecided ReviewItems
+
+4.4 ReviewItem (a source row inside a reviewer queue)
+id (PK, int)
+review_id (FK → Review queue)
+source_id (int, nullable) – MediaCloud source ID (null for proposed-new ones)
 source_label (string, optional)
 source_homepage (string, optional)
 is_new_source (bool, default false)
 decision (enum string): undecided, keep, remove, add
 decided_at (datetime, nullable)
-4.3 User (optional)
+source_metadata (json/text payload for later CSV export)
+
+4.5 User (optional)
 Can be omitted for v0; treat this as a single-user internal tool, or front it with simple basic auth/reverse-proxy.
 5. Backend API Endpoints
 All JSON except CSV export.
-5.1 Start or get review
-POST /api/reviews/start
+
+5.1 ReviewProject (Step 1 + Step 2 + manager read)
+POST /api/review-projects/start
 Body:
-    { "collection_id": 123 }
+    { "collection_ids": [123, 456], "guidelines_template": "default", "edit_metadata": false, "name": "Optional project name" }
 Behavior:
-Look up existing review for collection_id=123 with status != 'completed'.
-If found: return it.
-Else:
-Create new Review with status='in_progress'.
-Use the MediaCloud API client to fetch all sources in that collection.
-For each source, create ReviewItem as described in 3.3.
-Return the new Review.
-Response:
-    {      "review": {        "id": 1,        "collection_id": 123,        "status": "in_progress",        "created_at": "...",        "updated_at": "...",        "name": null,        "notes": null      }    }
-Error cases:
-If the MediaCloud API call fails (invalid collection ID, auth, network):
-Return 400 or 502 with a simple JSON error message.
-5.2 Get review & stats
-GET /api/reviews/<review_id>
-Response:
-    {      "review": {        "id": 1,        "collection_id": 123,        "status": "in_progress",        "created_at": "...",        "updated_at": "...",        "stats": {          "total": 100,          "keep": 10,          "remove": 5,          "add": 2,          "undecided": 83        }      }    }
-5.3 List items
-GET /api/reviews/<review_id>/items
+- Step 1 creates a ReviewProject
+- Fetches MediaCloud sources for each seed collection_id
+- Deduplicates sources across seed collections by source_id
+- Stores deduped sources as ReviewProjectSource rows (including stored seed collection names)
+
+POST /api/review-projects/<project_guid>/queues
+Body:
+    { "queue_count": 3 }
+Behavior:
+- Step 2 partitions the project's deduped sources into disjoint reviewer queues
+- Creates Review + ReviewItem rows with decision='undecided'
+
+GET /api/review-projects
+Lists all ReviewProjects with derived status + aggregated queue stats.
+
+GET /api/review-projects/<project_guid>
+Returns project details plus per-queue summaries (derived on read).
+
+GET /api/review-projects/<project_guid>/export
+Exports a single aggregated project CSV (KEEP + ADD union across queues; non-blocking even if queues are not “completed”).
+
+5.2 Reviewer queues (GUID-based)
+GET /api/review-queues/<queue_guid>
+Returns queue details + derived status (completed when exhausted).
+
+GET /api/review-queues/<queue_guid>/guidelines
+Returns rendered guidelines for the queue.
+
+GET /api/review-queues/<queue_guid>/items
 Query params:
 page, page_size (optional)
 decision (optional filter: undecided, keep, remove, add)
 Response:
-    {      "items": [        {          "id": 10,          "source_id": 42,          "source_label": "Example News",          "source_homepage": "https://example.com",          "is_new_source": false,          "decision": "undecided",          "decided_at": null        },        ...      ],      "total": 100    }
-5.4 Decide on an item
-POST /api/reviews/<review_id>/items/<item_id>/decide
+items array and total count.
+
+POST /api/review-queues/<queue_guid>/items/<item_id>/decide
 Body:
-    { "decision": "keep" }
-Allowed decisions:
-Existing sources: keep or remove.
-New/proposed sources: add (and optionally remove/keep if desired).
+    { "decision": "keep" | "remove" | "add" }
+Behavior:
 Updates decision and decided_at.
-Returns updated item.
-5.5 Propose a new source
-POST /api/reviews/<review_id>/items
+
+POST /api/review-queues/<queue_guid>/items
 Body:
-    {      "source_label": "New Outlet",      "source_homepage": "https://new-outlet.example"    }
+    { "source_label": "New Outlet", "source_homepage": "https://new-outlet.example" }
 Behavior:
-Create ReviewItem with:
-source_id = null
-is_new_source = true
-decision = "add" (or undecided, simple is add)
-Response: created item JSON.
-5.6 Complete a review
-POST /api/reviews/<review_id>/complete
-Behavior:
-Optionally verify that there are no undecided items.
-Set status='completed'.
-Update updated_at; recompute and store stats if you cache them.
-Response: updated review JSON.
-5.7 Export CSV
-GET /api/reviews/<review_id>/export
-Returns CSV with headers similar to:
-collection_id
-review_id
-source_id
-source_label
-source_homepage
-decision
-is_new_source
-This file is for operators/scripts to apply changes in MediaCloud via its own APIs or workflows.
+Creates a new proposed source item inside the queue (is_new_source=true, decision='add').
+
 6. Frontend (Svelte) UX
-6.1 Start / Resume Review (/)
-Input: “MediaCloud Collection ID” (text or number).
-Button: “Start / Resume Review”.
+6.1 Home (/)
+Input: comma-separated MediaCloud `collection_id`s.
+Button: Start ReviewProject.
 On submit:
-POST /api/reviews/start.
-On success, navigate to /reviews/:reviewId.
-6.2 Review page (/reviews/:reviewId)
+POST /api/review-projects/start
+On success:
+navigate to /review-projects/:guid.
+
+6.2 ReviewProject manager page (/review-projects/:guid)
+Shows seed collection names, project stats, and derived project status.
+If queues do not exist:
+enter `queue_count` and call POST /api/review-projects/<guid>/queues.
+If queues exist:
+show queue cards (with progress) and Open Queue links.
+Download Project CSV is available on the project page.
+
+6.3 Reviewer queue (/reviews/:queue_guid)
 On load:
-GET /api/reviews/:reviewId.
-GET /api/reviews/:reviewId/items?decision=undecided&page=1.
+GET /api/review-queues/:queue_guid
+GET /api/review-queues/:queue_guid/items?decision=undecided&page=1
 UI:
-Header with collection_id, status, and stats.
+Header with queue progress + queue status.
 Current undecided item viewer:
 Show source_label and source_homepage (link).
 Buttons:
-Keep → POST decide with decision="keep" and then load next undecided.
-Remove → POST decide with decision="remove" and then next.
-Propose new source form:
-source_label, source_homepage.
-On submit, POST /items to create a new add item.
-Complete review button:
-POST /complete.
-After success, show “Download CSV” button.
-6.3 Completed review
-If status='completed':
-Show link/button to /api/reviews/:reviewId/export.
-Optionally show a read-only table of decisions.
+Keep/Remove update the current item decision and then load next undecided.
+Propose new source form creates an “add” item in the queue.
+Queue completion is automatic:
+when the queue has no undecided items, it is exhausted and the UI shows “Queue exhausted”.
 7. Configuration & Ops
 Env vars:
 DATABASE_URL
@@ -180,4 +191,3 @@ Error handling:
 Surface simple, clear JSON errors when:
 MC client fails (bad key, network).
 Collection ID not found / no sources.
-d

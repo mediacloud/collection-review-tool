@@ -32,8 +32,9 @@ UNDP_collections_inspector/
 │   │   ├── lib/
 │   │   │   └── api.js         # Axios API client
 │   │   ├── routes/
-│   │   │   ├── Home.svelte    # Start/resume review page
-│   │   │   └── Review.svelte  # Review workflow page
+│   │   │   ├── Home.svelte            # ReviewProject creation + ReviewProjects landing table
+│   │   │   ├── ReviewProject.svelte  # Manager view (Step 2 queue generation + export)
+│   │   │   └── Review.svelte         # Reviewer queue workflow (queue_guid)
 │   │   └── components/
 │   │       ├── ReviewHeader.svelte    # Stats display
 │   │       ├── SourceViewer.svelte    # Current source with Keep/Remove
@@ -49,11 +50,17 @@ UNDP_collections_inspector/
 ### Backend
 
 **Database Models:**
-- `Review`: Represents a review session for a MediaCloud collection
-  - Fields: id, collection_id, status (pending/in_progress/completed), timestamps, name, notes
-  - Relationship: one-to-many with ReviewItem
-- `ReviewItem`: Represents a source in a review
-  - Fields: id, review_id, source_id (nullable), source_label, source_homepage, is_new_source, decision (undecided/keep/remove/add), decided_at
+- `ReviewProject`: Manager-level container for a multi-collection review project
+  - Stores seed `collection_ids` and seed collection names
+  - Step 1 stores deduped seed sources at the project level
+  - Status is computed on read from its reviewer queues (derived/computed, not manually set)
+- `ReviewProjectSource`: Deduped seed source belonging to a `ReviewProject`
+  - Stores `source_id` and the MediaCloud metadata needed for later CSV export
+- `Review`: Used as a reviewer queue when linked to a `ReviewProject`
+  - Has `queue_guid` + `queue_index` and belongs to `review_project_id`
+  - Queue completion is derived from whether undecided `ReviewItem`s remain
+- `ReviewItem`: A source row inside a reviewer queue
+  - Stores decisions (undecided/keep/remove/add) and the full `source_metadata` payload
 
 **MediaCloud Integration:**
 - Uses `mediacloud.api.DirectoryApi` and `mediacloud.api.SearchApi`
@@ -62,19 +69,22 @@ UNDP_collections_inspector/
 - Handles pagination automatically
 
 **API Endpoints:**
-- `POST /api/reviews/start` - Start or resume review (creates if new, returns existing if active)
-- `GET /api/reviews/<id>` - Get review with stats
-- `GET /api/reviews/<id>/items` - List items (supports pagination, decision filter)
-- `POST /api/reviews/<id>/items/<item_id>/decide` - Make decision (keep/remove/add)
-- `POST /api/reviews/<id>/items` - Propose new source
-- `POST /api/reviews/<id>/complete` - Mark review as completed
-- `GET /api/reviews/<id>/export` - Download CSV export
+- `POST /api/review-projects/start` - Step 1: create ReviewProject + store deduped sources
+- `POST /api/review-projects/<project_guid>/queues` - Step 2: generate reviewer queues from project sources
+- `GET /api/review-projects` - List projects with derived status + aggregated queue stats
+- `GET /api/review-projects/<project_guid>` - Project details + per-queue summaries (derived on read)
+- `GET /api/review-projects/<project_guid>/export` - Export a single aggregated project CSV (KEEP + ADD union)
+- `GET /api/review-queues/<queue_guid>` - Get a reviewer queue (status is derived when exhausted)
+- `GET /api/review-queues/<queue_guid>/guidelines` - Rendered guidelines for the queue
+- `GET /api/review-queues/<queue_guid>/items` - List queue items (supports pagination + decision filter)
+- `POST /api/review-queues/<queue_guid>/items/<item_id>/decide` - Make a decision in the queue
+- `POST /api/review-queues/<queue_guid>/items` - Propose a new source in the queue
 
 ### Frontend
 
 **Routing:**
 - Simple custom router using browser History API (no external routing library)
-- Routes: `/` (Home), `/reviews/:id` (Review)
+- Routes: `/` (Home), `/review-projects/:guid` (ReviewProject manager view), `/reviews/:queue_guid` (Reviewer Queue)
 - Navigation: `window.navigate(path)` function
 
 **State Management:**
@@ -82,8 +92,9 @@ UNDP_collections_inspector/
 - API calls via Axios in `lib/api.js`
 
 **Key Components:**
-- `Home.svelte`: Collection ID input, starts/resumes reviews
-- `Review.svelte`: Main review workflow, manages current item, handles decisions
+- `Home.svelte`: ReviewProject creation form + ReviewProjects landing table
+- `ReviewProject.svelte`: Manager view for a project (generate reviewer queues + project CSV export)
+- `Review.svelte`: Reviewer queue workflow (GUID-based), handles item decisions + proposing new sources
 - `ReviewHeader.svelte`: Displays collection info and statistics
 - `SourceViewer.svelte`: Shows current source with Keep/Remove buttons
 - `NewSourceForm.svelte`: Form to propose new sources
@@ -214,23 +225,23 @@ Domains (`ALLOWED_HOSTS`) are derived from `INSTANCE` in `dokku-scripts/common.s
    - Switch to PostgreSQL by changing `DATABASE_URL` in `.env`
 
 3. **Review Logic**:
-   - Only one active review per collection_id (status != 'completed')
-   - New reviews automatically fetch sources from MediaCloud
-   - Sources are seeded as ReviewItems with decision='undecided'
+  - Step 1 creates a `ReviewProject` from multiple seed `collection_id`s and stores deduped sources at the project level (`ReviewProjectSource`)
+  - Step 2 generates reviewer queues by partitioning the project's deduped sources into disjoint buckets (`queue_count`)
+  - Queue and project statuses are derived on read: a queue is “completed” when it is exhausted (no undecided items remain)
+  - Project CSV export aggregates the union of **KEEP + ADD** decisions across all queues
 
 4. **CSV Export**:
-   - Columns: collection_id, review_id, source_id, source_label, source_homepage, decision, is_new_source
-   - Used for ingestion by main MediaCloud web-search app
+  - Project export is a single aggregated CSV across all reviewer queues
+  - Includes the union of **KEEP + ADD** decisions (while REMOVE decisions are not exported)
+  - CSV columns follow the existing MediaCloud mapping defined by `mc_csv_columns.txt`
 
 ## Current Features
 
-✅ Start/resume reviews by collection ID
-✅ Review sources one-by-one (Keep/Remove decisions)
-✅ Propose new sources to add
-✅ Track statistics (total, keep, remove, add, undecided)
-✅ Complete reviews
-✅ Export decisions as CSV
-✅ View all decisions in read-only table (completed reviews)
+✅ Start ReviewProjects from multiple collections (deduped sources)
+✅ Two-step workflow (Step 1 seed + Step 2 generate reviewer queues)
+✅ Queue progress + derived completion when exhausted
+✅ Persistent reviewer decisions (KEEP/REMOVE/ADD) and proposed new sources
+✅ Project-level aggregated CSV export (KEEP + ADD union across queues)
 
 ## Known Issues / Future Improvements
 
@@ -242,25 +253,22 @@ Domains (`ALLOWED_HOSTS`) are derived from `INSTANCE` in `dokku-scripts/common.s
 
 ## API Response Examples
 
-**Start Review:**
+**Start ReviewProject (Step 1):**
 ```json
 {
-  "review": {
-    "id": 1,
-    "collection_id": 123,
-    "status": "in_progress",
-    "stats": {
-      "total": 100,
-      "keep": 0,
-      "remove": 0,
-      "add": 0,
-      "undecided": 100
-    }
-  }
+  "project": {
+    "guid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "collection_ids": [123, 456],
+    "collection_names": ["Collection 123", "Collection 456"],
+    "name": "ReviewProject (2 collections)"
+  },
+  "derived_status": "pending",
+  "queues": [],
+  "stats": { "total": 100, "keep": 0, "remove": 0, "add": 0, "undecided": 100, "skip": 0 }
 }
 ```
 
-**Review Items:**
+**ReviewQueue Items:**
 ```json
 {
   "items": [
