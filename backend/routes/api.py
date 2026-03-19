@@ -343,6 +343,65 @@ def get_review_project(project_guid):
         return jsonify({'error': f'Failed to fetch review project: {str(e)}'}), 500
 
 
+@api_bp.route('/review-projects/<string:project_guid>/edit-metadata', methods=['PATCH'])
+def set_review_project_edit_metadata(project_guid):
+    """
+    Toggle whether reviewers can edit per-source metadata in reviewer queues.
+
+    This propagates down to all existing reviewer queues for the project.
+    """
+    try:
+        data = request.get_json() or {}
+        if 'edit_metadata' not in data:
+            return jsonify({'error': 'edit_metadata is required'}), 400
+
+        edit_metadata = bool(data.get('edit_metadata'))
+
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+        project.edit_metadata = edit_metadata
+
+        queues = Review.query.filter_by(review_project_id=project.id).all()
+        for q in queues:
+            q.edit_metadata = edit_metadata
+
+        db.session.commit()
+
+        return jsonify({
+            'project': project.to_dict(),
+            'queues_updated': len(queues),
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to update review project edit_metadata: {str(e)}'}), 500
+
+
+@api_bp.route('/review-projects/<string:project_guid>/name', methods=['PATCH'])
+def set_review_project_name(project_guid):
+    """
+    Update a ReviewProject's display name.
+    """
+    try:
+        data = request.get_json() or {}
+        raw_name = data.get('name')
+        if raw_name is None:
+            return jsonify({'error': 'name is required'}), 400
+
+        name = str(raw_name).strip()
+        if not name:
+            return jsonify({'error': 'name cannot be empty'}), 400
+        if len(name) > 255:
+            return jsonify({'error': 'name must be 255 characters or fewer'}), 400
+
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+        project.name = name
+
+        db.session.commit()
+        return jsonify({'project': project.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to update review project name: {str(e)}'}), 500
+
+
 @api_bp.route('/review-projects/<string:project_guid>/queues', methods=['POST'])
 def generate_review_project_queues(project_guid):
     """
@@ -634,6 +693,255 @@ def export_review_project(project_guid):
         return jsonify({'error': f'Failed to export review project: {str(e)}'}), 500
 
 
+@api_bp.route('/review-projects/<string:project_guid>/skipped-items', methods=['GET'])
+def get_skipped_items_for_project(project_guid):
+    """
+    Virtual queue: aggregate all SKIP-decision items across all reviewer queues for a project.
+
+    Each returned item includes `queue_guid` so the frontend can route decisions back to the
+    originating underlying reviewer queue.
+    """
+    try:
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 100, type=int)
+        dedupe_source_id = request.args.get('dedupe_source_id', 'true').lower() in ['1', 'true', 'yes', 'y']
+
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 100
+        # Hard cap to prevent accidental massive responses.
+        page_size = min(page_size, 5000)
+
+        queues = Review.query.filter_by(review_project_id=project.id).all()
+        queue_ids = [q.id for q in queues]
+        if not queue_ids:
+            return jsonify({'items': [], 'total': 0}), 200
+
+        queue_by_review_id = {q.id: q for q in queues}
+
+        skipped_query = ReviewItem.query.filter(
+            ReviewItem.review_id.in_(queue_ids),
+            ReviewItem.decision == Decision.SKIP,
+        ).order_by(ReviewItem.id.asc())
+
+        skipped_items = skipped_query.all()
+
+        if dedupe_source_id:
+            seen_keys = set()
+            deduped = []
+            for item in skipped_items:
+                # Prefer source_id as the dedupe key; fall back to item id for new-source rows.
+                key = item.source_id if item.source_id is not None else f'item:{item.id}'
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                deduped.append(item)
+            skipped_items = deduped
+
+        total = len(skipped_items)
+
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_items = skipped_items[start:end]
+
+        resp_items = []
+        for item in page_items:
+            item_dict = item.to_dict()
+            q = queue_by_review_id.get(item.review_id)
+            item_dict['queue_guid'] = q.queue_guid if q else None
+            item_dict['queue_index'] = q.queue_index if q else None
+            resp_items.append(item_dict)
+
+        return jsonify({'items': resp_items, 'total': total}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch skipped items: {str(e)}'}), 500
+
+
+@api_bp.route('/review-projects/<string:project_guid>/added-items', methods=['GET'])
+def get_added_items_for_project(project_guid):
+    """
+    Virtual queue: aggregate all ADD-decision items across all reviewer queues for a project.
+
+    Each returned item includes `queue_guid` and `queue_index` so the frontend can route any
+    optional item-level operations back to the originating queue.
+    """
+    try:
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 100, type=int)
+        dedupe_source_id = request.args.get('dedupe_source_id', 'true').lower() in ['1', 'true', 'yes', 'y']
+
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 100
+        page_size = min(page_size, 5000)
+
+        queues = Review.query.filter_by(review_project_id=project.id).all()
+        queue_ids = [q.id for q in queues]
+        if not queue_ids:
+            return jsonify({'items': [], 'total': 0}), 200
+
+        queue_by_review_id = {q.id: q for q in queues}
+
+        added_query = ReviewItem.query.filter(
+            ReviewItem.review_id.in_(queue_ids),
+            ReviewItem.decision == Decision.ADD,
+        ).order_by(ReviewItem.id.asc())
+
+        added_items = added_query.all()
+
+        if dedupe_source_id:
+            seen_keys = set()
+            deduped = []
+            for item in added_items:
+                # Prefer source_id as the dedupe key; for new sources (source_id is None),
+                # fall back to item id.
+                key = item.source_id if item.source_id is not None else f'item:{item.id}'
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                deduped.append(item)
+            added_items = deduped
+
+        total = len(added_items)
+
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_items = added_items[start:end]
+
+        resp_items = []
+        for item in page_items:
+            item_dict = item.to_dict()
+            q = queue_by_review_id.get(item.review_id)
+            item_dict['queue_guid'] = q.queue_guid if q else None
+            item_dict['queue_index'] = q.queue_index if q else None
+            resp_items.append(item_dict)
+
+        return jsonify({'items': resp_items, 'total': total}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch added items: {str(e)}'}), 500
+
+
+@api_bp.route('/review-projects/<string:project_guid>/removed-items', methods=['GET'])
+def get_removed_items_for_project(project_guid):
+    """
+    Virtual queue: aggregate all REMOVE-decision items across all reviewer queues for a project.
+
+    Each returned item includes `queue_guid` and `queue_index` so the frontend can route any
+    optional item-level operations back to the originating queue.
+    """
+    try:
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 100, type=int)
+        dedupe_source_id = request.args.get('dedupe_source_id', 'true').lower() in ['1', 'true', 'yes', 'y']
+
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 100
+        page_size = min(page_size, 5000)
+
+        queues = Review.query.filter_by(review_project_id=project.id).all()
+        queue_ids = [q.id for q in queues]
+        if not queue_ids:
+            return jsonify({'items': [], 'total': 0}), 200
+
+        queue_by_review_id = {q.id: q for q in queues}
+
+        removed_query = ReviewItem.query.filter(
+            ReviewItem.review_id.in_(queue_ids),
+            ReviewItem.decision == Decision.REMOVE,
+        ).order_by(ReviewItem.id.asc())
+
+        removed_items = removed_query.all()
+
+        if dedupe_source_id:
+            seen_keys = set()
+            deduped = []
+            for item in removed_items:
+                # Prefer source_id as the dedupe key; for new sources (source_id is None),
+                # fall back to item id.
+                key = item.source_id if item.source_id is not None else f'item:{item.id}'
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                deduped.append(item)
+            removed_items = deduped
+
+        total = len(removed_items)
+
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_items = removed_items[start:end]
+
+        resp_items = []
+        for item in page_items:
+            item_dict = item.to_dict()
+            q = queue_by_review_id.get(item.review_id)
+            item_dict['queue_guid'] = q.queue_guid if q else None
+            item_dict['queue_index'] = q.queue_index if q else None
+            resp_items.append(item_dict)
+
+        return jsonify({'items': resp_items, 'total': total}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch removed items: {str(e)}'}), 500
+
+
+@api_bp.route('/review-queues/<string:queue_guid>/items/<int:item_id>/source-metadata', methods=['PATCH'])
+def update_queue_item_source_metadata(queue_guid, item_id):
+    """
+    Update per-item source metadata JSON (primary_language/pub_country/pub_state).
+
+    Used by the virtual queues to let managers/reviewers tweak metadata on already-added items.
+    """
+    try:
+        queue_review = Review.query.filter_by(queue_guid=queue_guid).first_or_404()
+
+        if not queue_review.edit_metadata:
+            return jsonify({'error': 'Metadata editing is disabled for this queue'}), 403
+
+        item = ReviewItem.query.filter_by(id=item_id, review_id=queue_review.id).first_or_404()
+
+        data = request.get_json() or {}
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+
+        allowed_keys = {'primary_language', 'pub_country', 'pub_state'}
+        updates = {k: v for k, v in data.items() if k in allowed_keys}
+        if not updates:
+            return jsonify({'error': 'No valid metadata fields provided'}), 400
+
+        current_meta = {}
+        if item.source_metadata:
+            try:
+                current_meta = json.loads(item.source_metadata) or {}
+            except Exception:
+                current_meta = {}
+
+        # Apply updates; allow blank strings (client controls validation where needed).
+        for k, v in updates.items():
+            current_meta[k] = v
+
+        item.source_metadata = json.dumps(current_meta)
+        db.session.commit()
+
+        return jsonify({'item': item.to_dict()}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to update source metadata: {str(e)}'}), 500
+
+
 @api_bp.route('/review-queues/<string:queue_guid>/guidelines', methods=['GET'])
 def get_review_queue_guidelines(queue_guid):
     """
@@ -778,6 +1086,60 @@ def create_queue_review_item(queue_guid):
         if not source_homepage:
             return jsonify({'error': 'source_homepage is required'}), 400
 
+        primary_language = data.get('primary_language')
+        pub_country = data.get('pub_country')
+        pub_state = data.get('pub_state')
+
+        # If metadata editing is enabled for this queue, require these fields.
+        if queue_review.edit_metadata:
+            if not primary_language or not pub_country or not pub_state:
+                return jsonify({
+                    'error': 'When metadata editing is enabled, primary_language, pub_country, and pub_state are required.'
+                }), 400
+
+        def _normalize_homepage(homepage: str) -> str:
+            homepage = (homepage or '').strip()
+            homepage = homepage.rstrip('/')
+            try:
+                parsed = urlparse(homepage)
+                if parsed.scheme and parsed.netloc:
+                    scheme = (parsed.scheme or '').lower()
+                    netloc = (parsed.netloc or '').lower()
+                    path = (parsed.path or '').rstrip('/')
+                    query = f'?{parsed.query}' if parsed.query else ''
+                    return f'{scheme}://{netloc}{path}{query}'
+            except Exception:
+                pass
+            return homepage.lower()
+
+        # Duplicate check within the parent ReviewProject:
+        # - compare against all existing ReviewItems (seed + already proposed) across all queues
+        # - match by source_homepage only
+        if queue_review.review_project_id is not None:
+            project_id = queue_review.review_project_id
+            queues = Review.query.filter_by(review_project_id=project_id).all()
+            queue_ids = [q.id for q in queues]
+
+            proposed_norm = _normalize_homepage(source_homepage)
+            existing_items = ReviewItem.query.filter(
+                ReviewItem.review_id.in_(queue_ids)
+            ).filter(
+                ReviewItem.source_homepage.isnot(None)
+            ).all()
+
+            for item in existing_items:
+                existing_norm = _normalize_homepage(item.source_homepage or '')
+                if existing_norm == proposed_norm:
+                    return jsonify({'error': 'This source already exists in the ReviewProject'}), 409
+
+        metadata = None
+        if queue_review.edit_metadata and (primary_language or pub_country or pub_state):
+            metadata = {
+                'primary_language': primary_language,
+                'pub_country': pub_country,
+                'pub_state': pub_state,
+            }
+
         new_item = ReviewItem(
             review_id=queue_review.id,
             source_id=None,
@@ -786,6 +1148,8 @@ def create_queue_review_item(queue_guid):
             is_new_source=True,
             decision=Decision.ADD
         )
+        if metadata is not None:
+            new_item.source_metadata = json.dumps(metadata)
 
         db.session.add(new_item)
         db.session.commit()
@@ -1094,6 +1458,17 @@ def create_review_item(review_id):
             return jsonify({'error': 'source_label is required'}), 400
         if not source_homepage:
             return jsonify({'error': 'source_homepage is required'}), 400
+
+        primary_language = data.get('primary_language')
+        pub_country = data.get('pub_country')
+        pub_state = data.get('pub_state')
+
+        # If metadata editing is enabled for this review, require these fields.
+        if review.edit_metadata:
+            if not primary_language or not pub_country or not pub_state:
+                return jsonify({
+                    'error': 'When metadata editing is enabled, primary_language, pub_country, and pub_state are required.'
+                }), 400
         
         # Create new review item
         new_item = ReviewItem(
@@ -1104,6 +1479,13 @@ def create_review_item(review_id):
             is_new_source=True,
             decision=Decision.ADD  # New sources default to "add"
         )
+
+        if review.edit_metadata and (primary_language or pub_country or pub_state):
+            new_item.source_metadata = json.dumps({
+                'primary_language': primary_language,
+                'pub_country': pub_country,
+                'pub_state': pub_state
+            })
         
         db.session.add(new_item)
         db.session.commit()

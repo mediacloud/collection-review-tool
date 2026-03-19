@@ -1,12 +1,23 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import iso3166 from 'iso-3166-2';
+  import * as rawIso3166 from 'iso-3166';
 
   export let show = false;
   export let loading = false;
+  export let editMetadata = false;
+  export let languageOptions = [];
+  export let countryOptions = [];
+  export let errorMessage = null;
 
   let sourceLabel = '';
   let sourceHomepage = '';
   let error = null;
+
+  let primaryLanguage = '';
+  let pubCountry = '';
+  let pubState = '';
+  let pubStateOptions = [];
 
   const dispatch = createEventDispatcher();
 
@@ -15,6 +26,34 @@
     sourceLabel = '';
     sourceHomepage = '';
     error = null;
+    primaryLanguage = '';
+    pubCountry = '';
+    pubState = '';
+    pubStateOptions = [];
+  }
+
+  $: if (show && editMetadata) {
+    // Update pub_state options whenever pub_country changes.
+    const alpha2Country =
+      pubCountry && pubCountry.length === 3
+        ? rawIso3166.iso31661Alpha3ToAlpha2[pubCountry] || pubCountry
+        : pubCountry;
+
+    if (alpha2Country && iso3166.data[alpha2Country] && iso3166.data[alpha2Country].sub) {
+      pubStateOptions = Object.keys(iso3166.data[alpha2Country].sub)
+        .sort()
+        .map((code) => {
+          const sub = iso3166.data[alpha2Country].sub[code];
+          return { value: code, label: `${code} – ${sub.name}` };
+        });
+    } else {
+      pubStateOptions = [];
+    }
+
+    // If pub_state is no longer valid, clear it.
+    if (pubState && !pubStateOptions.find((o) => o.value === pubState)) {
+      pubState = '';
+    }
   }
 
   function handleSubmit() {
@@ -37,9 +76,27 @@
       return;
     }
 
+    if (editMetadata) {
+      if (!primaryLanguage) {
+        error = 'Language is required when metadata editing is enabled';
+        return;
+      }
+      if (!pubCountry) {
+        error = 'Pub country is required when metadata editing is enabled';
+        return;
+      }
+      if (!pubState) {
+        error = 'Pub state is required when metadata editing is enabled';
+        return;
+      }
+    }
+
     dispatch('confirm', {
       label: sourceLabel.trim(),
-      homepage: sourceHomepage.trim()
+      homepage: sourceHomepage.trim(),
+      primary_language: editMetadata ? primaryLanguage : null,
+      pub_country: editMetadata ? pubCountry : null,
+      pub_state: editMetadata ? pubState : null,
     });
   }
 
@@ -86,8 +143,60 @@
           />
         </div>
 
+        {#if editMetadata}
+          <div class="metadata-section">
+            <h3>Source Metadata</h3>
+
+            <div class="form-group">
+              <label for="primary-language">Primary language *</label>
+              <select
+                id="primary-language"
+                bind:value={primaryLanguage}
+                disabled={loading}
+              >
+                <option value="">Select language...</option>
+                {#each languageOptions as opt}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="pub-country">Pub country (ISO 3166-1 alpha-3) *</label>
+              <select
+                id="pub-country"
+                bind:value={pubCountry}
+                disabled={loading}
+              >
+                <option value="">Select country...</option>
+                {#each countryOptions as opt}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="pub-state">Pub state (ISO 3166-2) *</label>
+              <select
+                id="pub-state"
+                bind:value={pubState}
+                disabled={loading || !pubStateOptions || pubStateOptions.length === 0}
+              >
+                <option value="">Select state...</option>
+                {#each pubStateOptions as opt}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
+            </div>
+          </div>
+        {/if}
+
         {#if error}
           <div class="error-message">{error}</div>
+        {/if}
+
+        {#if errorMessage && !error}
+          <div class="error-message">{errorMessage}</div>
         {/if}
 
         <div class="modal-actions">
@@ -113,6 +222,21 @@
 {/if}
 
 <style>
+  .metadata-section {
+    border: 1px solid #e0e4e8;
+    border-radius: 8px;
+    padding: 14px 14px;
+    background: #f8f9fa;
+    margin-bottom: 14px;
+  }
+
+  .metadata-section h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 900;
+    color: #2c3e50;
+  }
+
   .modal-overlay {
     position: fixed;
     top: 0;
@@ -176,6 +300,26 @@
   }
 
   input:disabled {
+    background-color: #f5f5f5;
+    cursor: not-allowed;
+  }
+
+  select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+    background: white;
+  }
+
+  select:focus {
+    outline: none;
+    border-color: #3498db;
+  }
+
+  select:disabled {
     background-color: #f5f5f5;
     cursor: not-allowed;
   }

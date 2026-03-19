@@ -20,6 +20,7 @@
   let selectedTemplate = 'default';
   let loadingTemplates = false;
   let editMetadata = false;
+let projectName = '';
 
   onMount(async () => {
     await loadReviewProjects();
@@ -162,7 +163,13 @@
 
     projectLoading = true;
     try {
-      const result = await startReviewProject(collectionIds, selectedTemplate, editMetadata);
+      const cleanProjectName = String(projectName || '').trim();
+      const result = await startReviewProject(
+        collectionIds,
+        selectedTemplate,
+        editMetadata,
+        cleanProjectName || null
+      );
       const guid = result?.project?.guid;
       if (!guid) {
         projectError = 'Project start succeeded but no project GUID was returned.';
@@ -208,17 +215,14 @@
           {/if}
 
           <div class="form-group">
-            <button
-              type="button"
-              class="context-toggle-button"
-              on:click={() => (editMetadata = !editMetadata)}
+            <label for="project-name">Project Name</label>
+            <input
+              id="project-name"
+              type="text"
+              bind:value={projectName}
+              placeholder="e.g. UNDP 2026 Seed Project"
               disabled={projectLoading}
-            >
-              <span class="toggle-label">
-                <span class="toggle-indicator {editMetadata ? 'on' : 'off'}"></span>
-                Enable metadata editing in this project
-              </span>
-            </button>
+            />
           </div>
 
           <div class="form-group">

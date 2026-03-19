@@ -3,6 +3,9 @@
   import Home from './routes/Home.svelte';
   import Review from './routes/Review.svelte';
   import ReviewProject from './routes/ReviewProject.svelte';
+import ReviewSkippedQueue from './routes/ReviewSkippedQueue.svelte';
+import ReviewAddedQueue from './routes/ReviewAddedQueue.svelte';
+import ReviewRemovedQueue from './routes/ReviewRemovedQueue.svelte';
 
   let currentPath = window.location.pathname;
 
@@ -26,6 +29,12 @@
 <main>
   {#if currentPath === '/'}
     <Home />
+  {:else if currentPath.match(/^\/review-projects\/[0-9a-fA-F-]+\/skipped$/)}
+    <ReviewSkippedQueue />
+  {:else if currentPath.match(/^\/review-projects\/[0-9a-fA-F-]+\/added$/)}
+    <ReviewAddedQueue />
+  {:else if currentPath.match(/^\/review-projects\/[0-9a-fA-F-]+\/removed$/)}
+    <ReviewRemovedQueue />
   {:else if currentPath.startsWith('/review-projects/')}
     <ReviewProject />
   {:else if currentPath.startsWith('/reviews/')}

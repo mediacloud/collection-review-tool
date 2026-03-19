@@ -71,6 +71,31 @@ export async function getReviewProject(projectGuid) {
   return response.data;
 }
 
+/**
+ * Update whether reviewers can edit per-source metadata for this project's queues.
+ * Propagates down to all existing reviewer queues.
+ * @param {string} projectGuid
+ * @param {boolean} editMetadata
+ */
+export async function setReviewProjectEditMetadata(projectGuid, editMetadata) {
+  const response = await api.patch(`/review-projects/${projectGuid}/edit-metadata`, {
+    edit_metadata: !!editMetadata,
+  });
+  return response.data;
+}
+
+/**
+ * Update a ReviewProject display name.
+ * @param {string} projectGuid
+ * @param {string} name
+ */
+export async function setReviewProjectName(projectGuid, name) {
+  const response = await api.patch(`/review-projects/${projectGuid}/name`, {
+    name: String(name ?? '').trim(),
+  });
+  return response.data;
+}
+
 export function getReviewProjectExportUrl(projectGuid) {
   return `${API_BASE_URL}/review-projects/${projectGuid}/export`;
 }
@@ -82,6 +107,77 @@ export function getReviewProjectExportUrl(projectGuid) {
 export async function getReviewProjects() {
   const response = await api.get('/review-projects');
   return response.data.projects;
+}
+
+/**
+ * Get aggregated skipped items for a ReviewProject (virtual queue).
+ * Each item includes `queue_guid` so decisions can be routed back.
+ * @param {string} projectGuid
+ * @param {Object} options - { page, page_size, dedupe_source_id }
+ */
+export async function getSkippedItemsByProjectGuid(projectGuid, options = {}) {
+  const params = new URLSearchParams();
+  if (options.page) params.append('page', options.page);
+  if (options.page_size) params.append('page_size', options.page_size);
+  if (options.dedupe_source_id !== undefined) params.append('dedupe_source_id', options.dedupe_source_id);
+
+  const query = params.toString();
+  const url = `/review-projects/${projectGuid}/skipped-items${query ? `?${query}` : ''}`;
+
+  const response = await api.get(url);
+  return response.data;
+}
+
+/**
+ * Get aggregated added items for a ReviewProject (virtual queue).
+ * Each item includes `queue_guid` so metadata updates can be routed back.
+ * @param {string} projectGuid
+ * @param {Object} options - { page, page_size, dedupe_source_id }
+ */
+export async function getAddedItemsByProjectGuid(projectGuid, options = {}) {
+  const params = new URLSearchParams();
+  if (options.page) params.append('page', options.page);
+  if (options.page_size) params.append('page_size', options.page_size);
+  if (options.dedupe_source_id !== undefined) params.append('dedupe_source_id', options.dedupe_source_id);
+
+  const query = params.toString();
+  const url = `/review-projects/${projectGuid}/added-items${query ? `?${query}` : ''}`;
+
+  const response = await api.get(url);
+  return response.data;
+}
+
+/**
+ * Get aggregated removed items for a ReviewProject (virtual queue).
+ * Each item includes `queue_guid` so metadata updates can be routed back.
+ * @param {string} projectGuid
+ * @param {Object} options - { page, page_size, dedupe_source_id }
+ */
+export async function getRemovedItemsByProjectGuid(projectGuid, options = {}) {
+  const params = new URLSearchParams();
+  if (options.page) params.append('page', options.page);
+  if (options.page_size) params.append('page_size', options.page_size);
+  if (options.dedupe_source_id !== undefined) params.append('dedupe_source_id', options.dedupe_source_id);
+
+  const query = params.toString();
+  const url = `/review-projects/${projectGuid}/removed-items${query ? `?${query}` : ''}`;
+
+  const response = await api.get(url);
+  return response.data;
+}
+
+/**
+ * Update per-item source metadata for a queue item.
+ * @param {string} queueGuid
+ * @param {number} itemId
+ * @param {{primary_language?: string, pub_country?: string, pub_state?: string}} metadata
+ */
+export async function updateQueueItemSourceMetadata(queueGuid, itemId, metadata) {
+  const response = await api.patch(
+    `/review-queues/${queueGuid}/items/${itemId}/source-metadata`,
+    metadata
+  );
+  return response.data;
 }
 
 /**
@@ -113,11 +209,19 @@ export async function decideQueueItem(queueGuid, itemId, decision, removalReason
   return response.data;
 }
 
-export async function proposeNewSourceByQueueGuid(queueGuid, sourceLabel, sourceHomepage) {
-  const response = await api.post(`/review-queues/${queueGuid}/items`, {
+export async function proposeNewSourceByQueueGuid(queueGuid, sourceLabel, sourceHomepage, metadata = null) {
+  const body = {
     source_label: sourceLabel,
-    source_homepage: sourceHomepage,
-  });
+    source_homepage: sourceHomepage
+  };
+
+  if (metadata) {
+    body.primary_language = metadata.primary_language;
+    body.pub_country = metadata.pub_country;
+    body.pub_state = metadata.pub_state;
+  }
+
+  const response = await api.post(`/review-queues/${queueGuid}/items`, body);
   return response.data;
 }
 
@@ -194,11 +298,19 @@ export async function decideItem(reviewId, itemId, decision, removalReason = nul
  * @param {string} sourceHomepage - Source homepage URL
  * @returns {Promise} Created item object
  */
-export async function proposeNewSource(reviewId, sourceLabel, sourceHomepage) {
-  const response = await api.post(`/reviews/${reviewId}/items`, {
+export async function proposeNewSource(reviewId, sourceLabel, sourceHomepage, metadata = null) {
+  const body = {
     source_label: sourceLabel,
     source_homepage: sourceHomepage
-  });
+  };
+
+  if (metadata) {
+    body.primary_language = metadata.primary_language;
+    body.pub_country = metadata.pub_country;
+    body.pub_state = metadata.pub_state;
+  }
+
+  const response = await api.post(`/reviews/${reviewId}/items`, body);
   return response.data;
 }
 

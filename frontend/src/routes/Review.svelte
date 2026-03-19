@@ -49,6 +49,7 @@
   let editFieldCurrentValue = '';
   let editFieldOptions = [];
   let editFieldReadonlyMessage = '';
+  let newSourceModalError = null;
 
   const LANGUAGE_OPTIONS = [
     { value: 'en', label: 'en – English' },
@@ -310,12 +311,20 @@
   function handleOpenNewSourceModal() {
     if (loading) return;
     showNewSourceModal = true;
+    newSourceModalError = null;
   }
 
   async function handleNewSourceModalConfirm(event) {
-    const { label, homepage } = event.detail || {};
-    showNewSourceModal = false;
-    await handleNewSource(label, homepage);
+    const { label, homepage, primary_language, pub_country, pub_state } = event.detail || {};
+    const metadata = {
+      primary_language,
+      pub_country,
+      pub_state,
+    };
+    const success = await handleNewSource(label, homepage, metadata);
+    if (success) {
+      showNewSourceModal = false;
+    }
   }
 
   function openAllDecisionsModal() {
@@ -323,25 +332,30 @@
     showAllItemsModal = true;
   }
 
-  async function handleNewSource(sourceLabel, sourceHomepage) {
+  async function handleNewSource(sourceLabel, sourceHomepage, metadata = null) {
     if ((!reviewId && !queueGuid) || loading) return;
 
     loading = true;
     error = null;
+    newSourceModalError = null;
 
     try {
       if (isQueueMode) {
-        await proposeNewSourceByQueueGuid(queueGuid, sourceLabel, sourceHomepage);
+        await proposeNewSourceByQueueGuid(queueGuid, sourceLabel, sourceHomepage, metadata);
       } else {
-        await proposeNewSource(reviewId, sourceLabel, sourceHomepage);
+        await proposeNewSource(reviewId, sourceLabel, sourceHomepage, metadata);
       }
       // Reload review to get updated stats
       await reloadReviewStatsOnly();
       // Optionally reload items to show the new one
       await loadNextUndecidedItem();
+      return true;
     } catch (err) {
-      error = err.response?.data?.error || err.message || 'Failed to add source';
+      const msg = err.response?.data?.error || err.message || 'Failed to add source';
+      error = msg;
+      newSourceModalError = msg;
       console.error('Error adding source:', err);
+      return false;
     } finally {
       loading = false;
     }
@@ -531,6 +545,29 @@
         </div>
 
         <div class="context-section">
+          {#if isQueueMode && review?.review_project_guid}
+            <div class="queue-modal-actions">
+              <button
+                type="button"
+                class="queue-modal-link"
+                on:click={() =>
+                  window.navigate(
+                    `/review-projects/${review.review_project_guid}/skipped`
+                  )
+                }
+              >
+                Review skipped sources
+              </button>
+              <button
+                type="button"
+                class="queue-modal-link-secondary"
+                on:click={() => openAllDecisionsModal()}
+              >
+                See all decisions
+              </button>
+            </div>
+          {/if}
+
           {#if !isQueueMode}
             <div class="export-section">
               <h3>Export Files</h3>
@@ -602,12 +639,68 @@
         {/if}
 
         {#if review.status === 'completed'}
-          <div class="completed-message">
-            <p>
-              ✓ {isQueueMode ? 'Queue exhausted.' : 'Review completed!'}
-              {#if !isQueueMode} Download the CSV export below.{/if}
-            </p>
-          </div>
+          {#if !isQueueMode}
+            <div class="completed-message">
+              <p>
+                ✓ Review completed!
+                Download the CSV export below.
+              </p>
+            </div>
+          {:else}
+            <div class="queue-exhausted-card">
+              <div class="queue-exhausted-header">
+                ✓ Queue Exhausted
+              </div>
+              <div class="queue-exhausted-subtitle">
+                Here are some next steps:
+              </div>
+
+              <div class="queue-exhausted-actions-row">
+                <button
+                  type="button"
+                  class="propose-next-button queue-exhausted-action-button"
+                  on:click={handleOpenNewSourceModal}
+                  disabled={loading || showContextPanel}
+                >
+                  + Propose new source
+                </button>
+
+                <button
+                  type="button"
+                  class="queue-exhausted-link queue-exhausted-action-button"
+                  on:click={() =>
+                    window.navigate(
+                      `/review-projects/${review.review_project_guid}/skipped`
+                    )
+                  }
+                  disabled={
+                    loading ||
+                    !review?.review_project_guid ||
+                    (review?.stats?.skip !== undefined && review.stats.skip <= 0)
+                  }
+                  title={
+                    review?.stats?.skip !== undefined && review.stats.skip <= 0
+                      ? 'No skipped sources to review'
+                      : undefined
+                  }
+                >
+                  Review skipped sources
+                  {#if review?.stats?.skip !== undefined && review?.stats?.skip > 0}
+                    <span class="queue-exhausted-link-count">({review.stats.skip})</span>
+                  {/if}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                class="queue-exhausted-show-choices"
+                on:click={openAllDecisionsModal}
+                disabled={loading || !allItems || allItems.length === 0}
+              >
+                Show review choices
+              </button>
+            </div>
+          {/if}
         {/if}
 
         {#if review.status !== 'completed'}
@@ -680,15 +773,21 @@
             on:close={handleRemoveCancel}
           />
 
-          <NewSourceModal
-            show={showNewSourceModal}
-            {loading}
-            on:confirm={handleNewSourceModalConfirm}
-            on:close={() => (showNewSourceModal = false)}
-          />
+          
         {/if}
       </div>
     </div>
+
+    <NewSourceModal
+      show={showNewSourceModal}
+      {loading}
+      editMetadata={review?.edit_metadata}
+      languageOptions={LANGUAGE_OPTIONS}
+      countryOptions={COUNTRY_OPTIONS}
+      errorMessage={newSourceModalError}
+      on:confirm={handleNewSourceModalConfirm}
+      on:close={() => (showNewSourceModal = false)}
+    />
 
     <EditMetadataModal
       show={showEditMetadataModal}
@@ -824,6 +923,226 @@
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+  }
+
+  .propose-next-card {
+    background: white;
+    border: 1px solid #d0d7de;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    padding: 16px 16px;
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .propose-next-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #2c3e50;
+  }
+
+  .propose-next-subtitle {
+    font-size: 13px;
+    color: #7f8c8d;
+    line-height: 1.35;
+  }
+
+  .propose-next-button {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 999px;
+    border: 1px solid #2ecc71;
+    background-color: #2ecc71;
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+  }
+
+  .propose-next-button:hover:enabled {
+    background-color: #229954;
+    border-color: #229954;
+  }
+
+  .propose-next-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .queue-exhausted-links {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .queue-exhausted-link {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid #3498db;
+    background-color: #f5fbff;
+    color: #3498db;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+  }
+
+  .queue-exhausted-link:hover:enabled {
+    background-color: #e3f3ff;
+    border-color: #2980b9;
+  }
+
+  .queue-exhausted-link:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .queue-exhausted-link-count {
+    margin-left: 8px;
+    font-size: 12px;
+    font-weight: 900;
+    color: #7f8c8d;
+  }
+
+  .queue-exhausted-link-secondary {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid #d0d7de;
+    background-color: #f6f8fa;
+    color: #34495e;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+  }
+
+  .queue-exhausted-link-secondary:hover:enabled {
+    background-color: #eef2f7;
+    border-color: #c0c7d0;
+  }
+
+  .queue-exhausted-link-secondary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .queue-modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .queue-modal-link {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid #3498db;
+    background-color: #f5fbff;
+    color: #3498db;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+  }
+
+  .queue-modal-link:hover:enabled {
+    background-color: #e3f3ff;
+    border-color: #2980b9;
+  }
+
+  .queue-modal-link:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .queue-modal-link-secondary {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid #d0d7de;
+    background-color: #f6f8fa;
+    color: #34495e;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+  }
+
+  .queue-modal-link-secondary:hover:enabled {
+    background-color: #eef2f7;
+    border-color: #c0c7d0;
+  }
+
+  .queue-modal-link-secondary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .queue-exhausted-card {
+    background: white;
+    border: 1px solid #d0d7de;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    padding: 16px 16px;
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .queue-exhausted-header {
+    font-size: 16px;
+    font-weight: 900;
+    color: #27ae60;
+  }
+
+  .queue-exhausted-subtitle {
+    font-size: 13px;
+    color: #7f8c8d;
+    line-height: 1.35;
+    font-weight: 700;
+  }
+
+  .queue-exhausted-actions-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .queue-exhausted-action-button {
+    flex: 1;
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .queue-exhausted-show-choices {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid #d0d7de;
+    background-color: #f6f8fa;
+    color: #34495e;
+    font-size: 13px;
+    font-weight: 900;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+  }
+
+  .queue-exhausted-show-choices:hover:enabled {
+    background-color: #eef2f7;
+    border-color: #c0c7d0;
+  }
+
+  .queue-exhausted-show-choices:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   .propose-button:hover:enabled {

@@ -4,10 +4,12 @@
   export let onRemove;
   export let onSkip;
   export let editMetadata = false;
+  export let showActions = true;
   export let onEditLanguage;
   export let onEditPubCountry;
   export let onEditPubState;
   export let loading = false;
+  export let showSkip = true;
 
   let faviconUrl = null;
   let metadata = {};
@@ -117,7 +119,9 @@
       </div>
       {#if item.is_new_source}
         <span class="badge new-source">New Source</span>
-      {:else if item.source_id}
+      {/if}
+
+      {#if (item.source_id) || (item.is_new_source && (editMetadata || metadata.primary_language || metadata.language || metadata.pub_country || metadata.pub_state))}
         <div class="source-metadata">
           <div class="metadata-grid">
             <div class="meta-card">
@@ -188,36 +192,40 @@
       {/if}
     </div>
     
-    <div class="actions">
-      <div class="actions-left">
-        <button 
-          class="btn btn-remove" 
-          on:click={onRemove} 
-          disabled={loading}
-        >
-          Remove
-        </button>
+    {#if showActions}
+      <div class="actions">
+        <div class="actions-left">
+          <button 
+            class="btn btn-remove" 
+            on:click={onRemove} 
+            disabled={loading}
+          >
+            Remove
+          </button>
+        </div>
+        <div class="actions-right">
+          {#if showSkip}
+            <button
+              class="btn btn-skip"
+              on:click={onSkip}
+              disabled={loading}
+            >
+              Skip for now
+            </button>
+          {/if}
+          <button 
+            class="btn btn-keep" 
+            on:click={onKeep} 
+            disabled={!canKeep}
+            title={!canKeep && editMetadata
+              ? 'To keep this source, first mark Language, Pub country, and Pub state as correct.'
+              : undefined}
+          >
+            Keep
+          </button>
+        </div>
       </div>
-      <div class="actions-right">
-        <button 
-          class="btn btn-skip" 
-          on:click={onSkip} 
-          disabled={loading}
-        >
-          Skip for now
-        </button>
-        <button 
-          class="btn btn-keep" 
-          on:click={onKeep} 
-          disabled={!canKeep}
-          title={!canKeep && editMetadata
-            ? 'To keep this source, first mark Language, Pub country, and Pub state as correct.'
-            : undefined}
-        >
-          Keep
-        </button>
-      </div>
-    </div>
+    {/if}
   </div>
 {:else}
   <div class="no-items">
