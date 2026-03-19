@@ -5,6 +5,11 @@
     getReviewItems, 
     decideItem, 
     proposeNewSource, 
+    getReviewByQueueGuid,
+    getReviewItemsByQueueGuid,
+    decideQueueItem,
+    proposeNewSourceByQueueGuid,
+    getReviewQueueGuidelines,
     getExportUrl,
     getRemovedSourcesExportUrl,
     getAddedSourcesExportUrl,
@@ -28,6 +33,8 @@
   let loading = false;
   let error = null;
   let reviewId = null;
+  let queueGuid = null;
+  let isQueueMode = false;
   let showAllItems = false;
   let currentPath = window.location.pathname;
   let showRemovalModal = false;
@@ -73,24 +80,37 @@
     });
 
   // Get review ID from URL
-  function getReviewIdFromUrl() {
-    const match = currentPath.match(/^\/reviews\/(\d+)$/);
-    return match ? parseInt(match[1]) : null;
+  function parseReviewOrQueueFromUrl() {
+    const match = currentPath.match(/^\/reviews\/([^/]+)$/);
+    if (!match) return { reviewId: null, queueGuid: null };
+
+    const segment = match[1];
+    if (/^\d+$/.test(segment)) {
+      return { reviewId: parseInt(segment, 10), queueGuid: null };
+    }
+
+    return { reviewId: null, queueGuid: segment };
   }
 
   onMount(() => {
     // Listen for URL changes
     const updatePath = () => {
       currentPath = window.location.pathname;
-      reviewId = getReviewIdFromUrl();
-      if (reviewId) {
+      const parsed = parseReviewOrQueueFromUrl();
+      reviewId = parsed.reviewId;
+      queueGuid = parsed.queueGuid;
+      isQueueMode = !!queueGuid;
+      if (reviewId || queueGuid) {
         loadReview();
       }
     };
 
     window.addEventListener('popstate', updatePath);
-    reviewId = getReviewIdFromUrl();
-    if (reviewId) {
+    const initialParsed = parseReviewOrQueueFromUrl();
+    reviewId = initialParsed.reviewId;
+    queueGuid = initialParsed.queueGuid;
+    isQueueMode = !!queueGuid;
+    if (reviewId || queueGuid) {
       loadReview();
     }
 
@@ -100,13 +120,13 @@
   });
 
   async function loadReview() {
-    if (!reviewId) return;
+    if (!reviewId && !queueGuid) return;
 
     loading = true;
     error = null;
 
     try {
-      review = await getReview(reviewId);
+      review = isQueueMode ? await getReviewByQueueGuid(queueGuid) : await getReview(reviewId);
       // Always load all items so they're available for the "Show All Decisions" panel
       await loadAllItems();
       // Load guidelines
@@ -124,13 +144,12 @@
   }
 
   async function loadAllItems() {
-    if (!reviewId) return;
+    if (!reviewId && !queueGuid) return;
 
     try {
-      const response = await getReviewItems(reviewId, {
-        page: 1,
-        page_size: 1000  // Get all items
-      });
+      const response = isQueueMode
+        ? await getReviewItemsByQueueGuid(queueGuid, { page: 1, page_size: 1000 })
+        : await getReviewItems(reviewId, { page: 1, page_size: 1000 });  // Get all items
       allItems = response.items || [];
     } catch (err) {
       console.error('Error loading all items:', err);
@@ -138,24 +157,24 @@
   }
 
   async function loadGuidelines() {
-    if (!reviewId) return;
+    if (!reviewId && !queueGuid) return;
 
     try {
-      guidelines = await getReviewGuidelines(reviewId);
+      guidelines = isQueueMode
+        ? await getReviewQueueGuidelines(queueGuid)
+        : await getReviewGuidelines(reviewId);
     } catch (err) {
       console.error('Error loading guidelines:', err);
     }
   }
 
   async function loadNextUndecidedItem() {
-    if (!reviewId) return;
+    if (!reviewId && !queueGuid) return;
 
     try {
-      const response = await getReviewItems(reviewId, {
-        decision: 'undecided',
-        page: 1,
-        page_size: 1
-      });
+      const response = isQueueMode
+        ? await getReviewItemsByQueueGuid(queueGuid, { decision: 'undecided', page: 1, page_size: 1 })
+        : await getReviewItems(reviewId, { decision: 'undecided', page: 1, page_size: 1 });
 
       if (response.items && response.items.length > 0) {
         currentItem = response.items[0];
@@ -165,6 +184,14 @@
       }
     } catch (err) {
       console.error('Error loading next item:', err);
+    }
+  }
+
+  async function reloadReviewStatsOnly() {
+    if (isQueueMode) {
+      review = await getReviewByQueueGuid(queueGuid);
+    } else {
+      review = await getReview(reviewId);
     }
   }
 
@@ -204,9 +231,13 @@
     error = null;
 
     try {
-      await decideItem(reviewId, currentItem.id, 'keep');
+      if (isQueueMode) {
+        await decideQueueItem(queueGuid, currentItem.id, 'keep');
+      } else {
+        await decideItem(reviewId, currentItem.id, 'keep');
+      }
       // Reload review to get updated stats
-      review = await getReview(reviewId);
+      await reloadReviewStatsOnly();
       // Load next undecided item
       await loadNextUndecidedItem();
     } catch (err) {
@@ -224,9 +255,13 @@
     error = null;
 
     try {
-      await decideItem(reviewId, currentItem.id, 'skip');
+      if (isQueueMode) {
+        await decideQueueItem(queueGuid, currentItem.id, 'skip');
+      } else {
+        await decideItem(reviewId, currentItem.id, 'skip');
+      }
       // Reload review to get updated stats
-      review = await getReview(reviewId);
+      await reloadReviewStatsOnly();
       // Load next undecided item
       await loadNextUndecidedItem();
     } catch (err) {
@@ -251,9 +286,13 @@
     error = null;
 
     try {
-      await decideItem(reviewId, currentItem.id, 'remove', removalReason);
+      if (isQueueMode) {
+        await decideQueueItem(queueGuid, currentItem.id, 'remove', removalReason);
+      } else {
+        await decideItem(reviewId, currentItem.id, 'remove', removalReason);
+      }
       // Reload review to get updated stats
-      review = await getReview(reviewId);
+      await reloadReviewStatsOnly();
       // Load next undecided item
       await loadNextUndecidedItem();
     } catch (err) {
@@ -285,15 +324,19 @@
   }
 
   async function handleNewSource(sourceLabel, sourceHomepage) {
-    if (!reviewId || loading) return;
+    if ((!reviewId && !queueGuid) || loading) return;
 
     loading = true;
     error = null;
 
     try {
-      await proposeNewSource(reviewId, sourceLabel, sourceHomepage);
+      if (isQueueMode) {
+        await proposeNewSourceByQueueGuid(queueGuid, sourceLabel, sourceHomepage);
+      } else {
+        await proposeNewSource(reviewId, sourceLabel, sourceHomepage);
+      }
       // Reload review to get updated stats
-      review = await getReview(reviewId);
+      await reloadReviewStatsOnly();
       // Optionally reload items to show the new one
       await loadNextUndecidedItem();
     } catch (err) {
@@ -444,7 +487,7 @@
           <button
             type="button"
             class="back-home"
-            on:click={() => window.navigate('/')}
+            on:click={() => window.navigate(review?.review_project_guid ? `/review-projects/${review.review_project_guid}` : '/')}
             title="Return to home"
             aria-label="Return to home"
           >
@@ -488,53 +531,57 @@
         </div>
 
         <div class="context-section">
-          <div class="export-section">
-            <h3>Export Files</h3>
-            <div class="export-links">
-              <a 
-                href={getExportUrl(reviewId)} 
-                download 
-                class="btn-download"
-              >
-                Download Main Export (Keep & Add Sources)
-              </a>
-              {#if review.stats && review.stats.remove > 0}
+          {#if !isQueueMode}
+            <div class="export-section">
+              <h3>Export Files</h3>
+              <div class="export-links">
                 <a 
-                  href={getRemovedSourcesExportUrl(reviewId)} 
+                  href={getExportUrl(reviewId)} 
                   download 
-                  class="btn-download btn-download-secondary"
+                  class="btn-download"
                 >
-                  Download Removed Sources ({review.stats.remove})
+                  Download Main Export (Keep & Add Sources)
                 </a>
-              {/if}
-              {#if review.stats && review.stats.add > 0}
-                <a 
-                  href={getAddedSourcesExportUrl(reviewId)} 
-                  download 
-                  class="btn-download btn-download-secondary"
-                >
-                  Download Added Sources ({review.stats.add})
-                </a>
-              {/if}
+                {#if review.stats && review.stats.remove > 0}
+                  <a 
+                    href={getRemovedSourcesExportUrl(reviewId)} 
+                    download 
+                    class="btn-download btn-download-secondary"
+                  >
+                    Download Removed Sources ({review.stats.remove})
+                  </a>
+                {/if}
+                {#if review.stats && review.stats.add > 0}
+                  <a 
+                    href={getAddedSourcesExportUrl(reviewId)} 
+                    download 
+                    class="btn-download btn-download-secondary"
+                  >
+                    Download Added Sources ({review.stats.add})
+                  </a>
+                {/if}
+              </div>
             </div>
-          </div>
+          {/if}
         </div>
 
         <div class="context-section">
-          <button
-            type="button"
-            class="context-toggle-button"
-            on:click={toggleEditMetadata}
-          >
-            <span class="toggle-label">
-              <span class="toggle-indicator {review.edit_metadata ? 'on' : 'off'}"></span>
-              Enable metadata editing for this review
-            </span>
-          </button>
-          {#if showEditMetadataError}
-            <div class="error-banner">
-              {showEditMetadataError}
-            </div>
+          {#if !isQueueMode}
+            <button
+              type="button"
+              class="context-toggle-button"
+              on:click={toggleEditMetadata}
+            >
+              <span class="toggle-label">
+                <span class="toggle-indicator {review.edit_metadata ? 'on' : 'off'}"></span>
+                Enable metadata editing for this review
+              </span>
+            </button>
+            {#if showEditMetadataError}
+              <div class="error-banner">
+                {showEditMetadataError}
+              </div>
+            {/if}
           {/if}
         </div>
       </div>
@@ -556,7 +603,10 @@
 
         {#if review.status === 'completed'}
           <div class="completed-message">
-            <p>✓ Review completed! Download the CSV export below.</p>
+            <p>
+              ✓ {isQueueMode ? 'Queue exhausted.' : 'Review completed!'}
+              {#if !isQueueMode} Download the CSV export below.{/if}
+            </p>
           </div>
         {/if}
 

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Home from './routes/Home.svelte';
   import Review from './routes/Review.svelte';
+  import ReviewProject from './routes/ReviewProject.svelte';
 
   let currentPath = window.location.pathname;
 
@@ -25,6 +26,8 @@
 <main>
   {#if currentPath === '/'}
     <Home />
+  {:else if currentPath.startsWith('/review-projects/')}
+    <ReviewProject />
   {:else if currentPath.startsWith('/reviews/')}
     <Review />
   {:else}

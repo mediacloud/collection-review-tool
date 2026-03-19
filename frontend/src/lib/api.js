@@ -28,6 +28,105 @@ export async function startReview(collectionId, guidelinesTemplate = 'default', 
 }
 
 /**
+ * Start a ReviewProject seeded from multiple MediaCloud collections.
+ * @param {number[]} collectionIds
+ * @param {string} guidelinesTemplate
+ * @param {boolean} editMetadata
+ * @param {string|null} name
+ * @returns {Promise<Object>}
+ */
+export async function startReviewProject(
+  collectionIds,
+  guidelinesTemplate = 'default',
+  editMetadata = false,
+  name = null
+) {
+  const response = await api.post('/review-projects/start', {
+    collection_ids: collectionIds,
+    guidelines_template: guidelinesTemplate,
+    edit_metadata: !!editMetadata,
+    name,
+  });
+  return response.data;
+}
+
+/**
+ * Step 2: generate reviewer queues for a ReviewProject.
+ * @param {string} projectGuid
+ * @param {number} queueCount
+ */
+export async function generateReviewProjectQueues(projectGuid, queueCount) {
+  const response = await api.post(`/review-projects/${projectGuid}/queues`, {
+    queue_count: queueCount,
+  });
+  return response.data;
+}
+
+/**
+ * Get a ReviewProject (manager view).
+ * @param {string} projectGuid
+ */
+export async function getReviewProject(projectGuid) {
+  const response = await api.get(`/review-projects/${projectGuid}`);
+  return response.data;
+}
+
+export function getReviewProjectExportUrl(projectGuid) {
+  return `${API_BASE_URL}/review-projects/${projectGuid}/export`;
+}
+
+/**
+ * Get all ReviewProjects with derived status and aggregated stats.
+ * @returns {Promise<{projects: Array}>}
+ */
+export async function getReviewProjects() {
+  const response = await api.get('/review-projects');
+  return response.data.projects;
+}
+
+/**
+ * Get a reviewer queue review by queue GUID.
+ * @param {string} queueGuid
+ */
+export async function getReviewByQueueGuid(queueGuid) {
+  const response = await api.get(`/review-queues/${queueGuid}`);
+  return response.data.review;
+}
+
+export async function getReviewItemsByQueueGuid(queueGuid, options = {}) {
+  const params = new URLSearchParams();
+  if (options.page) params.append('page', options.page);
+  if (options.page_size) params.append('page_size', options.page_size);
+  if (options.decision) params.append('decision', options.decision);
+
+  const response = await api.get(`/review-queues/${queueGuid}/items?${params.toString()}`);
+  return response.data;
+}
+
+export async function decideQueueItem(queueGuid, itemId, decision, removalReason = null) {
+  const body = { decision };
+  if (decision === 'remove' && removalReason) {
+    body.removal_reason = removalReason;
+  }
+
+  const response = await api.post(`/review-queues/${queueGuid}/items/${itemId}/decide`, body);
+  return response.data;
+}
+
+export async function proposeNewSourceByQueueGuid(queueGuid, sourceLabel, sourceHomepage) {
+  const response = await api.post(`/review-queues/${queueGuid}/items`, {
+    source_label: sourceLabel,
+    source_homepage: sourceHomepage,
+  });
+  return response.data;
+}
+
+export async function getReviewQueueGuidelines(queueGuid) {
+  const response = await api.get(`/review-queues/${queueGuid}/guidelines`);
+  return response.data.guidelines;
+}
+
+/**
  * Get all in-progress reviews
  * @returns {Promise} Array of review objects with completeness percentage
  */

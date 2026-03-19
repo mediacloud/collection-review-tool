@@ -152,7 +152,71 @@ def run_all_migrations():
                     conn.execute(text("ALTER TABLE reviews ADD COLUMN edit_metadata BOOLEAN DEFAULT FALSE"))
                     print("Successfully added 'edit_metadata' column.")
 
-            # Migration 6: add 'SKIP' value to decision enum (PostgreSQL only)
+            # Migration 6: review_project_id and queue_guid fields
+            print("\nRunning migration: review_project queue fields")
+            if is_sqlite:
+                result = conn.execute(text("PRAGMA table_info(reviews)"))
+                columns = [row[1] for row in result]
+
+                if 'review_project_id' not in columns:
+                    conn.execute(text("ALTER TABLE reviews ADD COLUMN review_project_id INTEGER"))
+                    print("Successfully added 'review_project_id' column.")
+                else:
+                    print("Column 'review_project_id' already exists. No migration needed.")
+
+                if 'queue_guid' not in columns:
+                    conn.execute(text("ALTER TABLE reviews ADD COLUMN queue_guid TEXT"))
+                    print("Successfully added 'queue_guid' column.")
+                else:
+                    print("Column 'queue_guid' already exists. No migration needed.")
+
+                if 'queue_index' not in columns:
+                    conn.execute(text("ALTER TABLE reviews ADD COLUMN queue_index INTEGER"))
+                    print("Successfully added 'queue_index' column.")
+                else:
+                    print("Column 'queue_index' already exists. No migration needed.")
+            else:
+                # PostgreSQL: Check each column independently
+                for col_name, col_def in [
+                    ('review_project_id', 'INTEGER'),
+                    ('queue_guid', 'VARCHAR(36)'),
+                    ('queue_index', 'INTEGER'),
+                ]:
+                    result = conn.execute(text("""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name='reviews' AND column_name=:col_name
+                    """), {"col_name": col_name})
+
+                    if result.fetchone():
+                        print(f"Column '{col_name}' already exists. No migration needed.")
+                    else:
+                        conn.execute(text(f"ALTER TABLE reviews ADD COLUMN {col_name} {col_def}"))
+                        print(f"Successfully added '{col_name}' column.")
+
+            # Migration 7: collection_names_json on review_projects
+            print("\nRunning migration: ReviewProject collection_names_json")
+            if is_sqlite:
+                result = conn.execute(text("PRAGMA table_info(review_projects)"))
+                columns = [row[1] for row in result]
+                if 'collection_names_json' not in columns:
+                    conn.execute(text("ALTER TABLE review_projects ADD COLUMN collection_names_json TEXT DEFAULT '[]'"))
+                    print("Successfully added 'collection_names_json' column to review_projects table.")
+                else:
+                    print("Column 'collection_names_json' already exists. No migration needed.")
+            else:
+                result = conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name='review_projects' AND column_name='collection_names_json'
+                """))
+                if result.fetchone():
+                    print("Column 'collection_names_json' already exists. No migration needed.")
+                else:
+                    conn.execute(text("ALTER TABLE review_projects ADD COLUMN collection_names_json TEXT DEFAULT '[]'"))
+                    print("Successfully added 'collection_names_json' column to review_projects table.")
+
+            # Migration 8: add 'SKIP' value to decision enum (PostgreSQL only)
             print("\nRunning migration: decision enum 'SKIP' value")
             if is_sqlite:
                 print("SQLite database detected; no enum migration needed.")

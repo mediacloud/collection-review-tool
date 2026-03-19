@@ -3,6 +3,7 @@ from datetime import datetime
 from database import db
 import enum
 import json
+from sqlalchemy import ForeignKey
 
 
 class ReviewStatus(enum.Enum):
@@ -27,6 +28,71 @@ class TimestampMixin:
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
+class ReviewProject(db.Model, TimestampMixin):
+    """Manager-level container for a multi-collection review project."""
+    __tablename__ = 'review_projects'
+
+    id = db.Column(db.Integer, primary_key=True)
+    guid = db.Column(db.String(36), unique=True, nullable=False, index=True)
+    collection_ids_json = db.Column(db.Text, nullable=False, default='[]')
+    # Human-friendly collection names corresponding to `collection_ids_json` (same order).
+    collection_names_json = db.Column(db.Text, nullable=False, default='[]')
+
+    # Status is informational; API returns derived status computed from queues.
+    status = db.Column(db.String(32), nullable=True)
+    name = db.Column(db.String(255), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    guidelines_template = db.Column(db.String(100), nullable=True, default='default')
+    edit_metadata = db.Column(db.Boolean, default=False, nullable=False)
+
+    queues = db.relationship(
+        'Review',
+        backref='review_project',
+        lazy=True,
+        cascade='all, delete-orphan',
+    )
+
+    sources = db.relationship(
+        'ReviewProjectSource',
+        backref='review_project',
+        lazy=True,
+        cascade='all, delete-orphan',
+    )
+
+    def to_dict(self, include_queues=False):
+        data = {
+            'guid': self.guid,
+            'collection_ids': json.loads(self.collection_ids_json or '[]'),
+            'collection_names': json.loads(self.collection_names_json or '[]'),
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'name': self.name,
+            'notes': self.notes,
+            'guidelines_template': self.guidelines_template or 'default',
+            'edit_metadata': bool(self.edit_metadata),
+        }
+        if include_queues:
+            data['queues'] = [q.to_dict(include_stats=True) for q in (self.queues or [])]
+        return data
+
+
+class ReviewProjectSource(db.Model, TimestampMixin):
+    """A deduped seed source that belongs to a ReviewProject (before queue splitting)."""
+    __tablename__ = 'review_project_sources'
+
+    id = db.Column(db.Integer, primary_key=True)
+    review_project_id = db.Column(db.Integer, ForeignKey('review_projects.id'), nullable=False, index=True)
+
+    # MediaCloud source ID
+    source_id = db.Column(db.Integer, nullable=False, index=True)
+    source_label = db.Column(db.String(500), nullable=True)
+    source_homepage = db.Column(db.String(1000), nullable=True)
+
+    # JSON-encoded full source object snapshot (for later export / context)
+    source_metadata = db.Column(db.Text, nullable=True)
+
+
 class Review(db.Model, TimestampMixin):
     """Review model representing a review session for a MediaCloud collection."""
     __tablename__ = 'reviews'
@@ -40,6 +106,13 @@ class Review(db.Model, TimestampMixin):
     guidelines_template = db.Column(db.String(100), nullable=True, default='default')  # Template name for annotation guidelines
     # When true, UI should allow editing of per-source language and geography metadata
     edit_metadata = db.Column(db.Boolean, default=False, nullable=False)
+
+    # Optional linkage to a manager-level ReviewProject (when used as a reviewer queue)
+    review_project_id = db.Column(db.Integer, ForeignKey('review_projects.id'), nullable=True, index=True)
+    # Public GUID used for reviewer URLs (queue assignment)
+    queue_guid = db.Column(db.String(36), unique=True, nullable=True, index=True)
+    # Stable index within a project (0-based)
+    queue_index = db.Column(db.Integer, nullable=True)
     
     # Relationship to review items
     items = db.relationship('ReviewItem', backref='review', lazy=True, cascade='all, delete-orphan')
@@ -56,7 +129,10 @@ class Review(db.Model, TimestampMixin):
             'name': self.name,
             'notes': self.notes,
             'guidelines_template': self.guidelines_template or 'default',
-            'edit_metadata': bool(self.edit_metadata)
+            'edit_metadata': bool(self.edit_metadata),
+            'review_project_id': self.review_project_id,
+            'queue_guid': self.queue_guid,
+            'queue_index': self.queue_index,
         }
         
         if include_stats:
