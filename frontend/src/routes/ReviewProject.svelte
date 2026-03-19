@@ -36,6 +36,8 @@
   let projectNameSaving = false;
   let projectNameError = null;
   let showProjectNameEditor = false;
+  let copiedQueueGuid = null;
+  let copiedIconTimer = null;
   let showEditMetadataEditor = false;
 
   let currentPath = window.location.pathname;
@@ -197,6 +199,14 @@
     const link = queueReviewerLink(queueGuid);
     try {
       await navigator.clipboard.writeText(link);
+      copiedQueueGuid = queueGuid;
+      if (copiedIconTimer) {
+        clearTimeout(copiedIconTimer);
+      }
+      copiedIconTimer = setTimeout(() => {
+        copiedQueueGuid = null;
+        copiedIconTimer = null;
+      }, 1200);
     } catch (e) {
       // Clipboard can fail due to browser permissions; fall back to selection-free UI.
       console.error('Copy failed:', e);
@@ -516,7 +526,22 @@
 
                 <div class="queue-link-row">
                   <div class="queue-link-label">Reviewer URL</div>
-                  <code class="queue-code">{`/reviews/${q.queue_guid}`}</code>
+                  <div class="queue-link-value">
+                    <code class="queue-code">{queueReviewerLink(q.queue_guid)}</code>
+                    <button
+                      type="button"
+                      class="queue-copy-icon {copiedQueueGuid === q.queue_guid ? 'is-copied' : ''}"
+                      on:click={() => copyQueueLink(q.queue_guid)}
+                      title="Copy full reviewer URL"
+                      aria-label="Copy full reviewer URL"
+                    >
+                      {#if copiedQueueGuid === q.queue_guid}
+                        ✓
+                      {:else}
+                        📋
+                      {/if}
+                    </button>
+                  </div>
                 </div>
 
                 <div class="queue-actions">
@@ -528,13 +553,6 @@
                     Open Queue
                   </button>
 
-                  <button
-                    type="button"
-                    class="queue-copy"
-                    on:click={() => copyQueueLink(q.queue_guid)}
-                  >
-                    Copy Link
-                  </button>
                 </div>
               </div>
             {/each}
@@ -1044,6 +1062,12 @@
     gap: 6px;
   }
 
+  .queue-link-value {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   .queue-link-label {
     font-size: 12px;
     color: #7f8c8d;
@@ -1052,6 +1076,7 @@
   }
 
   .queue-code {
+    flex: 1;
     font-size: 12px;
     color: #3498db;
     background: #f5fbff;
@@ -1059,6 +1084,30 @@
     padding: 6px 8px;
     border-radius: 8px;
     word-break: break-all;
+  }
+
+  .queue-copy-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid #d0d7de;
+    background-color: #f6f8fa;
+    color: #34495e;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    transition: color 180ms ease, border-color 180ms ease, background-color 180ms ease, opacity 220ms ease;
+  }
+
+  .queue-copy-icon:hover {
+    background-color: #eef2f7;
+  }
+
+  .queue-copy-icon.is-copied {
+    color: #1f7a3d;
+    border-color: #b7e2c4;
+    background-color: #eaf8ef;
+    opacity: 1;
   }
 
   .queue-actions {
