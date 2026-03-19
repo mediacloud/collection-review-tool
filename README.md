@@ -4,11 +4,16 @@ A standalone web application for reviewing sources in MediaCloud collections and
 
 ## Features
 
-- Start or resume reviews for MediaCloud collections
-- Review sources one-by-one with Keep/Remove decisions
-- Propose new sources to add to collections
-- Track review progress with statistics
-- Export all decisions as CSV for further processing
+- Manage multi-collection `ReviewProject`s (manager view)
+- Seed a project from multiple MediaCloud `collection_id`s with deduped sources
+- Seed collection names are stored and displayed on the project page
+- Two-step project setup:
+  - Step 1: start a `ReviewProject` (sources are fetched/stored at the project level)
+  - Step 2: generate reviewer queues by entering `queue_count` on the project page
+- Reviewer queues use derived status (queue is “completed” when exhausted; no manual completion needed)
+- Queue cards show progress (based on undecided vs total)
+- Persistent reviewer decisions (KEEP/REMOVE/ADD) and proposed new sources within the project
+- Export a single aggregated project CSV (KEEP + ADD union across all reviewer queues)
 - Clean, modern UI built with Svelte
 
 ## Prerequisites
@@ -170,58 +175,66 @@ This will:
 
 ## Usage
 
-1. **Start a Review**: Enter a MediaCloud collection ID on the home page and click "Start / Resume Review"
-   - If an active review exists for that collection, it will be resumed
-   - Otherwise, a new review will be created and sources will be fetched from MediaCloud
+1. **Create a ReviewProject**
+   - On the home page, enter one or more MediaCloud collection IDs (comma-separated).
+   - Click **Start ReviewProject**.
+   - Step 1 creates the project and fetches/dedupes sources (no reviewer queues yet).
 
-2. **Review Sources**: 
-   - View each source one at a time
-   - Click "Keep" to mark a source to keep
-   - Click "Remove" to mark a source for removal
-   - The next undecided source will automatically load
+2. **Generate reviewer queues (Step 2)**
+   - Open the project page from the **Review Projects** table.
+   - Enter `queue_count` and click **Generate queues**.
+   - Reviewer queue links are then available to share with reviewers.
 
-3. **Propose New Sources**:
-   - Fill in the "Propose New Source" form with a label and homepage URL
-   - New sources are automatically marked as "add"
+3. **Review via queue links**
+   - Each queue page shows queue progress and reviewer actions (KEEP/REMOVE + proposing new sources).
+   - A queue is considered **completed automatically** when it is exhausted (no undecided items remain).
 
-4. **Complete Review**:
-   - Click "Complete Review" when finished
-   - Review the statistics in the header
-
-5. **Export CSV**:
-   - After completion, click "Download CSV Export"
-   - The CSV contains all decisions for use in scripts or the main MediaCloud app
+4. **Download the Project CSV**
+   - Use **Download Project CSV** from the project page.
+   - Export aggregates the union of **KEEP + ADD** decisions across all queues.
 
 ## API Endpoints
 
-### Reviews
+### Review Projects (manager)
+- `POST /api/review-projects/start`
+  - Body: `{ "collection_ids": [123, 456], "guidelines_template": "default", "edit_metadata": false, "name": "Optional project name" }`
+  - Step 1: creates the project and stores deduped sources (no reviewer queues yet).
 
-- `POST /api/reviews/start` - Start or resume a review
-  - Body: `{ "collection_id": 123 }`
-  - Returns: Review object with stats
+- `POST /api/review-projects/<project_guid>/queues`
+  - Body: `{ "queue_count": 3 }`
+  - Step 2: generates reviewer queues from the project’s stored sources.
 
-- `GET /api/reviews/<review_id>` - Get review details
-  - Returns: Review object with stats
+- `GET /api/review-projects`
+  - Lists all projects with derived status and aggregated stats.
 
-- `POST /api/reviews/<review_id>/complete` - Mark review as completed
-  - Returns: Updated review object
+- `GET /api/review-projects/<project_guid>`
+  - Returns project details + per-queue summaries (derived on read).
 
-- `GET /api/reviews/<review_id>/export` - Export review as CSV
-  - Returns: CSV file download
+- `GET /api/review-projects/<project_guid>/export`
+  - Exports a single aggregated project CSV (KEEP + ADD union across all queues; non-blocking).
 
-### Review Items
+### Reviewer Queues (GUID-based)
+- `GET /api/review-queues/<queue_guid>`
+  - Returns the queue plus derived status (completed when exhausted).
 
-- `GET /api/reviews/<review_id>/items` - List review items
-  - Query params: `page`, `page_size`, `decision` (filter)
-  - Returns: Items array and total count
+- `GET /api/review-queues/<queue_guid>/guidelines`
+  - Returns rendered guidelines for the queue.
 
-- `POST /api/reviews/<review_id>/items/<item_id>/decide` - Make a decision
-  - Body: `{ "decision": "keep" }` (keep, remove, add, undecided)
-  - Returns: Updated item
+- `GET /api/review-queues/<queue_guid>/items`
+  - Query params: `page`, `page_size`, `decision` (optional filter)
+  - Returns queue items array and total count.
 
-- `POST /api/reviews/<review_id>/items` - Propose new source
+- `POST /api/review-queues/<queue_guid>/items/<item_id>/decide`
+  - Body: `{ "decision": "keep" | "remove" | "add" }` (removal_reason optional when removing)
+  - Returns updated item.
+
+- `POST /api/review-queues/<queue_guid>/items`
+  - Propose a new source inside the queue
   - Body: `{ "source_label": "Name", "source_homepage": "https://..." }`
-  - Returns: Created item
+  - Returns created item.
+
+### Legacy single-collection reviews
+The app still includes legacy `/api/reviews/*` endpoints, but the primary workflow is `ReviewProject`s.
 
 ## Database
 

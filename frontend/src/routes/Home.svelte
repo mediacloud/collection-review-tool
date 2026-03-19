@@ -1,22 +1,29 @@
 <script>
   import { onMount } from 'svelte';
-  import { startReview, getInProgressReviews, getCompletedReviews, getGuidelineTemplates } from '../lib/api.js';
+  import { startReview, startReviewProject, getInProgressReviews, getCompletedReviews, getGuidelineTemplates, getReviewProjects } from '../lib/api.js';
 
   let collectionId = '';
+  let projectCollectionIdsInput = '';
   let loading = false;
+  let projectLoading = false;
   let error = null;
+  let projectError = null;
   let inProgressReviews = [];
   let loadingReviews = false;
   let completedReviews = [];
   let loadingCompleted = false;
   let showCompleted = false;
+  let reviewProjects = [];
+  let loadingProjects = false;
+  let showProjects = true;
   let guidelineTemplates = [];
   let selectedTemplate = 'default';
   let loadingTemplates = false;
   let editMetadata = false;
+let projectName = '';
 
   onMount(async () => {
-    await loadInProgressReviews();
+    await loadReviewProjects();
     await loadGuidelineTemplates();
   });
 
@@ -60,6 +67,18 @@
       console.error('Error loading completed reviews:', err);
     } finally {
       loadingCompleted = false;
+    }
+  }
+
+  async function loadReviewProjects() {
+    loadingProjects = true;
+    try {
+      reviewProjects = await getReviewProjects();
+    } catch (err) {
+      console.error('Error loading review projects:', err);
+      reviewProjects = [];
+    } finally {
+      loadingProjects = false;
     }
   }
 
@@ -114,6 +133,57 @@
       loading = false;
     }
   }
+
+  async function handleProjectSubmit() {
+    projectError = null;
+
+    const raw = String(projectCollectionIdsInput || '');
+    const parts = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (parts.length === 0) {
+      projectError = 'Please enter at least one collection ID (comma-separated).';
+      return;
+    }
+
+    let collectionIds = [];
+    try {
+      collectionIds = parts.map((p) => parseInt(p, 10));
+    } catch {
+      projectError = 'All collection IDs must be valid integers.';
+      return;
+    }
+
+    if (collectionIds.some((id) => !id || id <= 0)) {
+      projectError = 'All collection IDs must be positive integers.';
+      return;
+    }
+
+    projectLoading = true;
+    try {
+      const cleanProjectName = String(projectName || '').trim();
+      const result = await startReviewProject(
+        collectionIds,
+        selectedTemplate,
+        editMetadata,
+        cleanProjectName || null
+      );
+      const guid = result?.project?.guid;
+      if (!guid) {
+        projectError = 'Project start succeeded but no project GUID was returned.';
+        return;
+      }
+      // Any warnings are returned on the project page.
+      window.navigate(`/review-projects/${guid}`);
+    } catch (err) {
+      projectError = err.response?.data?.error || err.message || 'Failed to start review project';
+      console.error('Error starting review project:', err);
+    } finally {
+      projectLoading = false;
+    }
+  }
 </script>
 
 <div class="container">
@@ -122,139 +192,129 @@
       <h1>MediaCloud Collections Review</h1>
       <p class="subtitle">Review and manage sources in MediaCloud collections</p>
 
-      <form on:submit|preventDefault={handleSubmit}>
-        <div class="form-group">
-          <label for="collection-id">MediaCloud Collection ID</label>
-          <input
-            id="collection-id"
-            type="number"
-            bind:value={collectionId}
-            placeholder="Enter collection ID"
-            disabled={loading}
-          />
-        </div>
+      <div class="project-divider" />
 
-        {#if guidelineTemplates.length > 0}
+      <div class="project-section">
+        <h2>Start ReviewProject</h2>
+        <p class="subtitle">Seed a multi-collection project into reviewer queues.</p>
+
+        <form on:submit|preventDefault={handleProjectSubmit}>
+          {#if guidelineTemplates.length > 0}
+            <div class="form-group">
+              <label for="guideline-template">Annotation Guidelines Template</label>
+              <select
+                id="guideline-template"
+                bind:value={selectedTemplate}
+                disabled={projectLoading || loadingTemplates}
+              >
+                {#each guidelineTemplates as template}
+                  <option value={template}>{template}</option>
+                {/each}
+              </select>
+            </div>
+          {/if}
+
           <div class="form-group">
-            <label for="guideline-template">Annotation Guidelines Template</label>
-            <select
-              id="guideline-template"
-              bind:value={selectedTemplate}
-              disabled={loading || loadingTemplates}
-            >
-              {#each guidelineTemplates as template}
-                <option value={template}>{template}</option>
-              {/each}
-            </select>
+            <label for="project-name">Project Name</label>
+            <input
+              id="project-name"
+              type="text"
+              bind:value={projectName}
+              placeholder="e.g. UNDP 2026 Seed Project"
+              disabled={projectLoading}
+            />
           </div>
-        {/if}
 
-        <div class="form-group">
-          <button
-            type="button"
-            class="context-toggle-button"
-            on:click={() => (editMetadata = !editMetadata)}
-            disabled={loading}
-          >
-            <span class="toggle-label">
-              <span class="toggle-indicator {editMetadata ? 'on' : 'off'}"></span>
-              Enable metadata editing in this review
-            </span>
+          <div class="form-group">
+            <label for="project-collection-ids">MediaCloud Collection IDs</label>
+            <input
+              id="project-collection-ids"
+              type="text"
+              bind:value={projectCollectionIdsInput}
+              placeholder="e.g. 123, 456, 789"
+              disabled={projectLoading}
+            />
+          </div>
+
+          {#if projectError}
+            <div class="error">{projectError}</div>
+          {/if}
+
+          <button type="submit" disabled={projectLoading}>
+            {projectLoading ? 'Starting...' : 'Start ReviewProject'}
           </button>
-        </div>
-
-        {#if error}
-          <div class="error">{error}</div>
-        {/if}
-
-        <button type="submit" disabled={loading}>
-          {loading ? 'Starting...' : 'Start / Resume Review'}
-        </button>
-      </form>
+        </form>
+      </div>
     </div>
 
-    {#if inProgressReviews.length > 0}
-      <div class="card reviews-list">
-        <h2>Reviews in Progress</h2>
-        {#if loadingReviews}
-          <p class="loading-text">Loading reviews...</p>
-        {:else}
-          <div class="reviews-container">
-            {#each inProgressReviews as review}
-              <div 
-                class="review-item" 
-                on:click={() => navigateToReview(review.id)} 
-                on:keydown={(e) => handleKeydown(e, review.id)}
-                role="button" 
-                tabindex="0"
-              >
-                <div class="review-header">
-                  <span class="review-id">
-                    {review.name || review.collection_name || `Collection #${review.collection_id}`}
-                  </span>
-                  <span class="completeness">{review.completeness}%</span>
-                </div>
-                <div class="review-meta">
-                  <span class="review-date">Started: {formatDate(review.created_at)}</span>
-                  {#if review.stats}
-                    <span class="review-stats">
-                      {review.stats.total} items • {review.stats.undecided} undecided
-                    </span>
-                  {/if}
-                </div>
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    {/if}
-
-    <div class="card reviews-list">
+    <div class="card">
       <div class="reviews-list-header">
-        <h2>Completed Reviews</h2>
-        <button 
-          class="toggle-button" 
-          on:click={loadCompletedReviews}
-          disabled={loadingCompleted}
+        <h2>Review Projects</h2>
+        <button
+          class="toggle-button"
+          on:click={() => (showProjects = !showProjects)}
+          disabled={loadingProjects}
         >
-          {loadingCompleted ? 'Loading...' : (showCompleted ? 'Hide' : 'Show')}
+          {loadingProjects ? 'Loading...' : (showProjects ? 'Hide' : 'Show')}
         </button>
       </div>
-      {#if showCompleted}
-        {#if loadingCompleted}
-          <p class="loading-text">Loading reviews...</p>
-        {:else if completedReviews.length === 0}
-          <p class="empty-text">No completed reviews yet.</p>
+
+      {#if showProjects}
+        {#if loadingProjects}
+          <p class="loading-text">Loading projects...</p>
+        {:else if reviewProjects.length === 0}
+          <p class="empty-text">No review projects found.</p>
         {:else}
-          <div class="reviews-container">
-            {#each completedReviews as review}
-              <div 
-                class="review-item completed" 
-                on:click={() => navigateToReview(review.id)} 
-                on:keydown={(e) => handleKeydown(e, review.id)}
-                role="button" 
-                tabindex="0"
-              >
-                <div class="review-header">
-                  <span class="review-id">
-                    {review.name || review.collection_name || `Collection #${review.collection_id}`}
-                  </span>
-                  <span class="completeness completed-badge">{review.completeness}%</span>
-                </div>
-                <div class="review-meta">
-                  <span class="review-date">Completed: {formatDate(review.updated_at)}</span>
-                  {#if review.stats}
-                    <span class="review-stats">
-                      {review.stats.total} items • {review.stats.undecided} undecided
-                    </span>
-                  {/if}
-                </div>
-              </div>
-            {/each}
+          <div class="projects-table-wrap">
+            <table class="projects-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Status</th>
+                  <th>Queues</th>
+                  <th>Total</th>
+                  <th>Keep</th>
+                  <th>Remove</th>
+                  <th>Add</th>
+                  <th>Undecided</th>
+                  <th>Skip</th>
+                  <th>Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each reviewProjects as p}
+                  <tr>
+                    <td class="projects-name">
+                      {p.name || p.guid}
+                    </td>
+                    <td class="projects-status">
+                      {p.derived_status}
+                    </td>
+                    <td>{p.queues_count}</td>
+                    <td>{p.stats.total}</td>
+                    <td>{p.stats.keep}</td>
+                    <td>{p.stats.remove}</td>
+                    <td>{p.stats.add}</td>
+                    <td>{p.stats.undecided}</td>
+                    <td>{p.stats.skip}</td>
+                    <td>
+                      <button
+                        type="button"
+                        class="projects-open"
+                        on:click={() => window.navigate(`/review-projects/${p.guid}`)}
+                      >
+                        Open
+                      </button>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
           </div>
         {/if}
       {/if}
     </div>
+
   </div>
 </div>
 
@@ -393,6 +453,75 @@
     border-radius: 4px;
     margin-bottom: 20px;
     border: 1px solid #fcc;
+  }
+
+  .project-divider {
+    margin: 28px 0;
+    border: 0;
+    border-top: 1px solid #e0e4e8;
+  }
+
+  .projects-table-wrap {
+    overflow-x: auto;
+    margin-top: 12px;
+  }
+
+  .projects-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .projects-table th,
+  .projects-table td {
+    border-bottom: 1px solid #e0e4e8;
+    padding: 10px 8px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .projects-table th {
+    color: #2c3e50;
+    font-weight: 700;
+    background: #f8f9fa;
+  }
+
+  .projects-name {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .projects-status {
+    font-weight: 700;
+    text-transform: lowercase;
+    color: #34495e;
+  }
+
+  .projects-open {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #3498db;
+    background-color: #3498db;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .projects-open:hover {
+    background-color: #2980b9;
+  }
+
+  .project-section h2 {
+    margin-bottom: 8px;
+    color: #2c3e50;
+    font-size: 20px;
+  }
+
+  .project-section .subtitle {
+    margin: 0 0 18px 0;
+    color: #7f8c8d;
+    font-size: 14px;
   }
 
   .reviews-list h2 {
