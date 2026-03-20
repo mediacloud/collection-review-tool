@@ -6,6 +6,8 @@
     generateReviewProjectQueues,
     setReviewProjectEditMetadata,
     setReviewProjectName,
+    getReviewProjectGuidelines,
+    setReviewProjectGuidelines,
   } from '../lib/api.js';
 
   let projectGuid = null;
@@ -39,6 +41,14 @@
   let copiedQueueGuid = null;
   let copiedIconTimer = null;
   let showEditMetadataEditor = false;
+
+  let showGuidelinesEditor = false;
+  let guidelinesLoadError = null;
+  let guidelinesLoading = false;
+  let guidelinesSaving = false;
+  let guidelinesError = null;
+  let initialGuidelinesMarkdown = '';
+  let guidelinesMarkdown = '';
 
   let currentPath = window.location.pathname;
 
@@ -191,6 +201,58 @@
     showEditMetadataEditor = false;
   }
 
+  async function handleStartGuidelinesEdit() {
+    if (!projectGuid || showGuidelinesEditor || guidelinesLoading) return;
+
+    guidelinesLoadError = null;
+    guidelinesLoading = true;
+
+    try {
+      const resp = await getReviewProjectGuidelines(projectGuid);
+      const markdown = resp?.guidelines ?? '';
+      initialGuidelinesMarkdown = markdown;
+      guidelinesMarkdown = markdown;
+      guidelinesError = null;
+      showGuidelinesEditor = true;
+    } catch (err) {
+      guidelinesLoadError = err.response?.data?.error || err.message || 'Failed to load guidelines';
+      guidelinesError = null;
+    } finally {
+      guidelinesLoading = false;
+    }
+  }
+
+  function handleCancelGuidelinesEdit() {
+    guidelinesError = null;
+    guidelinesMarkdown = initialGuidelinesMarkdown;
+    showGuidelinesEditor = false;
+    guidelinesLoadError = null;
+  }
+
+  async function handleSaveGuidelinesEdit() {
+    if (!projectGuid || guidelinesSaving) return;
+
+    guidelinesError = null;
+    guidelinesSaving = true;
+
+    const nextMarkdown = String(guidelinesMarkdown ?? '');
+    if (!nextMarkdown.trim()) {
+      guidelinesError = 'Guidelines cannot be empty.';
+      guidelinesSaving = false;
+      return;
+    }
+
+    try {
+      await setReviewProjectGuidelines(projectGuid, nextMarkdown);
+      await loadProject();
+      showGuidelinesEditor = false;
+    } catch (err) {
+      guidelinesError = err.response?.data?.error || err.message || 'Failed to save guidelines';
+    } finally {
+      guidelinesSaving = false;
+    }
+  }
+
   function queueReviewerLink(queueGuid) {
     return `${window.location.origin}/reviews/${queueGuid}`;
   }
@@ -307,6 +369,64 @@
             </div>
           </div>
         </div>
+
+        <div class="meta-row guidelines-meta-row">
+          <div class="meta-label guidelines-meta-label">
+            Guidelines (Markdown)
+            {#if !showGuidelinesEditor}
+              <button
+                type="button"
+                class="edit-name-button"
+                on:click={handleStartGuidelinesEdit}
+                title="Edit guidelines"
+                aria-label="Edit guidelines"
+                disabled={loading || guidelinesLoading}
+              >
+                ✎
+              </button>
+            {/if}
+          </div>
+
+          <div class="meta-value meta-value-guidelines">
+            {#if showGuidelinesEditor}
+              <div class="guidelines-editor">
+                <textarea
+                  class="guidelines-textarea"
+                  bind:value={guidelinesMarkdown}
+                  rows="10"
+                  disabled={guidelinesLoading || guidelinesSaving}
+                />
+
+                <div class="guidelines-editor-actions">
+                  <button
+                    type="button"
+                    class="cancel-name-button"
+                    on:click={handleCancelGuidelinesEdit}
+                    disabled={guidelinesSaving || guidelinesLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="save-name-button"
+                    on:click={handleSaveGuidelinesEdit}
+                    disabled={guidelinesSaving || guidelinesLoading}
+                  >
+                    {guidelinesSaving ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+
+                {#if guidelinesLoadError}
+                  <div class="inline-error">{guidelinesLoadError}</div>
+                {/if}
+                {#if guidelinesError}
+                  <div class="inline-error">{guidelinesError}</div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        </div>
+
         {#if stats}
           <div class="meta-row">
             <div class="meta-label">Status</div>
@@ -717,6 +837,23 @@
     text-overflow: ellipsis;
   }
 
+  .guidelines-meta-row {
+    align-items: flex-start;
+  }
+
+  .guidelines-meta-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .meta-value-guidelines {
+    overflow: visible;
+    text-overflow: clip;
+    flex: 1;
+    min-width: 0;
+  }
+
   .seed-collection-chips {
     display: flex;
     flex-wrap: wrap;
@@ -861,6 +998,32 @@
     color: #c0392b;
     font-size: 12px;
     font-weight: 600;
+  }
+
+  .guidelines-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .guidelines-textarea {
+    width: 100%;
+    min-height: 240px;
+    padding: 10px 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #2c3e50;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    background: white;
+    resize: vertical;
+  }
+
+  .guidelines-editor-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    align-items: center;
   }
 
   .metadata-edit-toggle {

@@ -4,17 +4,25 @@
   import iso3166 from 'iso-3166-2';
   import * as rawIso3166 from 'iso-3166';
   import EditMetadataModal from '../components/EditMetadataModal.svelte';
+  import NewSourceModal from '../components/NewSourceModal.svelte';
   import {
     getReviewProject,
     getAddedItemsByProjectGuid,
+    proposeNewSourceByQueueGuid,
     updateQueueItemSourceMetadata,
   } from '../lib/api.js';
 
   let projectGuid = null;
   let project = null;
+  let queues = [];
 
   let loading = false;
   let error = null;
+
+  let showNewSourceModal = false;
+  let addingNewSource = false;
+  let newSourceModalError = null;
+  let targetQueueGuidForNewSource = null;
 
   let items = [];
   let total = 0;
@@ -83,6 +91,7 @@
       ]);
 
       project = projectResp.project;
+      queues = projectResp.queues || [];
 
       items = addedResp.items || [];
       total = addedResp.total || 0;
@@ -95,6 +104,53 @@
       currentItem = null;
     } finally {
       loading = false;
+    }
+  }
+
+  function handleOpenNewSourceModal() {
+    if (addingNewSource) return;
+
+    newSourceModalError = null;
+    targetQueueGuidForNewSource = queues && queues.length > 0 ? queues[0]?.queue_guid : null;
+
+    if (!targetQueueGuidForNewSource) {
+      newSourceModalError = 'No reviewer queues exist yet for this project. Generate queues first.';
+      return;
+    }
+
+    showNewSourceModal = true;
+  }
+
+  async function handleNewSourceModalConfirm(event) {
+    const { label, homepage, primary_language, pub_country, pub_state } = event.detail || {};
+    const metadata = {
+      primary_language,
+      pub_country,
+      pub_state,
+    };
+
+    const success = await handleNewSource(label, homepage, metadata);
+    if (success) {
+      showNewSourceModal = false;
+    }
+  }
+
+  async function handleNewSource(sourceLabel, sourceHomepage, metadata = null) {
+    if (!targetQueueGuidForNewSource || addingNewSource) return false;
+
+    addingNewSource = true;
+    newSourceModalError = null;
+    try {
+      await proposeNewSourceByQueueGuid(targetQueueGuidForNewSource, sourceLabel, sourceHomepage, metadata);
+      await loadAdded();
+      return true;
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message || 'Failed to add source';
+      newSourceModalError = msg;
+      console.error('Error adding source:', err);
+      return false;
+    } finally {
+      addingNewSource = false;
     }
   }
 
@@ -188,6 +244,17 @@
     <div class="header-left">
       <button type="button" class="back-home" on:click={goBack}>↩</button>
       <div class="title">ReviewProject: {project?.name || projectGuid}</div>
+    </div>
+    <div class="header-right">
+      <button
+        type="button"
+        class="propose-button"
+        on:click={handleOpenNewSourceModal}
+        disabled={loading || addingNewSource || !(queues && queues.length > 0)}
+        title={queues && queues.length > 0 ? 'Propose a new source' : 'Generate reviewer queues first'}
+      >
+        + Propose new source
+      </button>
     </div>
   </div>
 
@@ -335,6 +402,20 @@
     on:save={handleEditMetadataSave}
     on:close={closeEditMetadata}
   />
+
+  <NewSourceModal
+    show={showNewSourceModal}
+    loading={addingNewSource}
+    editMetadata={project?.edit_metadata}
+    languageOptions={LANGUAGE_OPTIONS}
+    countryOptions={COUNTRY_OPTIONS}
+    errorMessage={newSourceModalError}
+    on:confirm={handleNewSourceModalConfirm}
+    on:close={() => {
+      showNewSourceModal = false;
+      newSourceModalError = null;
+    }}
+  />
 </div>
 
 <style>
@@ -367,6 +448,12 @@
     min-width: 0;
   }
 
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
   .top-row {
     display: flex;
     justify-content: space-between;
@@ -396,6 +483,21 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+
+  .propose-button {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #3498db;
+    background-color: #3498db;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .propose-button:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
   }
 
   .subheader {

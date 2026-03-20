@@ -71,9 +71,14 @@ UNDP_collections_inspector/
 **API Endpoints:**
 - `POST /api/review-projects/start` - Step 1: create ReviewProject + store deduped sources
 - `POST /api/review-projects/<project_guid>/queues` - Step 2: generate reviewer queues from project sources
+- `PATCH /api/review-projects/<project_guid>/edit-metadata` - Project-level metadata toggle (propagates to reviewer queues)
+- `PATCH /api/review-projects/<project_guid>/name` - Update a ReviewProject's display name
 - `GET /api/review-projects` - List projects with derived status + aggregated queue stats
 - `GET /api/review-projects/<project_guid>` - Project details + per-queue summaries (derived on read)
 - `GET /api/review-projects/<project_guid>/export` - Export a single aggregated project CSV (KEEP + ADD union)
+- `GET /api/review-projects/<project_guid>/skipped-items` - Virtual queue endpoint for `decision=skip`
+- `GET /api/review-projects/<project_guid>/added-items` - Virtual queue endpoint for `decision=add`
+- `GET /api/review-projects/<project_guid>/removed-items` - Virtual queue endpoint for `decision=remove`
 - `GET /api/review-queues/<queue_guid>` - Get a reviewer queue (status is derived when exhausted)
 - `GET /api/review-queues/<queue_guid>/guidelines` - Rendered guidelines for the queue
 - `GET /api/review-queues/<queue_guid>/items` - List queue items (supports pagination + decision filter)
@@ -84,7 +89,13 @@ UNDP_collections_inspector/
 
 **Routing:**
 - Simple custom router using browser History API (no external routing library)
-- Routes: `/` (Home), `/review-projects/:guid` (ReviewProject manager view), `/reviews/:queue_guid` (Reviewer Queue)
+- Routes:
+  - `/` (Home)
+  - `/review-projects/:guid` (ReviewProject manager view)
+  - `/reviews/:queue_guid` (Reviewer Queue)
+  - `/review-projects/:guid/skipped` (Virtual skipped sources)
+  - `/review-projects/:guid/added` (Virtual added sources)
+  - `/review-projects/:guid/removed` (Virtual removed sources)
 - Navigation: `window.navigate(path)` function
 
 **State Management:**
@@ -95,9 +106,13 @@ UNDP_collections_inspector/
 - `Home.svelte`: ReviewProject creation form + ReviewProjects landing table
 - `ReviewProject.svelte`: Manager view for a project (generate reviewer queues + project CSV export)
 - `Review.svelte`: Reviewer queue workflow (GUID-based), handles item decisions + proposing new sources
-- `ReviewHeader.svelte`: Displays collection info and statistics
+- `ReviewSkippedQueue.svelte`: Virtual queue page for skipped sources
+- `ReviewAddedQueue.svelte`: Virtual queue page for added sources
+- `ReviewRemovedQueue.svelte`: Virtual queue page for removed sources (includes requeue action)
 - `SourceViewer.svelte`: Shows current source with Keep/Remove buttons
-- `NewSourceForm.svelte`: Form to propose new sources
+- `NewSourceModal.svelte`: Modal form to propose new sources (with optional metadata fields)
+- `EditMetadataModal.svelte`: Modal to edit per-source metadata in queues
+- `RemovalReasonModal.svelte`: Modal to capture removal reason
 
 ## Setup & Running
 
@@ -241,6 +256,11 @@ Domains (`ALLOWED_HOSTS`) are derived from `INSTANCE` in `dokku-scripts/common.s
 ✅ Two-step workflow (Step 1 seed + Step 2 generate reviewer queues)
 ✅ Queue progress + derived completion when exhausted
 ✅ Persistent reviewer decisions (KEEP/REMOVE/ADD) and proposed new sources
+✅ Virtual queue pages for skipped/added/removed sources (with empty-state messaging)
+✅ Project-level editing controls:
+  - editable project display name
+  - toggle for “Edit source metadata in queues” (propagates to reviewer queues)
+✅ Reviewer URL copy-to-clipboard (full URL) for sharing queues
 ✅ Project-level aggregated CSV export (KEEP + ADD union across queues)
 
 ## Known Issues / Future Improvements

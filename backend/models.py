@@ -43,6 +43,8 @@ class ReviewProject(db.Model, TimestampMixin):
     name = db.Column(db.String(255), nullable=True)
     notes = db.Column(db.Text, nullable=True)
     guidelines_template = db.Column(db.String(100), nullable=True, default='default')
+    # If set, this is the final (rendered) Markdown text used for guidelines across all reviewer queues.
+    guidelines_custom_markdown = db.Column(db.Text, nullable=True)
     edit_metadata = db.Column(db.Boolean, default=False, nullable=False)
 
     queues = db.relationship(
@@ -70,6 +72,7 @@ class ReviewProject(db.Model, TimestampMixin):
             'name': self.name,
             'notes': self.notes,
             'guidelines_template': self.guidelines_template or 'default',
+            'has_custom_guidelines': bool(self.guidelines_custom_markdown),
             'edit_metadata': bool(self.edit_metadata),
         }
         if include_queues:

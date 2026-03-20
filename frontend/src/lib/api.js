@@ -96,6 +96,28 @@ export async function setReviewProjectName(projectGuid, name) {
   return response.data;
 }
 
+/**
+ * Get the final guidelines Markdown for a ReviewProject.
+ * (If customized, returns stored final Markdown; otherwise returns rendered template output.)
+ * @param {string} projectGuid
+ */
+export async function getReviewProjectGuidelines(projectGuid) {
+  const response = await api.get(`/review-projects/${projectGuid}/guidelines`);
+  return response.data;
+}
+
+/**
+ * Store final (rendered) guidelines Markdown for a ReviewProject.
+ * @param {string} projectGuid
+ * @param {string} markdown
+ */
+export async function setReviewProjectGuidelines(projectGuid, markdown) {
+  const response = await api.patch(`/review-projects/${projectGuid}/guidelines`, {
+    guidelines: String(markdown ?? ''),
+  });
+  return response.data;
+}
+
 export function getReviewProjectExportUrl(projectGuid) {
   return `${API_BASE_URL}/review-projects/${projectGuid}/export`;
 }

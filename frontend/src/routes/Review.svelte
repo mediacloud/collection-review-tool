@@ -520,16 +520,18 @@
               &nbsp;({completionPercent}% complete)
             {/if}
           </div>
-        </div>
-        <div class="footer-section footer-right">
-          <button
-            type="button"
-            class="propose-button"
-            on:click={handleOpenNewSourceModal}
-            disabled={loading || showContextPanel}
-          >
-            + Propose new source
-          </button>
+          {#if !isQueueMode}
+            <div class="footer-section footer-right">
+              <button
+                type="button"
+                class="propose-button"
+                on:click={handleOpenNewSourceModal}
+                disabled={loading || showContextPanel}
+              >
+                + Propose new source
+              </button>
+            </div>
+          {/if}
         </div>
       </div>
     </div>
@@ -557,6 +559,14 @@
                 }
               >
                 Review skipped sources
+              </button>
+              <button
+                type="button"
+                class="queue-modal-link"
+                on:click={handleOpenNewSourceModal}
+                disabled={loading || showNewSourceModal}
+              >
+                + Propose new source
               </button>
               <button
                 type="button"

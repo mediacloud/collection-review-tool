@@ -402,6 +402,69 @@ def set_review_project_name(project_guid):
         return jsonify({'error': f'Failed to update review project name: {str(e)}'}), 500
 
 
+@api_bp.route('/review-projects/<string:project_guid>/guidelines', methods=['GET'])
+def get_review_project_guidelines(project_guid):
+    """
+    Get the final guidelines Markdown for a project.
+    - If the project has been customized, return stored final Markdown.
+    - Otherwise, render the selected template using stable project-level context.
+    """
+    try:
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+        service = get_guidelines_service()
+
+        if project.guidelines_custom_markdown:
+            return jsonify({'guidelines': project.guidelines_custom_markdown}), 200
+
+        template_name = project.guidelines_template or 'default'
+
+        primary_collection_id = None
+        if project.collection_ids_json:
+            try:
+                ids = json.loads(project.collection_ids_json or '[]')
+                primary_collection_id = ids[0] if ids else None
+            except Exception:
+                primary_collection_id = None
+
+        context_overrides = {
+            'collection_name': project.name if project.name else 'ReviewProject',
+            'collection_id': primary_collection_id,
+            'review_id': project.id,
+            'review_name': project.name if project.name else 'ReviewProject',
+        }
+
+        # Render with a queue-like context surface; GuidelinesService supports ReviewProject via getattr fallbacks.
+        guidelines = service.render_guidelines(template_name, project, context_overrides=context_overrides)
+        return jsonify({'guidelines': guidelines}), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch review project guidelines: {str(e)}'}), 500
+
+
+@api_bp.route('/review-projects/<string:project_guid>/guidelines', methods=['PATCH'])
+def set_review_project_guidelines(project_guid):
+    """
+    Store final (rendered) guidelines Markdown for the project.
+    This is returned verbatim by reviewer queue pages.
+    """
+    try:
+        data = request.get_json() or {}
+        raw_markdown = data.get('guidelines')
+        if raw_markdown is None:
+            return jsonify({'error': 'guidelines is required'}), 400
+
+        markdown = str(raw_markdown)
+        if not markdown.strip():
+            return jsonify({'error': 'guidelines cannot be empty'}), 400
+
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+        project.guidelines_custom_markdown = markdown
+        db.session.commit()
+        return jsonify({'project': project.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to update review project guidelines: {str(e)}'}), 500
+
+
 @api_bp.route('/review-projects/<string:project_guid>/queues', methods=['POST'])
 def generate_review_project_queues(project_guid):
     """
@@ -950,8 +1013,30 @@ def get_review_queue_guidelines(queue_guid):
     try:
         queue_review = Review.query.filter_by(queue_guid=queue_guid).first_or_404()
         service = get_guidelines_service()
-        template_name = queue_review.guidelines_template or 'default'
-        guidelines = service.render_guidelines(template_name, queue_review)
+
+        project = queue_review.review_project
+        if project and project.guidelines_custom_markdown:
+            return jsonify({'guidelines': project.guidelines_custom_markdown}), 200
+
+        template_name = (project.guidelines_template if project else queue_review.guidelines_template) or 'default'
+
+        # Stable project-level context so guidelines are identical across all reviewer queues.
+        primary_collection_id = None
+        if project and project.collection_ids_json:
+            try:
+                ids = json.loads(project.collection_ids_json or '[]')
+                primary_collection_id = ids[0] if ids else None
+            except Exception:
+                primary_collection_id = None
+
+        context_overrides = {
+            'collection_name': project.name if project and project.name else queue_review.collection_name,
+            'collection_id': primary_collection_id if primary_collection_id is not None else queue_review.collection_id,
+            'review_id': project.id if project else queue_review.id,
+            'review_name': project.name if project and project.name else queue_review.name,
+        }
+
+        guidelines = service.render_guidelines(template_name, queue_review, context_overrides=context_overrides)
         return jsonify({'guidelines': guidelines}), 200
     except Exception as e:
         return jsonify({'error': f'Failed to fetch guidelines: {str(e)}'}), 500

@@ -234,6 +234,28 @@ def run_all_migrations():
                 else:
                     conn.execute(text("ALTER TYPE decision ADD VALUE 'SKIP'"))
                     print("Successfully added enum value 'SKIP' to type 'decision'.")
+
+            # Migration 9: guidelines_custom_markdown on review_projects
+            print("\nRunning migration: guidelines_custom_markdown")
+            if is_sqlite:
+                result = conn.execute(text("PRAGMA table_info(review_projects)"))
+                columns = [row[1] for row in result]
+                if 'guidelines_custom_markdown' not in columns:
+                    conn.execute(text("ALTER TABLE review_projects ADD COLUMN guidelines_custom_markdown TEXT"))
+                    print("Successfully added 'guidelines_custom_markdown' column to review_projects table.")
+                else:
+                    print("Column 'guidelines_custom_markdown' already exists. No migration needed.")
+            else:
+                result = conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name='review_projects' AND column_name='guidelines_custom_markdown'
+                """))
+                if result.fetchone():
+                    print("Column 'guidelines_custom_markdown' already exists. No migration needed.")
+                else:
+                    conn.execute(text("ALTER TABLE review_projects ADD COLUMN guidelines_custom_markdown TEXT"))
+                    print("Successfully added 'guidelines_custom_markdown' column to review_projects table.")
             
             trans.commit()
             print("\n✓ All migrations completed successfully.")

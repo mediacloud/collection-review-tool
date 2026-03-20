@@ -13,8 +13,13 @@ A standalone web application for reviewing sources in MediaCloud collections and
 - Reviewer queues use derived status (queue is “completed” when exhausted; no manual completion needed)
 - Queue cards show progress (based on undecided vs total)
 - Persistent reviewer decisions (KEEP/REMOVE/ADD) and proposed new sources within the project
+- Virtual queue pages for `skipped`, `added`, and `removed` sources (with empty-state messaging)
+- Project-level editing controls:
+  - editable project display name
+  - toggle for “Edit source metadata in queues” (propagates to reviewer queues)
 - Export a single aggregated project CSV (KEEP + ADD union across all reviewer queues)
 - Clean, modern UI built with Svelte
+- Reviewer queue cards include a full `Reviewer URL` that can be copied to clipboard (with brief checkmark feedback)
 
 ## Prerequisites
 
@@ -188,8 +193,15 @@ This will:
 3. **Review via queue links**
    - Each queue page shows queue progress and reviewer actions (KEEP/REMOVE + proposing new sources).
    - A queue is considered **completed automatically** when it is exhausted (no undecided items remain).
+   - When a reviewer queue is exhausted, the UI guides the next steps (propose a new source and review skipped sources).
 
-4. **Download the Project CSV**
+4. **Review virtual queues (skipped/added/removed)**
+   - The project page provides links to:
+     - `Review skipped sources` (includes “skip for now” rotation)
+     - `Review added sources` (table of added items)
+     - `Review removed sources` (includes a `requeue` action to move back to skipped)
+
+5. **Download the Project CSV**
    - Use **Download Project CSV** from the project page.
    - Export aggregates the union of **KEEP + ADD** decisions across all queues.
 
@@ -204,6 +216,13 @@ This will:
   - Body: `{ "queue_count": 3 }`
   - Step 2: generates reviewer queues from the project’s stored sources.
 
+- `PATCH /api/review-projects/<project_guid>/edit-metadata`
+  - Body: `{ "edit_metadata": true | false }`
+  - Updates the project setting and propagates to associated reviewer queues.
+
+- `PATCH /api/review-projects/<project_guid>/name`
+  - Body: `{ "name": "New project display name" }`
+
 - `GET /api/review-projects`
   - Lists all projects with derived status and aggregated stats.
 
@@ -212,6 +231,15 @@ This will:
 
 - `GET /api/review-projects/<project_guid>/export`
   - Exports a single aggregated project CSV (KEEP + ADD union across all queues; non-blocking).
+
+- `GET /api/review-projects/<project_guid>/skipped-items`
+  - Virtual queue endpoint aggregating sources with `decision=skip` across all project queues.
+
+- `GET /api/review-projects/<project_guid>/added-items`
+  - Virtual queue endpoint aggregating sources with `decision=add` across all project queues.
+
+- `GET /api/review-projects/<project_guid>/removed-items`
+  - Virtual queue endpoint aggregating sources with `decision=remove` across all project queues.
 
 ### Reviewer Queues (GUID-based)
 - `GET /api/review-queues/<queue_guid>`

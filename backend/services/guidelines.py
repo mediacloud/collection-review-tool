@@ -1,5 +1,6 @@
 """Service for loading and rendering annotation guidelines."""
 from pathlib import Path
+import json
 
 
 class GuidelinesService:
@@ -23,13 +24,14 @@ class GuidelinesService:
             templates.append('default')
         return sorted(templates)
     
-    def render_guidelines(self, template_name, review):
+    def render_guidelines(self, template_name, review, context_overrides=None):
         """
         Render guidelines template with review context.
         
         Args:
             template_name: Name of the template (without .md extension)
             review: Review object for interpolation
+            context_overrides: optional dict to override/intersect template variables
             
         Returns:
             Rendered guidelines text (markdown)
@@ -56,13 +58,34 @@ class GuidelinesService:
         except Exception:
             return "Guidelines template not available."
         
-        # Interpolate variables
+        context_overrides = context_overrides or {}
+
+        # Interpolate variables.
+        # The "review" argument might be a queue Review or (for project-level rendering)
+        # a ReviewProject; support both by using getattr fallbacks.
+        collection_name_default = (
+            getattr(review, 'collection_name', None)
+            or f'Collection {getattr(review, "collection_id", "")}'.strip()
+        )
+
+        # If this is a ReviewProject, collection_ids_json is a JSON string.
+        collection_id_default = getattr(review, 'collection_id', None)
+        if collection_id_default is None and hasattr(review, 'collection_ids_json'):
+            try:
+                ids = json.loads(review.collection_ids_json or '[]')
+                collection_id_default = ids[0] if ids else None
+            except Exception:
+                collection_id_default = None
+
         context = {
-            'collection_name': review.collection_name or f'Collection {review.collection_id}',
-            'collection_id': review.collection_id,
-            'review_id': review.id,
-            'review_name': review.name or review.collection_name or f'Collection {review.collection_id}'
+            'collection_name': collection_name_default,
+            'collection_id': collection_id_default,
+            'review_id': getattr(review, 'id', None),
+            'review_name': getattr(review, 'name', None) or collection_name_default,
         }
+
+        # Apply overrides last so callers can force stable values across queues.
+        context.update(context_overrides)
         
         # Simple string substitution (can be enhanced with Jinja2 later)
         try:

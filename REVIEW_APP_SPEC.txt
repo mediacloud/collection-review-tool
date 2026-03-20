@@ -11,6 +11,13 @@ Reviewers open queue links and step through sources:
 - Mark sources with KEEP/REMOVE decisions, and can propose new sources to ADD.
 Queue completion is automatic:
 - A queue is completed when exhausted (no undecided items remain); no manual “complete” action is required.
+Additionally, managers can:
+- Review project-wide virtual queues aggregated across all reviewer queues:
+  - `skipped` sources (includes local “skip for now” rotation)
+  - `added` sources
+  - `removed` sources (includes `requeue`)
+- Copy shareable reviewer links to clipboard (full URL) from the project queue cards
+- Edit the project display name and toggle “Edit source metadata in queues” at the project level (propagates to queues)
 At the end, managers download the project CSV:
 - Export aggregates the union of KEEP + ADD decisions across all reviewer queues.
 Out of scope:
@@ -116,6 +123,18 @@ Behavior:
 - Step 2 partitions the project's deduped sources into disjoint reviewer queues
 - Creates Review + ReviewItem rows with decision='undecided'
 
+PATCH /api/review-projects/<project_guid>/edit-metadata
+Body:
+    { "edit_metadata": true | false }
+Behavior:
+- Updates the project-level metadata editing toggle and propagates to associated reviewer queues.
+
+PATCH /api/review-projects/<project_guid>/name
+Body:
+    { "name": "New project display name" }
+Behavior:
+- Updates the ReviewProject's display name.
+
 GET /api/review-projects
 Lists all ReviewProjects with derived status + aggregated queue stats.
 
@@ -124,6 +143,15 @@ Returns project details plus per-queue summaries (derived on read).
 
 GET /api/review-projects/<project_guid>/export
 Exports a single aggregated project CSV (KEEP + ADD union across queues; non-blocking even if queues are not “completed”).
+
+GET /api/review-projects/<project_guid>/skipped-items
+- Virtual queue endpoint aggregating sources with decision='skip' across all project queues.
+
+GET /api/review-projects/<project_guid>/added-items
+- Virtual queue endpoint aggregating sources with decision='add' across all project queues.
+
+GET /api/review-projects/<project_guid>/removed-items
+- Virtual queue endpoint aggregating sources with decision='remove' across all project queues.
 
 5.2 Reviewer queues (GUID-based)
 GET /api/review-queues/<queue_guid>
@@ -166,6 +194,8 @@ If queues do not exist:
 enter `queue_count` and call POST /api/review-projects/<guid>/queues.
 If queues exist:
 show queue cards (with progress) and Open Queue links.
+queue cards also include a copy-to-clipboard `Reviewer URL` (full URL) for sharing.
+the project page links to virtual queue pages for `skipped`, `added`, and `removed` sources (each shows an empty-state message when there are no items).
 Download Project CSV is available on the project page.
 
 6.3 Reviewer queue (/reviews/:queue_guid)
@@ -180,7 +210,13 @@ Buttons:
 Keep/Remove update the current item decision and then load next undecided.
 Propose new source form creates an “add” item in the queue.
 Queue completion is automatic:
-when the queue has no undecided items, it is exhausted and the UI shows “Queue exhausted”.
+when the queue has no undecided items, it is exhausted and the UI shows “Queue exhausted” plus next-step actions.
+When exhausted, the UI guides the next steps (propose a new source and review skipped sources).
+
+6.4 Virtual queue pages (/review-projects/:guid/{skipped,added,removed})
+- `skipped`: shows sources marked with `skip` across all reviewer queues; includes “skip for now” local rotation
+- `added`: table of sources marked with `add` across all queues
+- `removed`: table of sources marked with `remove` across all queues; includes `requeue` to move the source back to `skipped`
 7. Configuration & Ops
 Env vars:
 DATABASE_URL
