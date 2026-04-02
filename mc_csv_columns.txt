@@ -8,6 +8,7 @@ platform
 pub_country	
 pub_state	
 media_type	
+stories_total	
 stories_per_week	
 last_story	
 primary_language

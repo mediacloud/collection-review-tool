@@ -1,8 +1,16 @@
-# Review Guidelines: {collection_name}
+## Review Guidelines
+Please review each source and decide whether to Keep or Remove it from the collection.
 
-Please review each source and decide whether to **Keep** or **Remove** it from the collection.
+Keep if:
+The outlet produces original news reporting (not just aggregating others)
+It has an identifiable editorial team or journalists listed
+It has an “About Us” page or clear organizational identity
+The website is active and functional
 
-- **Keep**: The source is appropriate for this collection
-- **Remove**: The source should be removed (please provide a reason)
+Remove if:
+The site is an aggregator: it copies articles from other outlets
+It is a blog, PR site, or company website without editorial function
+Content is satirical, unreliable, or the site is no longer active
 
-Use your best judgment based on the collection's purpose and the source's relevance.
+Skip if:
+You are unsure and would like to make decisions later.

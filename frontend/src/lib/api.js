@@ -51,6 +51,16 @@ export async function startReviewProject(
 }
 
 /**
+ * Geographic MediaCloud country/collection definitions (vendored JSON).
+ * Served from the API so the same base URL and CORS policy apply as for other calls.
+ * @returns {Promise<object[]>}
+ */
+export async function getCountryCollections() {
+  const response = await api.get('/meta/country-collections');
+  return response.data;
+}
+
+/**
  * Step 2: generate reviewer queues for a ReviewProject.
  * @param {string} projectGuid
  * @param {number} queueCount
@@ -120,6 +130,26 @@ export async function setReviewProjectGuidelines(projectGuid, markdown) {
 
 export function getReviewProjectExportUrl(projectGuid) {
   return `${API_BASE_URL}/review-projects/${projectGuid}/export`;
+}
+
+/** CSV with every queue row plus review_decision, removal_reason, reviewer_queue columns. */
+export function getReviewProjectAuditExportUrl(projectGuid) {
+  return `${API_BASE_URL}/review-projects/${projectGuid}/export/audit`;
+}
+
+/**
+ * All review items across queues for a project (preview / summaries).
+ * @param {string} projectGuid
+ * @param {{ page?: number, page_size?: number }} options
+ */
+export async function getReviewProjectAllQueueItems(projectGuid, options = {}) {
+  const params = new URLSearchParams();
+  if (options.page) params.append('page', options.page);
+  if (options.page_size) params.append('page_size', options.page_size);
+  const query = params.toString();
+  const url = `/review-projects/${projectGuid}/all-queue-items${query ? `?${query}` : ''}`;
+  const response = await api.get(url);
+  return response.data;
 }
 
 /**
@@ -221,10 +251,19 @@ export async function getReviewItemsByQueueGuid(queueGuid, options = {}) {
   return response.data;
 }
 
-export async function decideQueueItem(queueGuid, itemId, decision, removalReason = null) {
+export async function decideQueueItem(
+  queueGuid,
+  itemId,
+  decision,
+  removalReason = null,
+  skipNote = null
+) {
   const body = { decision };
   if (decision === 'remove' && removalReason) {
     body.removal_reason = removalReason;
+  }
+  if (decision === 'skip' && skipNote != null && String(skipNote).trim() !== '') {
+    body.skip_note = String(skipNote).trim();
   }
 
   const response = await api.post(`/review-queues/${queueGuid}/items/${itemId}/decide`, body);
@@ -304,10 +343,13 @@ export async function getReviewItems(reviewId, options = {}) {
  * @param {string} removalReason - Reason for removal (required when decision is 'remove')
  * @returns {Promise} Updated item object
  */
-export async function decideItem(reviewId, itemId, decision, removalReason = null) {
+export async function decideItem(reviewId, itemId, decision, removalReason = null, skipNote = null) {
   const body = { decision };
   if (decision === 'remove' && removalReason) {
     body.removal_reason = removalReason;
+  }
+  if (decision === 'skip' && skipNote != null && String(skipNote).trim() !== '') {
+    body.skip_note = String(skipNote).trim();
   }
   const response = await api.post(`/reviews/${reviewId}/items/${itemId}/decide`, body);
   return response.data;

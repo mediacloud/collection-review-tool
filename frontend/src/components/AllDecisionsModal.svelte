@@ -3,6 +3,17 @@
 
   export let show = false;
   export let items = [];
+  /** @type {string} */
+  export let modalTitle = 'All Decisions';
+  /** @type {string} */
+  export let modalDescription =
+    'Showing all sources and their review decisions for this collection.';
+  export let showQueueColumn = false;
+  /** When true, show whether each row appears in the Project CSV download (keep/add only). */
+  export let showProjectCsvColumn = false;
+  /** Shown under the description when the item list is truncated (e.g. large projects). */
+  export let truncationNote = '';
+  export let loading = false;
 
   const dispatch = createEventDispatcher();
 
@@ -21,24 +32,41 @@
       aria-labelledby="all-decisions-title"
     >
       <div class="modal-header">
-        <h2 id="all-decisions-title">All Decisions</h2>
+        <h2 id="all-decisions-title">{modalTitle}</h2>
         <button class="close-button" type="button" on:click={handleClose} aria-label="Close">
           ×
         </button>
       </div>
       <p class="modal-description">
-        Showing all sources and their review decisions for this collection.
+        {modalDescription}
       </p>
+      {#if truncationNote}
+        <p class="modal-truncation">{truncationNote}</p>
+      {/if}
 
       <div class="table-wrapper">
-        {#if items && items.length > 0}
+        {#if loading}
+          <p class="empty-text">Loading…</p>
+        {:else if items && items.length > 0}
           <table>
             <thead>
               <tr>
+                {#if showQueueColumn}
+                  <th>Queue</th>
+                {/if}
                 <th>Source Label</th>
                 <th>Homepage</th>
                 <th>MediaCloud</th>
                 <th>Decision</th>
+                <th title="Optional note when the reviewer skipped this source.">Skip note</th>
+                {#if showProjectCsvColumn}
+                  <th
+                    class="th-project-csv"
+                    title="Yes if this row is included in the Project CSV file (keep or add only)."
+                  >
+                    Project CSV
+                  </th>
+                {/if}
                 <th>Type</th>
                 <th>Removal Reason</th>
               </tr>
@@ -46,6 +74,15 @@
             <tbody>
               {#each items as item}
                 <tr>
+                  {#if showQueueColumn}
+                    <td>
+                      {#if item.queue_index != null && item.queue_index !== undefined}
+                        Queue #{(item.queue_index ?? 0) + 1}
+                      {:else}
+                        —
+                      {/if}
+                    </td>
+                  {/if}
                   <td>{item.source_label || 'N/A'}</td>
                   <td>
                     {#if item.source_homepage}
@@ -76,6 +113,22 @@
                     </span>
                   </td>
                   <td>
+                    {#if item.decision === 'skip' && item.skip_note}
+                      <span class="skip-note-cell" title={item.skip_note}>{item.skip_note}</span>
+                    {:else}
+                      <span class="no-reason">—</span>
+                    {/if}
+                  </td>
+                  {#if showProjectCsvColumn}
+                    <td>
+                      {#if item.in_mc_export}
+                        <span class="export-yes">Yes</span>
+                      {:else}
+                        <span class="export-no">No</span>
+                      {/if}
+                    </td>
+                  {/if}
+                  <td>
                     {item.is_new_source ? 'New Source' : 'Existing'}
                   </td>
                   <td>
@@ -92,7 +145,7 @@
             </tbody>
           </table>
         {:else}
-          <p class="empty-text">No decisions to display yet.</p>
+          <p class="empty-text">No items to display yet.</p>
         {/if}
       </div>
     </div>
@@ -157,6 +210,26 @@
   .modal-description {
     margin: 0 0 10px;
     font-size: 13px;
+    color: #7f8c8d;
+  }
+
+  .modal-truncation {
+    margin: -4px 0 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #856404;
+    background: #fff8e6;
+    border: 1px solid #f5e0a8;
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+
+  .export-yes {
+    font-weight: 700;
+    color: #1f7a3d;
+  }
+
+  .export-no {
     color: #7f8c8d;
   }
 
@@ -259,6 +332,15 @@
     display: inline-block;
     word-break: break-word;
     color: #721c24;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .skip-note-cell {
+    max-width: 280px;
+    display: inline-block;
+    word-break: break-word;
+    color: #856404;
     font-size: 13px;
     line-height: 1.4;
   }

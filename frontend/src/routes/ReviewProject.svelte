@@ -1,11 +1,12 @@
 <script>
   import { onMount } from 'svelte';
+  import AllDecisionsModal from '../components/AllDecisionsModal.svelte';
+  import ProjectExportPanel from '../components/ProjectExportPanel.svelte';
   import {
     getReviewProject,
-    getReviewProjectExportUrl,
+    getReviewProjectAllQueueItems,
     generateReviewProjectQueues,
     setReviewProjectEditMetadata,
-    setReviewProjectName,
     getReviewProjectGuidelines,
     setReviewProjectGuidelines,
   } from '../lib/api.js';
@@ -34,10 +35,6 @@
   let queueCount = 2;
   let generatingQueues = false;
   let queueGenError = null;
-  let localProjectName = '';
-  let projectNameSaving = false;
-  let projectNameError = null;
-  let showProjectNameEditor = false;
   let copiedQueueGuid = null;
   let copiedIconTimer = null;
   let showEditMetadataEditor = false;
@@ -50,12 +47,40 @@
   let initialGuidelinesMarkdown = '';
   let guidelinesMarkdown = '';
 
+  /** Collapsible "Project settings" panel */
+  let projectSettingsExpanded = false;
+
+  let showProjectDecisionsModal = false;
+  let projectDecisionsItems = [];
+  let projectDecisionsLoading = false;
+  let projectDecisionsTruncation = '';
+
   let currentPath = window.location.pathname;
+
+  $: canDownloadMainCsv =
+    queues.length > 0 && stats != null && ((stats.keep || 0) + (stats.add || 0)) > 0;
+  $: canDownloadAuditCsv = queues.length > 0 && stats != null && (stats.total || 0) > 0;
 
   function getProjectGuidFromUrl() {
     const match = currentPath.match(/^\/review-projects\/([0-9a-fA-F-]+)$/);
     return match ? match[1] : null;
   }
+
+  function mediacloudCollectionUrl(collectionId) {
+    return `https://search.mediacloud.org/collections/${collectionId}`;
+  }
+
+  /** Seed collections for display: parallel `collection_ids` / `collection_names` from the API. */
+  $: seedCollectionChips =
+    project == null
+      ? []
+      : (project.collection_ids || []).map((id, i) => {
+          const names = project.collection_names || [];
+          const name = names[i];
+          const label =
+            name != null && String(name).trim() !== '' ? name : String(id);
+          return { id, label };
+        });
 
   function formatDate(dateString) {
     if (!dateString) return 'Unknown';
@@ -99,8 +124,6 @@
     try {
       const data = await getReviewProject(projectGuid);
       project = data.project;
-      localProjectName = project?.name || '';
-      showProjectNameEditor = false;
       localEditMetadata = !!project.edit_metadata;
       initialEditMetadata = !!project.edit_metadata;
       showEditMetadataEditor = false;
@@ -150,43 +173,6 @@
     } finally {
       editMetadataSaving = false;
     }
-  }
-
-  async function handleSaveProjectName() {
-    if (!projectGuid || !project || projectNameSaving) return;
-    const nextName = String(localProjectName || '').trim();
-    if (!nextName) {
-      projectNameError = 'Project name cannot be empty';
-      return;
-    }
-
-    projectNameSaving = true;
-    projectNameError = null;
-    try {
-      const resp = await setReviewProjectName(projectGuid, nextName);
-      if (resp?.project) {
-        project = resp.project;
-      } else {
-        await loadProject();
-      }
-      showProjectNameEditor = false;
-    } catch (err) {
-      projectNameError = err.response?.data?.error || err.message || 'Failed to update project name';
-    } finally {
-      projectNameSaving = false;
-    }
-  }
-
-  function handleStartProjectNameEdit() {
-    localProjectName = project?.name || '';
-    projectNameError = null;
-    showProjectNameEditor = true;
-  }
-
-  function handleCancelProjectNameEdit() {
-    localProjectName = project?.name || '';
-    projectNameError = null;
-    showProjectNameEditor = false;
   }
 
   function handleStartEditMetadataEdit() {
@@ -257,6 +243,33 @@
     return `${window.location.origin}/reviews/${queueGuid}`;
   }
 
+  function closeProjectDecisionsModal() {
+    showProjectDecisionsModal = false;
+  }
+
+  async function openProjectDecisionsPreview() {
+    if (!projectGuid) return;
+    showProjectDecisionsModal = true;
+    projectDecisionsLoading = true;
+    projectDecisionsItems = [];
+    projectDecisionsTruncation = '';
+    try {
+      const data = await getReviewProjectAllQueueItems(projectGuid, { page: 1, page_size: 8000 });
+      projectDecisionsItems = data.items || [];
+      const total = data.total ?? 0;
+      const shown = projectDecisionsItems.length;
+      if (total > shown) {
+        projectDecisionsTruncation = `Showing ${shown} of ${total} rows. Download the audit CSV for the full list.`;
+      }
+    } catch (err) {
+      projectDecisionsItems = [];
+      projectDecisionsTruncation =
+        err.response?.data?.error || err.message || 'Failed to load queue items.';
+    } finally {
+      projectDecisionsLoading = false;
+    }
+  }
+
   async function copyQueueLink(queueGuid) {
     const link = queueReviewerLink(queueGuid);
     try {
@@ -294,13 +307,6 @@
         <div class="status-pill status-pill-{derivedStatus}">
           {derivedStatus || project.status || 'pending'}
         </div>
-        <a
-          class="export-button"
-          href={getReviewProjectExportUrl(projectGuid)}
-          download
-        >
-          Download Project CSV
-        </a>
       </div>
     </div>
 
@@ -309,122 +315,37 @@
     {/if}
 
     <div class="content">
-      <div class="project-meta">
+      <div class="project-meta project-overview">
         <div class="meta-row">
           <div class="meta-label">Project name</div>
           <div class="meta-value">
-            {#if !showProjectNameEditor}
-              <div class="project-name-display">
-                <span class="project-name-text">{project.name || projectGuid}</span>
-                <button
-                  type="button"
-                  class="edit-name-button"
-                  on:click={handleStartProjectNameEdit}
-                  title="Edit project name"
-                  aria-label="Edit project name"
-                >
-                  ✎
-                </button>
-              </div>
-            {:else}
-              <div class="project-name-editor">
-                <input
-                  type="text"
-                  bind:value={localProjectName}
-                  class="project-name-input"
-                  disabled={projectNameSaving}
-                  placeholder="Enter project name"
-                />
-                <button
-                  type="button"
-                  class="cancel-name-button"
-                  on:click={handleCancelProjectNameEdit}
-                  disabled={projectNameSaving}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  class="save-name-button"
-                  on:click={handleSaveProjectName}
-                  disabled={projectNameSaving || !localProjectName || !localProjectName.trim()}
-                >
-                  {projectNameSaving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            {/if}
-            {#if projectNameError}
-              <div class="inline-error">{projectNameError}</div>
-            {/if}
+            <span class="project-name-static">{project.name || projectGuid}</span>
           </div>
         </div>
 
-        <div class="meta-row">
-          <div class="meta-label">Seed collections</div>
-          <div class="meta-value">
-            <div class="seed-collection-chips">
-              {#each (project.collection_names && project.collection_names.length > 0 ? project.collection_names : project.collection_ids || []) as collection}
-                <span class="seed-collection-chip">{collection}</span>
-              {/each}
+        <div class="meta-block-seed">
+          <div class="meta-row meta-row-seed">
+            <div class="meta-label">Seed collections</div>
+            <div class="meta-value">
+              <div class="seed-collection-chips">
+                {#each seedCollectionChips as c, i (String(c.id) + '-' + i)}
+                  <a
+                    class="seed-collection-chip"
+                    href={mediacloudCollectionUrl(c.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open this collection in Media Cloud"
+                  >
+                    {c.label}
+                  </a>
+                {/each}
+              </div>
             </div>
           </div>
-        </div>
-
-        <div class="meta-row guidelines-meta-row">
-          <div class="meta-label guidelines-meta-label">
-            Guidelines (Markdown)
-            {#if !showGuidelinesEditor}
-              <button
-                type="button"
-                class="edit-name-button"
-                on:click={handleStartGuidelinesEdit}
-                title="Edit guidelines"
-                aria-label="Edit guidelines"
-                disabled={loading || guidelinesLoading}
-              >
-                ✎
-              </button>
-            {/if}
-          </div>
-
-          <div class="meta-value meta-value-guidelines">
-            {#if showGuidelinesEditor}
-              <div class="guidelines-editor">
-                <textarea
-                  class="guidelines-textarea"
-                  bind:value={guidelinesMarkdown}
-                  rows="10"
-                  disabled={guidelinesLoading || guidelinesSaving}
-                />
-
-                <div class="guidelines-editor-actions">
-                  <button
-                    type="button"
-                    class="cancel-name-button"
-                    on:click={handleCancelGuidelinesEdit}
-                    disabled={guidelinesSaving || guidelinesLoading}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    class="save-name-button"
-                    on:click={handleSaveGuidelinesEdit}
-                    disabled={guidelinesSaving || guidelinesLoading}
-                  >
-                    {guidelinesSaving ? 'Saving...' : 'Save'}
-                  </button>
-                </div>
-
-                {#if guidelinesLoadError}
-                  <div class="inline-error">{guidelinesLoadError}</div>
-                {/if}
-                {#if guidelinesError}
-                  <div class="inline-error">{guidelinesError}</div>
-                {/if}
-              </div>
-            {/if}
-          </div>
+          <p class="seed-collections-explainer">
+            These are the Media Cloud collections the project was created from. They were used to pull in the starting
+            set of sources for review.
+          </p>
         </div>
 
         {#if stats}
@@ -488,80 +409,28 @@
           </div>
         {/if}
         {#if queues.length > 0}
-          <div class="virtual-queue-bottom-actions">
-            <div class="virtual-queue-metadata">
-              <div class="project-name-display">
-                <span class="project-name-text metadata-setting-text">
-                  Review Source Metadata
-                </span>
-                {#if !showEditMetadataEditor}
-                  <span class="project-name-text metadata-setting-text">
-                    : {initialEditMetadata ? '✓' : '✕'}
-                  </span>
-                  <button
-                    type="button"
-                    class="edit-name-button"
-                    on:click={handleStartEditMetadataEdit}
-                    title="Edit metadata setting"
-                    aria-label="Edit metadata setting"
-                  >
-                    ✎
-                  </button>
-                {:else}
-                  <div class="setting-editor">
-                    <label class="metadata-edit-toggle" title="Propagates to all reviewer queues in this project">
-                      <input
-                        type="checkbox"
-                        bind:checked={localEditMetadata}
-                        disabled={editMetadataSaving || generatingQueues}
-                      />
-                      <span class="toggle-slider"></span>
-                    </label>
-                    <button
-                      type="button"
-                      class="cancel-name-button"
-                      on:click={handleCancelEditMetadataEdit}
-                      disabled={editMetadataSaving || generatingQueues}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      class="save-name-button"
-                      on:click={handleSaveProjectEditMetadata}
-                      disabled={editMetadataSaving || generatingQueues}
-                    >
-                      {editMetadataSaving ? 'Saving...' : 'Save'}
-                    </button>
-                  </div>
-                {/if}
-              </div>
-              {#if editMetadataError}
-                <div class="inline-error">{editMetadataError}</div>
+          <div class="virtual-queue-nav-actions">
+            <button
+              type="button"
+              class="queue-open"
+              on:click={() => window.navigate(`/review-projects/${projectGuid}/skipped`)}
+            >
+              Review skipped sources
+              {#if stats && stats.skip !== undefined && stats.skip > 0}
+                <span class="queue-count">({stats.skip})</span>
               {/if}
-            </div>
-            <div class="virtual-queue-bottom-buttons">
-              <button
-                type="button"
-                class="queue-open"
-                on:click={() => window.navigate(`/review-projects/${projectGuid}/skipped`)}
-              >
-                Review skipped sources
-                {#if stats && stats.skip !== undefined && stats.skip > 0}
-                  <span class="queue-count">({stats.skip})</span>
-                {/if}
-              </button>
+            </button>
 
-              <button
-                type="button"
-                class="queue-copy"
-                on:click={() => window.navigate(`/review-projects/${projectGuid}/added`)}
-              >
-                Review added sources
-                {#if stats && stats.add !== undefined && stats.add > 0}
-                  <span class="queue-count">({stats.add})</span>
-                {/if}
-              </button>
+            <button
+              type="button"
+              class="queue-copy"
+              on:click={() => window.navigate(`/review-projects/${projectGuid}/added`)}
+            >
+              Review added sources
+              {#if stats && stats.add !== undefined && stats.add > 0}
+                <span class="queue-count">({stats.add})</span>
+              {/if}
+            </button>
 
             <button
               type="button"
@@ -573,19 +442,189 @@
                 <span class="queue-count">({stats.remove})</span>
               {/if}
             </button>
-            </div>
           </div>
         {/if}
       </div>
+
+      <div class="project-settings" class:is-collapsed={!projectSettingsExpanded}>
+        <div class="project-settings-toolbar">
+          <h2 class="section-heading project-settings-title" id="project-settings-heading">Project settings</h2>
+          <button
+            type="button"
+            class="settings-collapse-toggle"
+            on:click={() => (projectSettingsExpanded = !projectSettingsExpanded)}
+            aria-expanded={projectSettingsExpanded}
+            aria-controls="project-settings-panel"
+            aria-label={projectSettingsExpanded ? 'Collapse project settings' : 'Expand project settings'}
+          >
+            <span class="settings-collapse-chevron" class:open={projectSettingsExpanded} aria-hidden="true"></span>
+            <span class="settings-collapse-label">{projectSettingsExpanded ? 'Hide' : 'Show'}</span>
+          </button>
+        </div>
+
+        {#if projectSettingsExpanded}
+          <div
+            id="project-settings-panel"
+            class="project-settings-panel"
+            role="region"
+            aria-labelledby="project-settings-heading"
+          >
+            <p class="settings-intro">
+              Use these when you need to change what reviewers see or whether they can edit source metadata. Updates
+              apply to every queue in this project.
+            </p>
+
+        <section class="setting-card">
+          <div class="setting-card-header">
+            <h3 class="setting-card-title">Annotation guidelines</h3>
+            {#if !showGuidelinesEditor}
+              <button
+                type="button"
+                class="edit-name-button"
+                on:click={handleStartGuidelinesEdit}
+                title="Edit guidelines"
+                aria-label="Edit guidelines"
+                disabled={loading || guidelinesLoading}
+              >
+                ✎
+              </button>
+            {/if}
+          </div>
+          <p class="setting-card-desc">
+            Markdown instructions shown to reviewers while they work through sources. Saving custom text replaces
+            the default template for all queues until you change it again.
+          </p>
+          {#if showGuidelinesEditor}
+            <div class="guidelines-editor">
+              <textarea
+                class="guidelines-textarea"
+                bind:value={guidelinesMarkdown}
+                rows="10"
+                disabled={guidelinesLoading || guidelinesSaving}
+              />
+
+              <div class="guidelines-editor-actions">
+                <button
+                  type="button"
+                  class="cancel-name-button"
+                  on:click={handleCancelGuidelinesEdit}
+                  disabled={guidelinesSaving || guidelinesLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="save-name-button"
+                  on:click={handleSaveGuidelinesEdit}
+                  disabled={guidelinesSaving || guidelinesLoading}
+                >
+                  {guidelinesSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+
+              {#if guidelinesLoadError}
+                <div class="inline-error">{guidelinesLoadError}</div>
+              {/if}
+              {#if guidelinesError}
+                <div class="inline-error">{guidelinesError}</div>
+              {/if}
+            </div>
+          {/if}
+        </section>
+
+        <section class="setting-card">
+          <div class="setting-card-header">
+            <h3 class="setting-card-title">Source metadata editing</h3>
+            {#if !showEditMetadataEditor}
+              <div class="setting-card-header-actions">
+                <span
+                  class="setting-status-pill"
+                  class:is-on={initialEditMetadata}
+                  class:is-off={!initialEditMetadata}
+                >
+                  {initialEditMetadata ? 'On' : 'Off'}
+                </span>
+                <button
+                  type="button"
+                  class="edit-name-button"
+                  on:click={handleStartEditMetadataEdit}
+                  title="Change metadata editing"
+                  aria-label="Change metadata editing"
+                >
+                  ✎
+                </button>
+              </div>
+            {/if}
+          </div>
+          <p class="setting-card-desc">
+            When enabled, reviewers must confirm language and publication country/state (or edit them) before they can
+            mark a source as Keep. The same setting is applied to every reviewer queue in this project.
+          </p>
+          {#if showEditMetadataEditor}
+            <div class="metadata-editor-panel">
+              <label class="metadata-edit-toggle" title="Applies to all reviewer queues in this project">
+                <input
+                  type="checkbox"
+                  bind:checked={localEditMetadata}
+                  disabled={editMetadataSaving || generatingQueues}
+                />
+                <span class="toggle-slider"></span>
+                <span class="metadata-toggle-label">Require metadata editing in review</span>
+              </label>
+              <div class="metadata-editor-actions">
+                <button
+                  type="button"
+                  class="cancel-name-button"
+                  on:click={handleCancelEditMetadataEdit}
+                  disabled={editMetadataSaving || generatingQueues}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="save-name-button"
+                  on:click={handleSaveProjectEditMetadata}
+                  disabled={editMetadataSaving || generatingQueues}
+                >
+                  {editMetadataSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+              {#if editMetadataError}
+                <div class="inline-error">{editMetadataError}</div>
+              {/if}
+            </div>
+          {/if}
+        </section>
+          </div>
+        {/if}
+      </div>
+
+      <ProjectExportPanel
+        {projectGuid}
+        canDownloadMainCsv={canDownloadMainCsv}
+        canDownloadAuditCsv={canDownloadAuditCsv}
+        onDecisionsPreview={openProjectDecisionsPreview}
+      />
 
       <div class="queues">
         <h2>Reviewer Queues</h2>
 
         {#if queues.length === 0}
+          <p class="reviewer-queues-explainer">
+            {#if stats != null && (stats.total ?? 0) > 0}
+              This project's {stats.total} {stats.total === 1 ? 'source is' : 'sources are'} not yet split into reviewer
+              queues. Use the form below to divide them into separate queues—each queue gets its own link so multiple
+              reviewers can work in parallel without overlapping assignments.
+            {:else}
+              Reviewer queues have not been generated yet. Use the form below to split the project's sources into
+              separate queues—each queue gets its own link so multiple reviewers can work in parallel without
+              overlapping assignments.
+            {/if}
+          </p>
           <div class="queue-gen-card">
             <div class="queue-gen-title">Generate reviewer queues</div>
             <p class="queue-gen-subtitle">
-              Queues are created after sources are seeded. Enter how many reviewers/queues you want to split into.
+              Enter how many parallel queues (and reviewer links) you want.
             </p>
 
             <form class="queue-gen-form" on:submit|preventDefault={handleGenerateQueues}>
@@ -611,6 +650,16 @@
             </form>
           </div>
         {:else}
+          <p class="reviewer-queues-explainer">
+            {#if stats != null && (stats.total ?? 0) > 0}
+              This project's {stats.total} {stats.total === 1 ? 'source is' : 'sources are'} split across
+              {queues.length} reviewer {queues.length === 1 ? 'queue' : 'queues'}. Each queue has its own link so
+              multiple reviewers can work in parallel without overlapping assignments.
+            {:else}
+              This project is split into {queues.length} reviewer {queues.length === 1 ? 'queue' : 'queues'}. Each queue
+              has its own link so multiple reviewers can work in parallel without overlapping assignments.
+            {/if}
+          </p>
           <div class="queues-grid">
             {#each queues as q}
               <div class="queue-card">
@@ -681,6 +730,18 @@
       </div>
 
     </div>
+
+    <AllDecisionsModal
+      show={showProjectDecisionsModal}
+      items={projectDecisionsItems}
+      loading={projectDecisionsLoading}
+      modalTitle="Project decisions"
+      modalDescription="Each row is one source in a reviewer queue. See Export project on the page for what each download contains."
+      showQueueColumn={true}
+      showProjectCsvColumn={true}
+      truncationNote={projectDecisionsTruncation}
+      on:close={closeProjectDecisionsModal}
+    />
   {/if}
 </div>
 
@@ -760,6 +821,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
   }
 
   .status-pill {
@@ -787,23 +849,12 @@
     color: white;
   }
 
-  .export-button {
-    padding: 10px 14px;
-    border-radius: 999px;
-    background-color: #3498db;
-    color: white;
-    text-decoration: none;
-    font-size: 13px;
-    font-weight: 600;
-    border: 1px solid #3498db;
-  }
-
   .content {
     max-width: 1320px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 5px;
     padding-top: 8px;
   }
 
@@ -813,6 +864,216 @@
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
     border: 1px solid #d0d7de;
     padding: 16px 18px;
+  }
+
+  .section-heading {
+    margin: 0 0 14px 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #2c3e50;
+  }
+
+  .project-name-static {
+    font-weight: 700;
+    color: #2c3e50;
+    font-size: 15px;
+  }
+
+  .virtual-queue-nav-actions {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #e6e9ee;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .project-settings {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    border: 1px solid #d0d7de;
+    padding: 14px 18px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .project-settings.is-collapsed {
+    padding-bottom: 14px;
+  }
+
+  .project-settings-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .project-settings-title {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .settings-collapse-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #d0d7de;
+    background: #f6f8fa;
+    color: #34495e;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .settings-collapse-toggle:hover {
+    background: #eef1f4;
+    border-color: #c0c7d0;
+  }
+
+  .settings-collapse-chevron {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #5a6c7d;
+    transform: rotate(-90deg);
+    transition: transform 0.18s ease;
+  }
+
+  .settings-collapse-chevron.open {
+    transform: rotate(0deg);
+  }
+
+  .settings-collapse-label {
+    white-space: nowrap;
+  }
+
+  .project-settings-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 14px;
+    padding-top: 4px;
+    border-top: 1px solid #e6e9ee;
+  }
+
+  .settings-intro {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.45;
+    color: #5a6c7d;
+  }
+
+  .setting-card {
+    border: 1px solid #e6e9ee;
+    border-radius: 10px;
+    padding: 14px 16px;
+    background: #fafbfc;
+  }
+
+  .setting-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .setting-card-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #2c3e50;
+  }
+
+  .setting-card-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .setting-status-pill {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #d0d7de;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .setting-status-pill.is-on {
+    background: #eaf8ef;
+    color: #1f7a3d;
+    border-color: #b7e2c4;
+  }
+
+  .setting-status-pill.is-off {
+    background: #f3f4f6;
+    color: #7f8c8d;
+  }
+
+  .setting-card-desc {
+    margin: 0 0 12px 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #5a6c7d;
+  }
+
+  .setting-card .guidelines-editor {
+    margin-top: 4px;
+  }
+
+  .metadata-editor-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .metadata-toggle-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #34495e;
+  }
+
+  .metadata-editor-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .meta-block-seed {
+    margin-bottom: 8px;
+  }
+
+  .meta-row-seed {
+    margin-bottom: 0;
+    align-items: flex-start;
+  }
+
+  .seed-collections-explainer,
+  .reviewer-queues-explainer {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #5a6c7d;
+  }
+
+  .seed-collections-explainer {
+    margin: 6px 0 0 0;
+  }
+
+  .reviewer-queues-explainer {
+    margin: 4px 0 14px 0;
   }
 
   .meta-row {
@@ -837,23 +1098,6 @@
     text-overflow: ellipsis;
   }
 
-  .guidelines-meta-row {
-    align-items: flex-start;
-  }
-
-  .guidelines-meta-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .meta-value-guidelines {
-    overflow: visible;
-    text-overflow: clip;
-    flex: 1;
-    min-width: 0;
-  }
-
   .seed-collection-chips {
     display: flex;
     flex-wrap: wrap;
@@ -861,7 +1105,7 @@
     justify-content: flex-end;
   }
 
-  .seed-collection-chip {
+  a.seed-collection-chip {
     display: inline-flex;
     align-items: center;
     padding: 6px 10px;
@@ -875,27 +1119,20 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+    box-sizing: border-box;
   }
 
-  .project-name-editor {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  a.seed-collection-chip:hover {
+    border-color: #3498db;
+    background: #eef6fc;
+    color: #2980b9;
   }
 
-  .project-name-display {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .project-name-text {
-    font-weight: 700;
-    color: #2c3e50;
-  }
-
-  .metadata-setting-text {
-    color: #7f8c8d;
+  a.seed-collection-chip:focus-visible {
+    outline: 2px solid #3498db;
+    outline-offset: 2px;
   }
 
   .edit-name-button {
@@ -912,17 +1149,6 @@
 
   .edit-name-button:hover {
     background-color: #f6f8fa;
-  }
-
-  .project-name-input {
-    min-width: 260px;
-    max-width: 520px;
-    width: 100%;
-    padding: 8px 10px;
-    border: 1px solid #d0d7de;
-    border-radius: 8px;
-    font-size: 14px;
-    color: #2c3e50;
   }
 
   .save-name-button {
@@ -955,42 +1181,6 @@
   .cancel-name-button:disabled {
     opacity: 0.65;
     cursor: not-allowed;
-  }
-
-  .setting-display {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .setting-editor {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .setting-badge {
-    min-width: 30px;
-    height: 30px;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 900;
-    font-size: 18px;
-    border: 1px solid transparent;
-  }
-
-  .setting-on {
-    background: #eaf8ef;
-    color: #1f7a3d;
-    border-color: #b7e2c4;
-  }
-
-  .setting-off {
-    background: #f3f4f6;
-    color: #7f8c8d;
-    border-color: #d0d7de;
   }
 
   .inline-error {
@@ -1328,28 +1518,6 @@
     gap: 10px;
     justify-content: flex-end;
     align-items: center;
-  }
-
-  .virtual-queue-bottom-actions {
-    margin-top: 14px;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 14px;
-    flex-wrap: wrap;
-  }
-
-  .virtual-queue-metadata {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .virtual-queue-bottom-buttons {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-    flex-wrap: wrap;
   }
 
   .queue-count {

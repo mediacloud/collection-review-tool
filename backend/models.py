@@ -175,8 +175,11 @@ class ReviewItem(db.Model, TimestampMixin):
     decision = db.Column(db.Enum(Decision), default=Decision.UNDECIDED, nullable=False)
     decided_at = db.Column(db.DateTime, nullable=True)
     removal_reason = db.Column(db.Text, nullable=True)  # Reason for removal (required when decision is REMOVE)
+    # Optional reviewer note when decision is SKIP (for coordinators / exports).
+    skip_note = db.Column(db.Text, nullable=True)
     # Optional JSON-encoded metadata about the source as returned by MediaCloud.
-    # This can include fields like stories_per_week, last_story, media_type, etc.
+    # Aligns with web-search Source model fields where present, e.g. stories_total,
+    # stories_per_week, last_story, media_type, pub_country, primary_language.
     source_metadata = db.Column(db.Text, nullable=True)
     
     def to_dict(self):
@@ -198,5 +201,6 @@ class ReviewItem(db.Model, TimestampMixin):
             'decision': self.decision.value,
             'decided_at': self.decided_at.isoformat() if self.decided_at else None,
             'removal_reason': self.removal_reason,
+            'skip_note': self.skip_note,
             'source_metadata': metadata
         }
