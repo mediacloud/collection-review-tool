@@ -22,6 +22,7 @@
   import ReviewHeader from '../components/ReviewHeader.svelte';
   import SourceViewer from '../components/SourceViewer.svelte';
   import RemovalReasonModal from '../components/RemovalReasonModal.svelte';
+  import SkipNoteModal from '../components/SkipNoteModal.svelte';
   import NewSourceModal from '../components/NewSourceModal.svelte';
   import AllDecisionsModal from '../components/AllDecisionsModal.svelte';
   import EditMetadataModal from '../components/EditMetadataModal.svelte';
@@ -38,6 +39,7 @@
   let showAllItems = false;
   let currentPath = window.location.pathname;
   let showRemovalModal = false;
+  let showSkipNoteModal = false;
   let showNewSourceModal = false;
   let guidelines = null;
   let showContextPanel = false;
@@ -237,9 +239,7 @@
       } else {
         await decideItem(reviewId, currentItem.id, 'keep');
       }
-      // Reload review to get updated stats
-      await reloadReviewStatsOnly();
-      // Load next undecided item
+      await Promise.all([reloadReviewStatsOnly(), loadAllItems()]);
       await loadNextUndecidedItem();
     } catch (err) {
       error = err.response?.data?.error || err.message || 'Failed to update decision';
@@ -249,21 +249,30 @@
     }
   }
 
-  async function handleSkip() {
+  function handleSkip() {
+    if (!currentItem || loading) return;
+    showSkipNoteModal = true;
+  }
+
+  function handleSkipModalClose() {
+    showSkipNoteModal = false;
+  }
+
+  async function handleSkipConfirm(note) {
     if (!currentItem || loading) return;
 
+    showSkipNoteModal = false;
     loading = true;
     error = null;
 
     try {
+      const trimmed = note && String(note).trim() ? String(note).trim() : null;
       if (isQueueMode) {
-        await decideQueueItem(queueGuid, currentItem.id, 'skip');
+        await decideQueueItem(queueGuid, currentItem.id, 'skip', null, trimmed);
       } else {
-        await decideItem(reviewId, currentItem.id, 'skip');
+        await decideItem(reviewId, currentItem.id, 'skip', null, trimmed);
       }
-      // Reload review to get updated stats
-      await reloadReviewStatsOnly();
-      // Load next undecided item
+      await Promise.all([reloadReviewStatsOnly(), loadAllItems()]);
       await loadNextUndecidedItem();
     } catch (err) {
       error = err.response?.data?.error || err.message || 'Failed to update decision';
@@ -292,9 +301,7 @@
       } else {
         await decideItem(reviewId, currentItem.id, 'remove', removalReason);
       }
-      // Reload review to get updated stats
-      await reloadReviewStatsOnly();
-      // Load next undecided item
+      await Promise.all([reloadReviewStatsOnly(), loadAllItems()]);
       await loadNextUndecidedItem();
     } catch (err) {
       error = err.response?.data?.error || err.message || 'Failed to update decision';
@@ -345,9 +352,7 @@
       } else {
         await proposeNewSource(reviewId, sourceLabel, sourceHomepage, metadata);
       }
-      // Reload review to get updated stats
-      await reloadReviewStatsOnly();
-      // Optionally reload items to show the new one
+      await Promise.all([reloadReviewStatsOnly(), loadAllItems()]);
       await loadNextUndecidedItem();
       return true;
     } catch (err) {
@@ -781,6 +786,13 @@
             sourceLabel={currentItem?.source_label}
             on:confirm={(e) => handleRemoveConfirm(e.detail)}
             on:close={handleRemoveCancel}
+          />
+
+          <SkipNoteModal
+            show={showSkipNoteModal}
+            sourceLabel={currentItem?.source_label}
+            on:confirm={(e) => handleSkipConfirm(e.detail)}
+            on:close={handleSkipModalClose}
           />
 
           

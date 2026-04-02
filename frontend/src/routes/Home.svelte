@@ -1,6 +1,14 @@
 <script>
   import { onMount } from 'svelte';
-  import { startReview, startReviewProject, getInProgressReviews, getCompletedReviews, getGuidelineTemplates, getReviewProjects } from '../lib/api.js';
+  import {
+    startReview,
+    startReviewProject,
+    getInProgressReviews,
+    getCompletedReviews,
+    getGuidelineTemplates,
+    getReviewProjects,
+    getCountryCollections,
+  } from '../lib/api.js';
 
   let collectionId = '';
   let projectCollectionIdsInput = '';
@@ -15,17 +23,113 @@
   let showCompleted = false;
   let reviewProjects = [];
   let loadingProjects = false;
-  let showProjects = true;
+  let showStartProject = false;
+  let togglingStartProject = false;
+  let startFormResourcesReady = false;
+  /** @type {Promise<void> | null} */
+  let startFormLoadPromise = null;
   let guidelineTemplates = [];
   let selectedTemplate = 'default';
   let loadingTemplates = false;
   let editMetadata = false;
-let projectName = '';
+  let projectName = '';
+
+  /** 'manual' | 'geographic' */
+  let projectInputMode = 'manual';
+  let geoData = [];
+  let geoLoading = false;
+  let geoLoadError = null;
+  let selectedCountryIndex = 0;
+  /** @type {number[]} */
+  let selectedGeoIds = [];
 
   onMount(async () => {
     await loadReviewProjects();
-    await loadGuidelineTemplates();
   });
+
+  async function ensureStartFormResources() {
+    if (startFormResourcesReady) return;
+    if (!startFormLoadPromise) {
+      startFormLoadPromise = (async () => {
+        try {
+          await Promise.all([loadGuidelineTemplates(), loadGeoCollections()]);
+          startFormResourcesReady = true;
+        } finally {
+          startFormLoadPromise = null;
+        }
+      })();
+    }
+    await startFormLoadPromise;
+  }
+
+  async function toggleStartProject() {
+    if (togglingStartProject) return;
+    const opening = !showStartProject;
+    if (opening) {
+      togglingStartProject = true;
+      try {
+        await ensureStartFormResources();
+      } catch (err) {
+        console.error('Error loading new-project form data:', err);
+      } finally {
+        togglingStartProject = false;
+      }
+    }
+    showStartProject = opening;
+  }
+
+  async function loadGeoCollections() {
+    geoLoading = true;
+    geoLoadError = null;
+    try {
+      const raw = await getCountryCollections();
+      if (!Array.isArray(raw)) {
+        throw new Error('Invalid geographic collections data');
+      }
+      geoData = [...raw].sort((a, b) =>
+        String(a?.country?.name || '').localeCompare(String(b?.country?.name || ''), undefined, {
+          sensitivity: 'base',
+        })
+      );
+      selectedCountryIndex = 0;
+      applyDefaultGeoSelection();
+    } catch (err) {
+      console.error('Error loading geographic collections:', err);
+      geoLoadError = err?.message || 'Failed to load country list';
+      geoData = [];
+    } finally {
+      geoLoading = false;
+    }
+  }
+
+  function applyDefaultGeoSelection() {
+    const entry = geoData[selectedCountryIndex];
+    if (!entry?.collections?.length) {
+      selectedGeoIds = [];
+      return;
+    }
+    const nat = entry.country?.national_tags_id;
+    const inCountry = new Set(entry.collections.map((c) => c.tags_id));
+    if (nat != null && inCountry.has(nat)) {
+      selectedGeoIds = [nat];
+    } else {
+      selectedGeoIds = [entry.collections[0].tags_id];
+    }
+  }
+
+  function onGeoCountryChange() {
+    applyDefaultGeoSelection();
+  }
+
+  function toggleGeoCollection(tagsId) {
+    if (selectedGeoIds.includes(tagsId)) {
+      selectedGeoIds = selectedGeoIds.filter((id) => id !== tagsId);
+    } else {
+      selectedGeoIds = [...selectedGeoIds, tagsId];
+    }
+  }
+
+  $: currentGeoEntry = geoData.length ? geoData[selectedCountryIndex] : null;
 
   async function loadGuidelineTemplates() {
     loadingTemplates = true;
@@ -137,28 +241,46 @@ let projectName = '';
   async function handleProjectSubmit() {
     projectError = null;
 
-    const raw = String(projectCollectionIdsInput || '');
-    const parts = raw
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    if (parts.length === 0) {
-      projectError = 'Please enter at least one collection ID (comma-separated).';
-      return;
-    }
-
     let collectionIds = [];
-    try {
-      collectionIds = parts.map((p) => parseInt(p, 10));
-    } catch {
-      projectError = 'All collection IDs must be valid integers.';
-      return;
-    }
 
-    if (collectionIds.some((id) => !id || id <= 0)) {
-      projectError = 'All collection IDs must be positive integers.';
-      return;
+    if (projectInputMode === 'geographic') {
+      if (geoLoadError || !geoData.length) {
+        projectError =
+          'Geographic collections list is not available. Use manual collection IDs or refresh the page.';
+        return;
+      }
+      if (!selectedGeoIds.length) {
+        projectError = 'Select at least one geographic collection for this country.';
+        return;
+      }
+      collectionIds = [...new Set(selectedGeoIds)];
+      if (collectionIds.some((id) => !Number.isFinite(id) || id <= 0)) {
+        projectError = 'Invalid geographic collection selection.';
+        return;
+      }
+    } else {
+      const raw = String(projectCollectionIdsInput || '');
+      const parts = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      if (parts.length === 0) {
+        projectError = 'Please enter at least one collection ID (comma-separated).';
+        return;
+      }
+
+      try {
+        collectionIds = parts.map((p) => parseInt(p, 10));
+      } catch {
+        projectError = 'All collection IDs must be valid integers.';
+        return;
+      }
+
+      if (collectionIds.some((id) => !id || id <= 0)) {
+        projectError = 'All collection IDs must be positive integers.';
+        return;
+      }
     }
 
     projectLoading = true;
@@ -188,80 +310,45 @@ let projectName = '';
 
 <div class="container">
   <div class="main-content">
-    <div class="card">
-      <h1>MediaCloud Collections Review</h1>
-      <p class="subtitle">Review and manage sources in MediaCloud collections</p>
+    <div class="card landing-card">
+      <header class="landing-header">
+        <h1>MediaCloud Collections Review</h1>
+        <div class="landing-explainer">
+          <p>
+            <a
+              href="https://search.mediacloud.org/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >Media Cloud</a>
+            is an open research platform for studying online media. In Media Cloud, <strong>collections</strong> group
+            sources so researchers and partners can analyze or curate them together.
+          </p>
+          <p>
+            This application is for <strong>collections review</strong> workflows: coordinators create review projects
+            from those collections, split work into reviewer queues, and reviewers record decisions such as keep, skip,
+            or remove on individual sources. If you were invited to review, open your project in the table below and
+            follow the links to your queue from the project page. Starting a brand-new project is usually only for
+            coordinators setting up a review.
+          </p>
+        </div>
+        <p class="landing-lead">Open a review project from the table below.</p>
+      </header>
 
-      <div class="project-divider" />
-
-      <div class="project-section">
-        <h2>Start ReviewProject</h2>
-        <p class="subtitle">Seed a multi-collection project into reviewer queues.</p>
-
-        <form on:submit|preventDefault={handleProjectSubmit}>
-          {#if guidelineTemplates.length > 0}
-            <div class="form-group">
-              <label for="guideline-template">Annotation Guidelines Template</label>
-              <select
-                id="guideline-template"
-                bind:value={selectedTemplate}
-                disabled={projectLoading || loadingTemplates}
-              >
-                {#each guidelineTemplates as template}
-                  <option value={template}>{template}</option>
-                {/each}
-              </select>
-            </div>
-          {/if}
-
-          <div class="form-group">
-            <label for="project-name">Project Name</label>
-            <input
-              id="project-name"
-              type="text"
-              bind:value={projectName}
-              placeholder="e.g. UNDP 2026 Seed Project"
-              disabled={projectLoading}
-            />
-          </div>
-
-          <div class="form-group">
-            <label for="project-collection-ids">MediaCloud Collection IDs</label>
-            <input
-              id="project-collection-ids"
-              type="text"
-              bind:value={projectCollectionIdsInput}
-              placeholder="e.g. 123, 456, 789"
-              disabled={projectLoading}
-            />
-          </div>
-
-          {#if projectError}
-            <div class="error">{projectError}</div>
-          {/if}
-
-          <button type="submit" disabled={projectLoading}>
-            {projectLoading ? 'Starting...' : 'Start ReviewProject'}
+      <section class="projects-primary" aria-labelledby="projects-heading">
+        <div class="reviews-list-header">
+          <h2 id="projects-heading">Review projects</h2>
+          <button
+            type="button"
+            class="toggle-button toggle-button-refresh"
+            on:click={loadReviewProjects}
+            disabled={loadingProjects}
+          >
+            {loadingProjects ? 'Loading…' : 'Refresh'}
           </button>
-        </form>
-      </div>
-    </div>
+        </div>
 
-    <div class="card">
-      <div class="reviews-list-header">
-        <h2>Review Projects</h2>
-        <button
-          class="toggle-button"
-          on:click={() => (showProjects = !showProjects)}
-          disabled={loadingProjects}
-        >
-          {loadingProjects ? 'Loading...' : (showProjects ? 'Hide' : 'Show')}
-        </button>
-      </div>
-
-      {#if showProjects}
         {#if loadingProjects}
-          <p class="loading-text">Loading projects...</p>
+          <p class="loading-text">Loading projects…</p>
         {:else if reviewProjects.length === 0}
           <p class="empty-text">No review projects found.</p>
         {:else}
@@ -312,6 +399,156 @@ let projectName = '';
             </table>
           </div>
         {/if}
+      </section>
+
+      <div class="start-project-footer">
+
+        <button
+          type="button"
+          class="text-link-btn"
+          on:click={toggleStartProject}
+          disabled={togglingStartProject}
+        >
+          {#if togglingStartProject}
+            Loading…
+          {:else if showStartProject}
+            Hide new project form
+          {:else}
+            Start a new review project
+          {/if}
+        </button>
+      </div>
+
+      {#if showStartProject}
+        <div class="project-divider" />
+        <p class="start-project-caution">
+          <strong>Are you sure you need to be here?</strong>
+          If you were asked to review sources, you almost always want an existing project from the list above—not
+          this next step. Starting a new review project is for people who are <em>seeding</em> collections into new
+          reviewer queues (typically coordinators). If that is not you, find your review project in the list above.
+        </p>
+        <div class="project-section">
+          <h2>Start review project</h2>
+          <p class="subtitle">Seed a multi-collection project into reviewer queues.</p>
+
+        <form on:submit|preventDefault={handleProjectSubmit}>
+          {#if guidelineTemplates.length > 0}
+            <div class="form-group">
+              <label for="guideline-template">Annotation Guidelines Template</label>
+              <select
+                id="guideline-template"
+                bind:value={selectedTemplate}
+                disabled={projectLoading || loadingTemplates}
+              >
+                {#each guidelineTemplates as template}
+                  <option value={template}>{template}</option>
+                {/each}
+              </select>
+            </div>
+          {/if}
+
+          <div class="form-group">
+            <label for="project-name">Project Name</label>
+            <input
+              id="project-name"
+              type="text"
+              bind:value={projectName}
+              placeholder="e.g. UNDP 2026 Seed Project"
+              disabled={projectLoading}
+            />
+          </div>
+
+          <div class="form-group">
+            <span class="field-label">Collection source</span>
+            <div class="input-mode-row">
+              <label class="input-mode-option">
+                <input
+                  type="radio"
+                  name="project-input-mode"
+                  value="geographic"
+                  bind:group={projectInputMode}
+                  disabled={projectLoading}
+                />
+                Geographic (MediaCloud country list)
+              </label>
+              <label class="input-mode-option">
+                <input
+                  type="radio"
+                  name="project-input-mode"
+                  value="manual"
+                  bind:group={projectInputMode}
+                  disabled={projectLoading}
+                />
+                Manual collection IDs
+              </label>
+            </div>
+          </div>
+
+          {#if projectInputMode === 'geographic'}
+            <div class="form-group">
+              <label for="geo-country">Country</label>
+              {#if geoLoading}
+                <p class="geo-status">Loading countries…</p>
+              {:else if geoLoadError}
+                <p class="geo-status error-inline">{geoLoadError}</p>
+                <button type="button" class="secondary-btn" on:click={loadGeoCollections} disabled={projectLoading || geoLoading}>
+                  Retry
+                </button>
+              {:else}
+                <select
+                  id="geo-country"
+                  bind:value={selectedCountryIndex}
+                  on:change={onGeoCountryChange}
+                  disabled={projectLoading || !geoData.length}
+                >
+                  {#each geoData as entry, idx (entry.country?.alpha3 || idx)}
+                    <option value={idx}>{entry.country?.name || 'Unknown'}</option>
+                  {/each}
+                </select>
+                {#if currentGeoEntry}
+                  <p class="geo-hint">
+                    Choose one or more geographic collections (national, state &amp; local, etc.). List is vendored from
+                    MediaCloud web-search <code>country-collections.json</code> and served by this app&apos;s API.
+                  </p>
+                  <div class="geo-collections-list">
+                    {#each currentGeoEntry.collections || [] as col (col.tags_id + '-' + col.tag)}
+                      <label class="geo-check">
+                        <input
+                          type="checkbox"
+                          checked={selectedGeoIds.includes(col.tags_id)}
+                          on:change={() => toggleGeoCollection(col.tags_id)}
+                          disabled={projectLoading}
+                        />
+                        <span class="geo-check-label">{col.label}</span>
+                        <span class="geo-tag-id">{col.tags_id}</span>
+                      </label>
+                    {/each}
+                  </div>
+                {/if}
+              {/if}
+            </div>
+          {:else}
+            <div class="form-group">
+              <label for="project-collection-ids">MediaCloud Collection IDs</label>
+              <input
+                id="project-collection-ids"
+                type="text"
+                bind:value={projectCollectionIdsInput}
+                placeholder="e.g. 123, 456, 789"
+                disabled={projectLoading}
+              />
+            </div>
+          {/if}
+
+          {#if projectError}
+            <div class="error">{projectError}</div>
+          {/if}
+
+          <button type="submit" disabled={projectLoading}>
+            {projectLoading ? 'Starting...' : 'Start ReviewProject'}
+          </button>
+        </form>
+        </div>
       {/if}
     </div>
 
@@ -338,6 +575,102 @@ let projectName = '';
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     padding: 40px;
     width: 100%;
+  }
+
+  .landing-header h1 {
+    margin-bottom: 12px;
+  }
+
+  .landing-explainer {
+    margin: 0 0 14px 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: #5a6c7d;
+  }
+
+  .landing-explainer p {
+    margin: 0 0 12px 0;
+  }
+
+  .landing-explainer p:last-child {
+    margin-bottom: 0;
+  }
+
+  .landing-explainer a {
+    color: #2980b9;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .landing-explainer a:hover {
+    text-decoration: underline;
+  }
+
+  .landing-lead {
+    color: #7f8c8d;
+    margin: 12px 0 12px 0;
+    font-size: 15px;
+    line-height: 1.45;
+    font-weight: 600;
+  }
+
+  .start-project-footer {
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid #e0e4e8;
+  }
+
+  .start-project-caution {
+    margin: 0 0 16px 0;
+    padding: 14px 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #4a5568;
+    background: #f8f9fb;
+    border: 1px solid #e6e9ee;
+    border-radius: 6px;
+  }
+
+  .start-project-caution strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #2c3e50;
+    font-size: 15px;
+  }
+
+  button.text-link-btn {
+    width: auto;
+    display: inline-block;
+    padding: 0;
+    margin: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    color: #2980b9;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  button.text-link-btn:hover:not(:disabled) {
+    background: none;
+    color: #1f6391;
+  }
+
+  button.text-link-btn:disabled {
+    background: none;
+    color: #95a5a6;
+  }
+
+  .projects-primary {
+    margin-top: 0;
+  }
+
+  .toggle-button-refresh {
+    width: auto;
+    min-width: 88px;
   }
 
   h1 {
@@ -403,6 +736,112 @@ let projectName = '';
     margin-bottom: 8px;
     font-weight: 500;
     color: #34495e;
+  }
+
+  .field-label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #34495e;
+  }
+
+  .input-mode-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+  }
+
+  .input-mode-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-weight: 400;
+    cursor: pointer;
+  }
+
+  .input-mode-option input {
+    width: auto;
+    margin: 0;
+  }
+
+  .geo-status {
+    margin: 0 0 8px 0;
+    color: #7f8c8d;
+    font-size: 14px;
+  }
+
+  .error-inline {
+    color: #c33;
+  }
+
+  button.secondary-btn {
+    width: auto;
+    display: inline-block;
+    padding: 8px 14px;
+    margin-top: 8px;
+    background-color: #ecf0f1;
+    color: #2c3e50;
+  }
+
+  button.secondary-btn:hover:not(:disabled) {
+    background-color: #dfe6e9;
+  }
+
+  .geo-hint {
+    margin: 10px 0 12px 0;
+    font-size: 13px;
+    color: #7f8c8d;
+    line-height: 1.45;
+  }
+
+  .geo-hint code {
+    font-size: 12px;
+    background: #f4f6f8;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .geo-collections-list {
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid #e0e4e8;
+    border-radius: 6px;
+    padding: 8px 10px;
+    background: #fafbfc;
+  }
+
+  .geo-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0 0 8px 0;
+    padding: 4px 0;
+    font-weight: 400;
+    cursor: pointer;
+  }
+
+  .geo-check:last-child {
+    margin-bottom: 0;
+  }
+
+  .geo-check input {
+    width: auto;
+    margin-top: 3px;
+    flex-shrink: 0;
+  }
+
+  .geo-check-label {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.35;
+  }
+
+  .geo-tag-id {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: #95a5a6;
+    font-variant-numeric: tabular-nums;
   }
 
   input, select {

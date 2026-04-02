@@ -36,7 +36,50 @@
     });
   }
 
+  /**
+   * MediaCloud directory list API uses SourcesViewSerializer: last_story is DateTimeField(format="%m/%Y")
+   * (e.g. "3/2024"), which `new Date()` cannot parse. Single-source responses may use ISO strings instead.
+   */
+  function formatLastStory(value) {
+    if (value === null || value === undefined || value === "") return null;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      const m = trimmed.match(/^(\d{1,2})\/(\d{4})$/);
+      if (m) {
+        const monthIndex = parseInt(m[1], 10) - 1;
+        const year = parseInt(m[2], 10);
+        if (monthIndex >= 0 && monthIndex <= 11 && Number.isFinite(year) && year > 0) {
+          const date = new Date(year, monthIndex, 1);
+          return date.toLocaleDateString("en-US", { year: "numeric", month: "short" });
+        }
+      }
+    }
+    return formatDateTime(value);
+  }
+
+  /** MediaCloud Source Directory fields (web-search sources.models.Source): stories_total, last_story, stories_per_week */
+  function pickNumericMeta(meta, snake, camel) {
+    const raw = meta[snake] ?? meta[camel];
+    if (raw === null || raw === undefined || raw === "") return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+
   $: metadata = item && item.source_metadata ? item.source_metadata : {};
+
+  $: storiesTotalApprox = pickNumericMeta(metadata, "stories_total", "storiesTotal");
+  $: storiesTotalLabel =
+    storiesTotalApprox !== null ? formatNumber(storiesTotalApprox) : null;
+
+  $: lastStoryRaw = metadata.last_story ?? metadata.lastStory;
+  $: lastStoryLabel = formatLastStory(lastStoryRaw);
+
+  $: storiesPerWeekVal = pickNumericMeta(metadata, "stories_per_week", "storiesPerWeek");
+  $: storiesPerWeekLabel =
+    storiesPerWeekVal !== null ? formatNumber(storiesPerWeekVal) : null;
+
+  $: showDirectoryStats =
+    item && !item.is_new_source && item.source_id;
 
   $: if (item && item.source_homepage) {
     try {
@@ -97,11 +140,6 @@
               </a>
             {/if}
           </div>
-          {#if metadata.stories_per_week && formatNumber(metadata.stories_per_week)}
-            <span class="stories-pill">
-              {formatNumber(metadata.stories_per_week)} stories per week
-            </span>
-          {/if}
         </div>
         <div class="header-right">
           {#if !item.is_new_source && item.source_id}
@@ -119,6 +157,38 @@
       </div>
       {#if item.is_new_source}
         <span class="badge new-source">New Source</span>
+      {/if}
+
+      {#if item.skip_note}
+        <div class="skip-note-callout" role="note">
+          <div class="skip-note-label">Skip note</div>
+          <div class="skip-note-text">{item.skip_note}</div>
+        </div>
+      {/if}
+
+      {#if showDirectoryStats}
+        <div class="directory-stats" aria-label="Source Directory">
+          <div class="directory-stats-grid">
+            <div class="directory-stat">
+              <div class="directory-stat-label">Total stories (approx.)</div>
+              <div class="directory-stat-value" title="Approximate indexed story count from the Source Directory">
+                {storiesTotalLabel ?? "—"}
+              </div>
+            </div>
+            <div class="directory-stat">
+              <div class="directory-stat-label">Last story seen</div>
+              <div class="directory-stat-value" title="Most recent story date observed for this source">
+                {lastStoryLabel ?? "—"}
+              </div>
+            </div>
+            <div class="directory-stat">
+              <div class="directory-stat-label">New stories / week</div>
+              <div class="directory-stat-value" title="Recent weekly story volume from the Source Directory">
+                {storiesPerWeekLabel ?? "—"}
+              </div>
+            </div>
+          </div>
+        </div>
       {/if}
 
       {#if (item.source_id) || (item.is_new_source && (editMetadata || metadata.primary_language || metadata.language || metadata.pub_country || metadata.pub_state))}
@@ -300,18 +370,44 @@
     transition: color 0.3s;
   }
 
-  .stories-pill {
-    align-self: stretch;
-    display: flex;
-    align-items: center;
-    padding: 12px 14px;
+  .directory-stats {
+    margin-top: 14px;
+    margin-bottom: 4px;
+  }
+
+  .directory-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  @media (max-width: 720px) {
+    .directory-stats-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .directory-stat {
+    background: #f8f9fa;
     border-radius: 10px;
+    padding: 12px 14px;
     border: 1px solid #e0e4e8;
-    background-color: #f8f9fa;
+  }
+
+  .directory-stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #7f8c8d;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .directory-stat-value {
+    font-size: 16px;
+    font-weight: 600;
     color: #2c3e50;
-    font-size: 14px;
-    font-weight: 500;
-    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
 
   .mediacloud-link:hover {
@@ -439,6 +535,31 @@
   .new-source {
     background-color: #3498db;
     color: white;
+  }
+
+  .skip-note-callout {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid #e6d9a8;
+    background: #fffbf0;
+  }
+
+  .skip-note-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #856404;
+    margin-bottom: 6px;
+  }
+
+  .skip-note-text {
+    font-size: 14px;
+    line-height: 1.45;
+    color: #4a3f20;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .actions {

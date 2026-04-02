@@ -15,6 +15,29 @@ import uuid
 api_bp = Blueprint('api', __name__)
 
 
+def _country_collections_path():
+    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(backend_dir, 'data', 'country-collections.json')
+
+
+@api_bp.route('/meta/country-collections', methods=['GET'])
+def get_country_collections():
+    """
+    Vendored MediaCloud geographic collections (same source as web-search
+    mcweb/backend/sources/data/country-collections.json).
+    Served via /api so split deployments use the same origin and CORS as other API calls.
+    """
+    path = _country_collections_path()
+    if not os.path.isfile(path):
+        return jsonify({'error': 'Country collections data is not installed on the server'}), 404
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return jsonify(data), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to read country collections: {str(e)}'}), 500
+
+
 @api_bp.route('/guidelines/templates', methods=['GET'])
 def get_guideline_templates():
     """Get list of available guideline templates."""
@@ -634,13 +657,121 @@ def get_review_projects():
         return jsonify({'error': f'Failed to fetch review projects: {str(e)}'}), 500
 
 
+_SKIP_NOTE_MAX_LEN = 4000
+
+
+def _apply_review_item_decision_fields(item, decision_enum, data):
+    """
+    Set removal_reason and skip_note from JSON body for the chosen decision.
+    Returns an error message string if validation fails, otherwise None.
+    """
+    if decision_enum == Decision.REMOVE:
+        removal_reason = (data.get('removal_reason') or '').strip()
+        if not removal_reason:
+            return 'removal_reason is required when decision is "remove"'
+        item.removal_reason = removal_reason
+        item.skip_note = None
+    elif decision_enum == Decision.SKIP:
+        item.removal_reason = None
+        raw = data.get('skip_note')
+        note = '' if raw is None else str(raw).strip()
+        item.skip_note = (note[:_SKIP_NOTE_MAX_LEN] if note else None)
+    else:
+        item.removal_reason = None
+        item.skip_note = None
+    return None
+
+
+def _extract_domain_from_homepage(homepage):
+    if not homepage:
+        return ''
+    try:
+        return urlparse(homepage).netloc or ''
+    except Exception:
+        return ''
+
+
+def _load_mc_csv_column_names():
+    """Column names for Media Cloud-style source CSV exports (matches mc_csv_columns.txt)."""
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    columns_file = os.path.join(base_dir, '..', 'mc_csv_columns.txt')
+    try:
+        with open(columns_file, 'r') as f:
+            return [line.strip().split('\t')[0].strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        return [
+            'id', 'homepage', 'domain', 'url_search_string', 'label', 'notes',
+            'platform', 'pub_country', 'pub_state', 'media_type',
+            'stories_total', 'stories_per_week', 'last_story', 'primary_language'
+        ]
+
+
+def _review_project_item_mc_row_values(item, mc_columns):
+    """Build one CSV row (list of strings) for a ReviewItem in Media Cloud column order (any decision)."""
+    row = {}
+    if item.is_new_source:
+        homepage = item.source_homepage or ''
+        domain = _extract_domain_from_homepage(homepage)
+        label = item.source_label or ''
+        for col in mc_columns:
+            if col == 'id':
+                row[col] = ''
+            elif col == 'homepage':
+                row[col] = homepage
+            elif col == 'domain':
+                row[col] = domain
+            elif col == 'label':
+                row[col] = label
+            else:
+                row[col] = ''
+    else:
+        metadata = {}
+        if item.source_metadata:
+            try:
+                metadata = json.loads(item.source_metadata) or {}
+            except Exception:
+                metadata = {}
+
+        homepage = (
+            metadata.get('url')
+            or metadata.get('homepage')
+            or metadata.get('media_url')
+            or item.source_homepage
+            or ''
+        )
+        domain = metadata.get('domain') or _extract_domain_from_homepage(homepage)
+        label = (
+            metadata.get('name')
+            or metadata.get('label')
+            or item.source_label
+            or ''
+        )
+        source_id_val = metadata.get('id') or item.source_id or ''
+
+        for col in mc_columns:
+            if col == 'id':
+                row[col] = source_id_val
+            elif col == 'homepage':
+                row[col] = homepage
+            elif col == 'domain':
+                row[col] = domain
+            elif col == 'label':
+                row[col] = label
+            elif col == 'primary_language':
+                row[col] = metadata.get('primary_language') or metadata.get('language') or ''
+            else:
+                row[col] = metadata.get(col, '') or ''
+
+    return [row.get(col, '') for col in mc_columns]
+
+
 @api_bp.route('/review-projects/<string:project_guid>/export', methods=['GET'])
 def export_review_project(project_guid):
     """
-    Export a ReviewProject as a single aggregated CSV.
+    Export a ReviewProject as a single aggregated CSV for Media Cloud collection workflows.
 
-    Non-blocking: export works regardless of whether the derived project status is completed.
-    Includes KEEP + ADD decisions union across all queues.
+    Includes only KEEP and ADD rows (sources to retain in the collection). Skip, remove, and
+    undecided sources are omitted. Use /export/audit for every row with decision labels.
     """
     try:
         project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
@@ -655,90 +786,14 @@ def export_review_project(project_guid):
                 ReviewItem.decision.in_([Decision.KEEP, Decision.ADD])
             ).all()
 
-        # Build CSV columns list exactly like the existing export helper.
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        columns_file = os.path.join(base_dir, '..', 'mc_csv_columns.txt')
-        mc_columns = []
-        try:
-            with open(columns_file, 'r') as f:
-                mc_columns = [line.strip().split('\t')[0].strip() for line in f if line.strip()]
-        except FileNotFoundError:
-            mc_columns = [
-                'id', 'homepage', 'domain', 'url_search_string', 'label', 'notes',
-                'platform', 'pub_country', 'pub_state', 'media_type',
-                'stories_per_week', 'last_story', 'primary_language'
-            ]
+        mc_columns = _load_mc_csv_column_names()
 
-        def _extract_domain_from_homepage(homepage):
-            if not homepage:
-                return ''
-            try:
-                return urlparse(homepage).netloc or ''
-            except Exception:
-                return ''
-
-        # CSV in memory
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(mc_columns)
 
         for item in items:
-            row = {}
-
-            if item.is_new_source:
-                homepage = item.source_homepage or ''
-                domain = _extract_domain_from_homepage(homepage)
-                label = item.source_label or ''
-                for col in mc_columns:
-                    if col == 'id':
-                        row[col] = ''
-                    elif col == 'homepage':
-                        row[col] = homepage
-                    elif col == 'domain':
-                        row[col] = domain
-                    elif col == 'label':
-                        row[col] = label
-                    else:
-                        row[col] = ''
-            else:
-                metadata = {}
-                if item.source_metadata:
-                    try:
-                        metadata = json.loads(item.source_metadata) or {}
-                    except Exception:
-                        metadata = {}
-
-                homepage = (
-                    metadata.get('url')
-                    or metadata.get('homepage')
-                    or metadata.get('media_url')
-                    or item.source_homepage
-                    or ''
-                )
-                domain = metadata.get('domain') or _extract_domain_from_homepage(homepage)
-                label = (
-                    metadata.get('name')
-                    or metadata.get('label')
-                    or item.source_label
-                    or ''
-                )
-                source_id_val = metadata.get('id') or item.source_id or ''
-
-                for col in mc_columns:
-                    if col == 'id':
-                        row[col] = source_id_val
-                    elif col == 'homepage':
-                        row[col] = homepage
-                    elif col == 'domain':
-                        row[col] = domain
-                    elif col == 'label':
-                        row[col] = label
-                    elif col == 'primary_language':
-                        row[col] = metadata.get('primary_language') or metadata.get('language') or ''
-                    else:
-                        row[col] = metadata.get(col, '') or ''
-
-            writer.writerow([row.get(col, '') for col in mc_columns])
+            writer.writerow(_review_project_item_mc_row_values(item, mc_columns))
 
         output.seek(0)
         csv_content = output.getvalue()
@@ -754,6 +809,141 @@ def export_review_project(project_guid):
 
     except Exception as e:
         return jsonify({'error': f'Failed to export review project: {str(e)}'}), 500
+
+
+@api_bp.route('/review-projects/<string:project_guid>/export/audit', methods=['GET'])
+def export_review_project_audit(project_guid):
+    """
+    Full-project CSV: Media Cloud source columns plus review_decision, removal_reason,
+    skip_note, and reviewer_queue (1-based queue index) for every item in all reviewer queues.
+    """
+    try:
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+        queues = Review.query.filter_by(review_project_id=project.id).order_by(Review.queue_index.asc()).all()
+        queue_ids = [q.id for q in queues]
+        queue_by_review_id = {q.id: q for q in queues}
+
+        mc_columns = _load_mc_csv_column_names()
+        extra = ['review_decision', 'removal_reason', 'skip_note', 'reviewer_queue']
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(mc_columns + extra)
+
+        if not queue_ids:
+            output.seek(0)
+            return Response(
+                output.getvalue(),
+                mimetype='text/csv',
+                headers={
+                    'Content-Disposition': f'attachment; filename=review_project_{project_guid}_audit.csv'
+                },
+            )
+
+        items = (
+            ReviewItem.query.filter(ReviewItem.review_id.in_(queue_ids))
+            .order_by(ReviewItem.review_id.asc(), ReviewItem.id.asc())
+            .all()
+        )
+        items.sort(
+            key=lambda it: (
+                queue_by_review_id[it.review_id].queue_index
+                if queue_by_review_id.get(it.review_id) and queue_by_review_id[it.review_id].queue_index is not None
+                else 0,
+                it.id,
+            )
+        )
+
+        for item in items:
+            base = _review_project_item_mc_row_values(item, mc_columns)
+            q = queue_by_review_id.get(item.review_id)
+            qn = ''
+            if q is not None and q.queue_index is not None:
+                qn = (q.queue_index or 0) + 1
+            writer.writerow(
+                base
+                + [
+                    item.decision.value if item.decision else '',
+                    item.removal_reason or '',
+                    item.skip_note or '',
+                    qn,
+                ]
+            )
+
+        output.seek(0)
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename=review_project_{project_guid}_audit.csv'
+            },
+        )
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to export audit CSV: {str(e)}'}), 500
+
+
+@api_bp.route('/review-projects/<string:project_guid>/all-queue-items', methods=['GET'])
+def get_all_queue_items_for_project(project_guid):
+    """
+    All ReviewItem rows across reviewer queues for this project (for UI preview / summaries).
+
+    Ordered by queue index then item id. Paginated; default page_size 500, max 8000.
+    """
+    try:
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 500, type=int)
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 500
+        page_size = min(page_size, 8000)
+
+        queues = Review.query.filter_by(review_project_id=project.id).order_by(Review.queue_index.asc()).all()
+        queue_ids = [q.id for q in queues]
+        queue_by_review_id = {q.id: q for q in queues}
+
+        if not queue_ids:
+            return jsonify({'items': [], 'total': 0, 'page': page, 'page_size': page_size}), 200
+
+        all_items = (
+            ReviewItem.query.filter(ReviewItem.review_id.in_(queue_ids))
+            .order_by(ReviewItem.id.asc())
+            .all()
+        )
+        all_items.sort(
+            key=lambda it: (
+                queue_by_review_id[it.review_id].queue_index
+                if queue_by_review_id.get(it.review_id) and queue_by_review_id[it.review_id].queue_index is not None
+                else 0,
+                it.id,
+            )
+        )
+        total = len(all_items)
+        start = (page - 1) * page_size
+        page_items = all_items[start : start + page_size]
+
+        resp_items = []
+        for item in page_items:
+            d = item.to_dict()
+            q = queue_by_review_id.get(item.review_id)
+            d['queue_guid'] = q.queue_guid if q else None
+            d['queue_index'] = q.queue_index if q else None
+            d['in_mc_export'] = item.decision in (Decision.KEEP, Decision.ADD)
+            resp_items.append(d)
+
+        return jsonify(
+            {
+                'items': resp_items,
+                'total': total,
+                'page': page,
+                'page_size': page_size,
+            }
+        ), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch queue items: {str(e)}'}), 500
 
 
 @api_bp.route('/review-projects/<string:project_guid>/skipped-items', methods=['GET'])
@@ -1106,6 +1296,9 @@ def get_review_queue_items(queue_guid):
 def decide_queue_item(queue_guid, item_id):
     """
     Decide on an item in a queue by queue_guid.
+
+    Body: { "decision": "keep"|"remove"|"skip"|..., "removal_reason"?: str (required for remove),
+           "skip_note"?: str (optional for skip) }
     """
     try:
         queue_review = Review.query.filter_by(queue_guid=queue_guid).first_or_404()
@@ -1128,15 +1321,9 @@ def decide_queue_item(queue_guid, item_id):
                     'error': f'Existing sources can only be marked as "keep", "remove", or "skip", not "{decision_str}"'
                 }), 400
 
-        if decision_enum == Decision.REMOVE:
-            removal_reason = data.get('removal_reason', '').strip()
-            if not removal_reason:
-                return jsonify({
-                    'error': 'removal_reason is required when decision is "remove"'
-                }), 400
-            item.removal_reason = removal_reason
-        else:
-            item.removal_reason = None
+        side_effect_error = _apply_review_item_decision_fields(item, decision_enum, data)
+        if side_effect_error:
+            return jsonify({'error': side_effect_error}), 400
 
         item.decision = decision_enum
         if decision_enum in [Decision.KEEP, Decision.REMOVE, Decision.ADD]:
@@ -1450,7 +1637,7 @@ def decide_item(review_id, item_id):
     Make a decision on a review item.
     
     POST /api/reviews/<review_id>/items/<item_id>/decide
-    Body: { "decision": "keep" }
+    Body: { "decision": "keep"|"skip"|..., "removal_reason"?: str, "skip_note"?: str (optional for skip) }
     
     Returns: Updated item JSON
     """
@@ -1486,18 +1673,10 @@ def decide_item(review_id, item_id):
             # The spec says new sources default to "add", but allows other decisions
             pass
         
-        # Require removal_reason when decision is REMOVE
-        if decision_enum == Decision.REMOVE:
-            removal_reason = data.get('removal_reason', '').strip()
-            if not removal_reason:
-                return jsonify({
-                    'error': 'removal_reason is required when decision is "remove"'
-                }), 400
-            item.removal_reason = removal_reason
-        else:
-            # Clear removal_reason if decision is not REMOVE
-            item.removal_reason = None
-        
+        side_effect_error = _apply_review_item_decision_fields(item, decision_enum, data)
+        if side_effect_error:
+            return jsonify({'error': side_effect_error}), 400
+
         # Update item
         item.decision = decision_enum
         # Mark decided_at for concrete decisions; leave as-is for undecided/skip
@@ -1643,7 +1822,7 @@ def _generate_mediacloud_csv(items, collection_id, include_removal_reason=False)
         mc_columns = [
             'id', 'homepage', 'domain', 'url_search_string', 'label', 'notes',
             'platform', 'pub_country', 'pub_state', 'media_type',
-            'stories_per_week', 'last_story', 'primary_language'
+            'stories_total', 'stories_per_week', 'last_story', 'primary_language'
         ]
     
     # Add removal_reason column if requested

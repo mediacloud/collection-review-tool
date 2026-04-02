@@ -256,6 +256,28 @@ def run_all_migrations():
                 else:
                     conn.execute(text("ALTER TABLE review_projects ADD COLUMN guidelines_custom_markdown TEXT"))
                     print("Successfully added 'guidelines_custom_markdown' column to review_projects table.")
+
+            # Migration 10: skip_note on review_items (optional note when skipping)
+            print("\nRunning migration: skip_note on review_items")
+            if is_sqlite:
+                result = conn.execute(text("PRAGMA table_info(review_items)"))
+                columns = [row[1] for row in result]
+                if 'skip_note' in columns:
+                    print("Column 'skip_note' already exists. No migration needed.")
+                else:
+                    conn.execute(text("ALTER TABLE review_items ADD COLUMN skip_note TEXT"))
+                    print("Successfully added 'skip_note' column to review_items table.")
+            else:
+                result = conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name='review_items' AND column_name='skip_note'
+                """))
+                if result.fetchone():
+                    print("Column 'skip_note' already exists. No migration needed.")
+                else:
+                    conn.execute(text("ALTER TABLE review_items ADD COLUMN skip_note TEXT"))
+                    print("Successfully added 'skip_note' column to review_items table.")
             
             trans.commit()
             print("\n✓ All migrations completed successfully.")
