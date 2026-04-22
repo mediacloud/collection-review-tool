@@ -109,13 +109,19 @@
             This application is for <strong>collections review</strong> workflows: you have been assigned a queue of sources, and your task is to decide whether to keep, skip, or remove on individual sources. Find your queue below to get started, and use the 'review decisions' button to validate your work.
           </p>
           <p>
-            When you've exhausted your queue, inform your review proejct coordinator for next steps.   
+            When you've exhausted your queue, inform your review project coordinator for next steps.   
           </div>
       </div>
 
       <div class="card">
         <h2>Your queue</h2>
         <div class="queue-status-toast">Queue status: {queue.status}</div>
+        {#if queue.status === 'completed'}
+          <div class="queue-complete-banner" role="status" aria-live="polite">
+            <strong>Queue complete.</strong>
+            You can review or edit prior decisions, then notify your project coordinator.
+          </div>
+        {/if}
         <div class="queue-summary">
           <div><strong>Total:</strong> {queue?.stats?.total ?? 0}</div>
           <div><strong>Undecided:</strong> {queue?.stats?.undecided ?? 0}</div>
@@ -357,6 +363,17 @@
     font-size: 12px;
     font-weight: 700;
     text-transform: lowercase;
+  }
+
+  .queue-complete-banner {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #b7e2c4;
+    background: #eaf8ef;
+    color: #1f7a3d;
+    font-size: 13px;
+    line-height: 1.4;
   }
 
   .progress-block {

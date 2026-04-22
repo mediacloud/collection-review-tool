@@ -421,6 +421,13 @@
           </div>
       </div>
 
+      {#if derivedStatus === 'completed'}
+        <div class="project-complete-banner" role="status" aria-live="polite">
+          <strong>All reviewer queues are complete.</strong>
+          Review virtual queues (skipped, added, removed, kept) and export final project outputs.
+        </div>
+      {/if}
+
       <div class="project-meta project-overview">
 
         <div class="meta-block-seed">
@@ -1113,6 +1120,16 @@
     font-size: 13px;
     color: #34495e;
     line-height: 1.45;
+  }
+
+  .project-complete-banner {
+    background: #eaf8ef;
+    border: 1px solid #b7e2c4;
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: #1f7a3d;
+    font-size: 14px;
+    line-height: 1.4;
   }
 
   .section-heading {
