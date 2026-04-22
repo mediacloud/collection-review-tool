@@ -6,7 +6,9 @@
     getReviewProject,
     getReviewProjectAllQueueItems,
     generateReviewProjectQueues,
+    setReviewProjectName,
     setReviewProjectEditMetadata,
+    setReviewProjectReviewerLandingVirtualQueues,
     getReviewProjectGuidelines,
     setReviewProjectGuidelines,
   } from '../lib/api.js';
@@ -28,6 +30,10 @@
   let error = null;
 
   let warning = null;
+  let showProjectNameEditor = false;
+  let projectNameDraft = '';
+  let projectNameSaving = false;
+  let projectNameError = null;
   let localEditMetadata = false;
   let initialEditMetadata = false;
   let editMetadataSaving = false;
@@ -38,6 +44,11 @@
   let copiedQueueGuid = null;
   let copiedIconTimer = null;
   let showEditMetadataEditor = false;
+  let showReviewerLandingVirtualQueues = true;
+  let initialShowReviewerLandingVirtualQueues = true;
+  let showReviewerLandingVirtualQueuesEditor = false;
+  let reviewerLandingVirtualQueuesSaving = false;
+  let reviewerLandingVirtualQueuesError = null;
 
   let showGuidelinesEditor = false;
   let guidelinesLoadError = null;
@@ -124,9 +135,15 @@
     try {
       const data = await getReviewProject(projectGuid);
       project = data.project;
+      projectNameDraft = project?.name || '';
+      showProjectNameEditor = false;
+      projectNameError = null;
       localEditMetadata = !!project.edit_metadata;
       initialEditMetadata = !!project.edit_metadata;
+      showReviewerLandingVirtualQueues = !!project.show_virtual_queue_links_on_reviewer_landing;
+      initialShowReviewerLandingVirtualQueues = !!project.show_virtual_queue_links_on_reviewer_landing;
       showEditMetadataEditor = false;
+      showReviewerLandingVirtualQueuesEditor = false;
       derivedStatus = data.derived_status;
       queues = data.queues || [];
       stats = data.stats || null;
@@ -152,6 +169,72 @@
     } finally {
       generatingQueues = false;
     }
+  }
+
+  function handleStartProjectNameEdit() {
+    projectNameDraft = project?.name || '';
+    projectNameError = null;
+    showProjectNameEditor = true;
+  }
+
+  function handleCancelProjectNameEdit() {
+    projectNameDraft = project?.name || '';
+    projectNameError = null;
+    showProjectNameEditor = false;
+  }
+
+  async function handleSaveProjectNameEdit() {
+    if (!projectGuid || projectNameSaving) return;
+
+    const trimmed = String(projectNameDraft ?? '').trim();
+    if (!trimmed) {
+      projectNameError = 'Project name cannot be empty.';
+      return;
+    }
+
+    projectNameSaving = true;
+    projectNameError = null;
+    try {
+      await setReviewProjectName(projectGuid, trimmed);
+      await loadProject();
+      showProjectNameEditor = false;
+    } catch (err) {
+      projectNameError = err.response?.data?.error || err.message || 'Failed to update project name';
+    } finally {
+      projectNameSaving = false;
+    }
+  }
+
+  async function handleSaveReviewerLandingVirtualQueues() {
+    if (!projectGuid || reviewerLandingVirtualQueuesSaving) return;
+
+    reviewerLandingVirtualQueuesSaving = true;
+    reviewerLandingVirtualQueuesError = null;
+
+    const nextValue = !!showReviewerLandingVirtualQueues;
+    try {
+      await setReviewProjectReviewerLandingVirtualQueues(projectGuid, nextValue);
+      await loadProject();
+      showReviewerLandingVirtualQueuesEditor = false;
+    } catch (err) {
+      reviewerLandingVirtualQueuesError =
+        err.response?.data?.error || err.message || 'Failed to update reviewer landing queue links';
+      showReviewerLandingVirtualQueues = !nextValue;
+    } finally {
+      reviewerLandingVirtualQueuesSaving = false;
+    }
+  }
+
+  function handleStartReviewerLandingVirtualQueuesEdit() {
+    showReviewerLandingVirtualQueues = initialShowReviewerLandingVirtualQueues;
+    reviewerLandingVirtualQueuesError = null;
+    showReviewerLandingVirtualQueuesEditor = true;
+  }
+
+  function handleCancelReviewerLandingVirtualQueuesEdit() {
+    showReviewerLandingVirtualQueues = initialShowReviewerLandingVirtualQueues;
+    reviewerLandingVirtualQueuesError = null;
+    showReviewerLandingVirtualQueuesEditor = false;
   }
 
   async function handleSaveProjectEditMetadata() {
@@ -240,7 +323,7 @@
   }
 
   function queueReviewerLink(queueGuid) {
-    return `${window.location.origin}/reviews/${queueGuid}`;
+    return `${window.location.origin}/review-projects/${projectGuid}/queues/${queueGuid}`;
   }
 
   function closeProjectDecisionsModal() {
@@ -297,7 +380,6 @@
   {:else if project}
     <div class="header-bar">
       <div class="header-left">
-        <button type="button" class="back-home" on:click={() => window.navigate('/')}>↩</button>
         <div class="title">
           ReviewProject: {project.name || projectGuid}
         </div>
@@ -315,13 +397,31 @@
     {/if}
 
     <div class="content">
-      <div class="project-meta project-overview">
-        <div class="meta-row">
-          <div class="meta-label">Project name</div>
-          <div class="meta-value">
-            <span class="project-name-static">{project.name || projectGuid}</span>
+      <div class="admin-workflow-card" role="note" aria-label="Admin workflow guidance">
+        <h3>Media Cloud Source Review Admin: <span class="project-name-static">{project.name || projectGuid}</span></h3>
+          <div class="landing-explainer">
+            <p>
+              <a
+                href="https://search.mediacloud.org/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >Media Cloud</a>
+              is an open research platform for studying online media. In Media Cloud, <strong>collections</strong> group
+              sources so researchers and partners can analyze or curate them together.
+            </p>
+            <p>
+              This application is for <strong>collections review</strong> workflows: this page provides options for configuring and managing your review queues, and for exporting review project data.     </p>
+          
+            </div>
+          <div class="admin-workflow-steps">
+            <div><strong>1.</strong> Configure project settings (guidelines and metadata editing).</div>
+            <div><strong>2.</strong> Generate reviewer queues and share queue links.</div>
+            <div><strong>3.</strong> Monitor queue and project progress, then review virtual queues as needed.</div>
+            <div><strong>4.</strong> Export final project outputs when review is complete.</div>
           </div>
-        </div>
+      </div>
+
+      <div class="project-meta project-overview">
 
         <div class="meta-block-seed">
           <div class="meta-row meta-row-seed">
@@ -350,7 +450,7 @@
 
         {#if stats}
           <div class="meta-row">
-            <div class="meta-label">Status</div>
+            <div class="meta-label">Review Status</div>
             <div class="meta-value">
               <div class="status-count-row">
                 <div class="status-count">
@@ -442,6 +542,17 @@
                 <span class="queue-count">({stats.remove})</span>
               {/if}
             </button>
+
+            <button
+              type="button"
+              class="queue-copy"
+              on:click={() => window.navigate(`/review-projects/${projectGuid}/kept`)}
+            >
+              Review kept sources
+              {#if stats && stats.keep !== undefined && stats.keep > 0}
+                <span class="queue-count">({stats.keep})</span>
+              {/if}
+            </button>
           </div>
         {/if}
       </div>
@@ -473,6 +584,59 @@
               Use these when you need to change what reviewers see or whether they can edit source metadata. Updates
               apply to every queue in this project.
             </p>
+
+        <section class="setting-card">
+          <div class="setting-card-header">
+            <h3 class="setting-card-title">Project name</h3>
+            {#if !showProjectNameEditor}
+              <button
+                type="button"
+                class="edit-name-button"
+                on:click={handleStartProjectNameEdit}
+                title="Edit project name"
+                aria-label="Edit project name"
+                disabled={projectNameSaving}
+              >
+                ✎
+              </button>
+            {/if}
+          </div>
+          <p class="setting-card-desc">
+            Display name used across admin and reviewer views for this review project.
+          </p>
+          {#if showProjectNameEditor}
+            <div class="guidelines-editor">
+              <input
+                type="text"
+                class="project-name-input"
+                bind:value={projectNameDraft}
+                maxlength="255"
+                disabled={projectNameSaving}
+              />
+              <div class="guidelines-editor-actions">
+                <button
+                  type="button"
+                  class="cancel-name-button"
+                  on:click={handleCancelProjectNameEdit}
+                  disabled={projectNameSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="save-name-button"
+                  on:click={handleSaveProjectNameEdit}
+                  disabled={projectNameSaving}
+                >
+                  {projectNameSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+              {#if projectNameError}
+                <div class="inline-error">{projectNameError}</div>
+              {/if}
+            </div>
+          {/if}
+        </section>
 
         <section class="setting-card">
           <div class="setting-card-header">
@@ -527,6 +691,70 @@
               {/if}
               {#if guidelinesError}
                 <div class="inline-error">{guidelinesError}</div>
+              {/if}
+            </div>
+          {/if}
+        </section>
+
+        <section class="setting-card">
+          <div class="setting-card-header">
+            <h3 class="setting-card-title">Reviewer landing: project virtual queues</h3>
+            {#if !showReviewerLandingVirtualQueuesEditor}
+              <div class="setting-card-header-actions">
+                <span
+                  class="setting-status-pill"
+                  class:is-on={initialShowReviewerLandingVirtualQueues}
+                  class:is-off={!initialShowReviewerLandingVirtualQueues}
+                >
+                  {initialShowReviewerLandingVirtualQueues ? 'Shown' : 'Hidden'}
+                </span>
+                <button
+                  type="button"
+                  class="edit-name-button"
+                  on:click={handleStartReviewerLandingVirtualQueuesEdit}
+                  title="Change reviewer landing virtual queue links"
+                  aria-label="Change reviewer landing virtual queue links"
+                >
+                  ✎
+                </button>
+              </div>
+            {/if}
+          </div>
+          <p class="setting-card-desc">
+            Controls whether reviewer queue landing pages show links to the project-wide virtual queues
+            (skipped, added, removed, kept).
+          </p>
+          {#if showReviewerLandingVirtualQueuesEditor}
+            <div class="metadata-editor-panel">
+              <label class="metadata-edit-toggle" title="Applies to all reviewer queue landing pages in this project">
+                <input
+                  type="checkbox"
+                  bind:checked={showReviewerLandingVirtualQueues}
+                  disabled={reviewerLandingVirtualQueuesSaving || generatingQueues}
+                />
+                <span class="toggle-slider"></span>
+                <span class="metadata-toggle-label">Show project virtual queue links on reviewer landing pages</span>
+              </label>
+              <div class="metadata-editor-actions">
+                <button
+                  type="button"
+                  class="cancel-name-button"
+                  on:click={handleCancelReviewerLandingVirtualQueuesEdit}
+                  disabled={reviewerLandingVirtualQueuesSaving || generatingQueues}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="save-name-button"
+                  on:click={handleSaveReviewerLandingVirtualQueues}
+                  disabled={reviewerLandingVirtualQueuesSaving || generatingQueues}
+                >
+                  {reviewerLandingVirtualQueuesSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+              {#if reviewerLandingVirtualQueuesError}
+                <div class="inline-error">{reviewerLandingVirtualQueuesError}</div>
               {/if}
             </div>
           {/if}
@@ -717,9 +945,9 @@
                   <button
                     type="button"
                     class="queue-open"
-                    on:click={() => window.navigate(`/reviews/${q.queue_guid}`)}
+                    on:click={() => window.navigate(`/review-projects/${projectGuid}/queues/${q.queue_guid}`)}
                   >
-                    Open Queue
+                    Open Queue Landing
                   </button>
 
                 </div>
@@ -739,6 +967,7 @@
       modalDescription="Each row is one source in a reviewer queue. See Export project on the page for what each download contains."
       showQueueColumn={true}
       showProjectCsvColumn={true}
+      showReevaluateAction={false}
       truncationNote={projectDecisionsTruncation}
       on:close={closeProjectDecisionsModal}
     />
@@ -799,16 +1028,6 @@
     min-width: 0;
   }
 
-  .back-home {
-    padding: 4px 8px;
-    border: none;
-    background: transparent;
-    color: #f6f8fa;
-    font-size: 16px;
-    font-weight: 400;
-    cursor: pointer;
-  }
-
   .title {
     font-weight: 700;
     color: #f6f8fa;
@@ -864,6 +1083,36 @@
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
     border: 1px solid #d0d7de;
     padding: 16px 18px;
+  }
+
+  .admin-workflow-card {
+    background: #f5fbff;
+    border: 1px solid #cfe2ff;
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+
+  .admin-workflow-title {
+    margin: 0 0 6px 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: #2c3e50;
+  }
+
+  .admin-workflow-subtitle {
+    margin: 0;
+    font-size: 13px;
+    color: #4f6478;
+    line-height: 1.45;
+  }
+
+  .admin-workflow-steps {
+    margin-top: 10px;
+    display: grid;
+    gap: 6px;
+    font-size: 13px;
+    color: #34495e;
+    line-height: 1.45;
   }
 
   .section-heading {
@@ -1207,6 +1456,16 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     background: white;
     resize: vertical;
+  }
+
+  .project-name-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #2c3e50;
+    background: white;
   }
 
   .guidelines-editor-actions {

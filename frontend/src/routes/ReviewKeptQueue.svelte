@@ -1,49 +1,38 @@
 <script>
   import { onMount } from 'svelte';
-
   import iso3166 from 'iso-3166-2';
   import * as rawIso3166 from 'iso-3166';
-  import EditMetadataModal from '../components/EditMetadataModal.svelte';
-  import NewSourceModal from '../components/NewSourceModal.svelte';
   import SourceViewer from '../components/SourceViewer.svelte';
   import BaseModal from '../components/BaseModal.svelte';
   import RemovalReasonModal from '../components/RemovalReasonModal.svelte';
   import SkipNoteModal from '../components/SkipNoteModal.svelte';
+  import EditMetadataModal from '../components/EditMetadataModal.svelte';
   import {
     getReviewProject,
-    getAddedItemsByProjectGuid,
-    proposeNewSourceByQueueGuid,
-    updateQueueItemSourceMetadata,
+    getKeptItemsByProjectGuid,
     decideQueueItem,
+    updateQueueItemSourceMetadata,
   } from '../lib/api.js';
 
   let projectGuid = null;
   let project = null;
-  let queues = [];
 
   let loading = false;
   let error = null;
-
-  let showNewSourceModal = false;
-  let addingNewSource = false;
-  let newSourceModalError = null;
-  let targetQueueGuidForNewSource = null;
-
-  let items = [];
-  let total = 0;
-  let currentItem = null;
-
+  let actionError = null;
+  let decidingItem = false;
   let showEditMetadataModal = false;
-  let showEditMetadataError = null;
   let editFieldKey = null;
   let editFieldLabel = '';
   let editFieldCurrentValue = '';
   let editFieldOptions = [];
   let editFieldReadonlyMessage = '';
-  let showEditItemModal = false;
+
+  let items = [];
+  let total = 0;
   let selectedItem = null;
   let selectedItemCursor = -1;
-  let decidingItem = false;
+  let showEditItemModal = false;
   let showRemovalModal = false;
   let showSkipNoteModal = false;
 
@@ -77,7 +66,7 @@
 
   function parseProjectGuidFromUrl() {
     const match = window.location.pathname.match(
-      /^\/review-projects\/([0-9a-fA-F-]+)\/added$/
+      /^\/review-projects\/([0-9a-fA-F-]+)\/kept$/
     );
     return match ? match[1] : null;
   }
@@ -91,14 +80,15 @@
     window.navigate(`/review-projects/${projectGuid}`);
   }
 
-  async function loadAdded() {
+  async function loadKept() {
     if (!projectGuid) return;
     loading = true;
     error = null;
+    actionError = null;
     try {
-      const [projectResp, addedResp] = await Promise.all([
+      const [projectResp, keptResp] = await Promise.all([
         getReviewProject(projectGuid),
-        getAddedItemsByProjectGuid(projectGuid, {
+        getKeptItemsByProjectGuid(projectGuid, {
           page: 1,
           page_size: 1000,
           dedupe_source_id: true,
@@ -106,145 +96,15 @@
       ]);
 
       project = projectResp.project;
-      queues = projectResp.queues || [];
-
-      items = addedResp.items || [];
-      total = addedResp.total || 0;
-      currentItem = items.length > 0 ? items[0] : null;
+      items = keptResp.items || [];
+      total = keptResp.total || 0;
     } catch (err) {
-      error = err.response?.data?.error || err.message || 'Failed to load added sources';
-      console.error('Error loading added sources:', err);
+      error = err.response?.data?.error || err.message || 'Failed to load kept sources';
+      console.error('Error loading kept sources:', err);
       items = [];
       total = 0;
-      currentItem = null;
     } finally {
       loading = false;
-    }
-  }
-
-  function handleOpenNewSourceModal() {
-    if (addingNewSource) return;
-
-    newSourceModalError = null;
-    targetQueueGuidForNewSource = queues && queues.length > 0 ? queues[0]?.queue_guid : null;
-
-    if (!targetQueueGuidForNewSource) {
-      newSourceModalError = 'No reviewer queues exist yet for this project. Generate queues first.';
-      return;
-    }
-
-    showNewSourceModal = true;
-  }
-
-  async function handleNewSourceModalConfirm(event) {
-    const { label, homepage, primary_language, pub_country, pub_state } = event.detail || {};
-    const metadata = {
-      primary_language,
-      pub_country,
-      pub_state,
-    };
-
-    const success = await handleNewSource(label, homepage, metadata);
-    if (success) {
-      showNewSourceModal = false;
-    }
-  }
-
-  async function handleNewSource(sourceLabel, sourceHomepage, metadata = null) {
-    if (!targetQueueGuidForNewSource || addingNewSource) return false;
-
-    addingNewSource = true;
-    newSourceModalError = null;
-    try {
-      await proposeNewSourceByQueueGuid(targetQueueGuidForNewSource, sourceLabel, sourceHomepage, metadata);
-      await loadAdded();
-      return true;
-    } catch (err) {
-      const msg = err.response?.data?.error || err.message || 'Failed to add source';
-      newSourceModalError = msg;
-      console.error('Error adding source:', err);
-      return false;
-    } finally {
-      addingNewSource = false;
-    }
-  }
-
-  function openEditMetadata(
-    fieldKey,
-    label,
-    currentValue,
-    options = [],
-    readonlyMsg = ''
-  ) {
-    // Ensure the modal edits the selected row.
-    // (caller typically sets `currentItem` just before calling this)
-    editFieldKey = fieldKey;
-    editFieldLabel = label;
-    editFieldCurrentValue = currentValue || '';
-    editFieldOptions = options;
-    editFieldReadonlyMessage = readonlyMsg;
-    showEditMetadataModal = true;
-    showEditMetadataError = null;
-  }
-
-  function closeEditMetadata() {
-    showEditMetadataModal = false;
-    editFieldKey = null;
-    editFieldLabel = '';
-    editFieldCurrentValue = '';
-    editFieldOptions = [];
-    editFieldReadonlyMessage = '';
-    showEditMetadataError = null;
-  }
-
-  async function handleEditMetadataSave(event) {
-    const newValue = event.detail;
-    showEditMetadataError = null;
-
-    if (!currentItem || !editFieldKey) return;
-
-    // If editing pub_state and we have a country code, validate ISO 3166-2.
-    if (editFieldKey === 'pub_state' && currentItem.source_metadata?.pub_country && newValue) {
-      const storedCountry = currentItem.source_metadata.pub_country;
-      const alpha2Country =
-        storedCountry.length === 3
-          ? rawIso3166.iso31661Alpha3ToAlpha2[storedCountry] || storedCountry
-          : storedCountry;
-
-      const subdivision = iso3166.subdivision(newValue);
-      if (!subdivision) {
-        showEditMetadataError = `Invalid subdivision code "${newValue}" for country ${storedCountry} (expected ISO 3166-2).`;
-        return;
-      }
-      if (!newValue.startsWith(`${alpha2Country}-`)) {
-        showEditMetadataError = `Subdivision code "${newValue}" does not match country ${storedCountry}.`;
-        return;
-      }
-    }
-
-    try {
-      const payload = { [editFieldKey]: newValue };
-      const resp = await updateQueueItemSourceMetadata(
-        currentItem.queue_guid,
-        currentItem.id,
-        payload
-      );
-
-      const updated = resp.item;
-      const merged = {
-        ...updated,
-        queue_guid: currentItem.queue_guid,
-        queue_index: currentItem.queue_index,
-      };
-
-      items = items.map((i) => (i.id === merged.id && i.queue_guid === merged.queue_guid ? merged : i));
-      currentItem = merged;
-
-      closeEditMetadata();
-    } catch (err) {
-      showEditMetadataError =
-        err.response?.data?.error || err.message || 'Failed to update source metadata';
-      console.error('Error updating metadata:', err);
     }
   }
 
@@ -257,7 +117,7 @@
     showEditItemModal = true;
     showRemovalModal = false;
     showSkipNoteModal = false;
-    showEditMetadataError = null;
+    actionError = null;
   }
 
   function closeItemEditor() {
@@ -266,6 +126,7 @@
     selectedItemCursor = -1;
     showRemovalModal = false;
     showSkipNoteModal = false;
+    closeEditMetadata();
   }
 
   function goToNeighborItem(direction) {
@@ -276,7 +137,7 @@
     selectedItem = items[next];
     showRemovalModal = false;
     showSkipNoteModal = false;
-    showEditMetadataError = null;
+    actionError = null;
   }
 
   async function decideSelectedItem(decision, removalReason = null, skipNote = null) {
@@ -284,7 +145,7 @@
     const previousSelected = selectedItem;
     const previousCursor = selectedItemCursor >= 0 ? selectedItemCursor : 0;
     decidingItem = true;
-    showEditMetadataError = null;
+    actionError = null;
     try {
       await decideQueueItem(
         selectedItem.queue_guid,
@@ -293,7 +154,7 @@
         removalReason,
         skipNote
       );
-      await loadAdded();
+      await loadKept();
       if (items.length === 0) {
         closeItemEditor();
         return;
@@ -313,9 +174,8 @@
       showRemovalModal = false;
       showSkipNoteModal = false;
     } catch (err) {
-      showEditMetadataError =
-        err.response?.data?.error || err.message || 'Failed to update decision';
-      console.error('Error updating added-item decision:', err);
+      actionError = err.response?.data?.error || err.message || 'Failed to update decision';
+      console.error('Error updating kept-item decision:', err);
     } finally {
       decidingItem = false;
     }
@@ -335,9 +195,74 @@
     showSkipNoteModal = true;
   }
 
+  function openEditMetadata(fieldKey, label, currentValue, options = [], readonlyMsg = '') {
+    editFieldKey = fieldKey;
+    editFieldLabel = label;
+    editFieldCurrentValue = currentValue || '';
+    editFieldOptions = options;
+    editFieldReadonlyMessage = readonlyMsg;
+    showEditMetadataModal = true;
+  }
+
+  function closeEditMetadata() {
+    showEditMetadataModal = false;
+    editFieldKey = null;
+    editFieldLabel = '';
+    editFieldCurrentValue = '';
+    editFieldOptions = [];
+    editFieldReadonlyMessage = '';
+  }
+
+  async function handleEditMetadataSave(event) {
+    const newValue = event.detail;
+    if (!selectedItem || !editFieldKey) {
+      closeEditMetadata();
+      return;
+    }
+
+    if (editFieldKey === 'pub_state' && selectedItem.source_metadata?.pub_country && newValue) {
+      const storedCountry = selectedItem.source_metadata.pub_country;
+      const alpha2Country =
+        storedCountry.length === 3
+          ? rawIso3166.iso31661Alpha3ToAlpha2[storedCountry] || storedCountry
+          : storedCountry;
+      const subdivision = iso3166.subdivision(newValue);
+      if (!subdivision) {
+        actionError = `Invalid subdivision code "${newValue}" for country ${storedCountry} (expected ISO 3166-2).`;
+        return;
+      }
+      if (!newValue.startsWith(`${alpha2Country}-`)) {
+        actionError = `Subdivision code "${newValue}" does not match country ${storedCountry}.`;
+        return;
+      }
+    }
+
+    try {
+      actionError = null;
+      const response = await updateQueueItemSourceMetadata(selectedItem.queue_guid, selectedItem.id, {
+        [editFieldKey]: newValue,
+      });
+      const updated = response?.item;
+      if (updated) {
+        const merged = {
+          ...updated,
+          queue_guid: selectedItem.queue_guid,
+          queue_index: selectedItem.queue_index,
+        };
+        selectedItem = merged;
+        items = items.map((item) =>
+          item.id === merged.id && item.queue_guid === merged.queue_guid ? merged : item
+        );
+      }
+      closeEditMetadata();
+    } catch (err) {
+      actionError = err.response?.data?.error || err.message || 'Failed to update source metadata';
+    }
+  }
+
   onMount(() => {
     projectGuid = parseProjectGuidFromUrl();
-    loadAdded();
+    loadKept();
   });
 </script>
 
@@ -347,31 +272,25 @@
       <button type="button" class="back-home" on:click={goBack}>↩</button>
       <div class="title">ReviewProject: {project?.name || projectGuid}</div>
     </div>
-    <div class="header-right">
-      <button
-        type="button"
-        class="propose-button"
-        on:click={handleOpenNewSourceModal}
-        disabled={loading || addingNewSource || !(queues && queues.length > 0)}
-        title={queues && queues.length > 0 ? 'Propose a new source' : 'Generate reviewer queues first'}
-      >
-        + Propose new source
-      </button>
-    </div>
   </div>
 
-  <div class="subheader">Added Sources</div>
+  <div class="subheader">Kept Sources ({total})</div>
 
   {#if error}
     <div class="error-banner">{error}</div>
   {/if}
+  {#if actionError}
+    <div class="error-banner">{actionError}</div>
+  {/if}
 
   {#if loading && items.length === 0}
-    <div class="loading">Loading added sources...</div>
+    <div class="loading">Loading kept sources...</div>
   {:else if items.length === 0}
     <div class="empty-card">
-      <div class="empty-title">No added sources</div>
-      <div class="empty-subtitle">There are no sources marked as <strong>add</strong> in this project.</div>
+      <div class="empty-title">No kept sources</div>
+      <div class="empty-subtitle">
+        There are no sources currently marked as <strong>keep</strong> in this project.
+      </div>
     </div>
   {:else}
     <div class="table-wrapper">
@@ -383,10 +302,8 @@
             <th>Language</th>
             <th>Pub country</th>
             <th>Pub state</th>
+            <th>MediaCloud</th>
             <th>Decision</th>
-            {#if project?.edit_metadata}
-              <th>Metadata</th>
-            {/if}
           </tr>
         </thead>
         <tbody>
@@ -405,116 +322,35 @@
               <td>{item.source_metadata?.primary_language || item.source_metadata?.language || '—'}</td>
               <td>{item.source_metadata?.pub_country || '—'}</td>
               <td>{item.source_metadata?.pub_state || '—'}</td>
-              <td class="td-actions">
+              <td>
+                {#if !item.is_new_source && item.source_id}
+                  <a
+                    href={`https://search.mediacloud.org/sources/${item.source_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View ↗
+                  </a>
+                {:else}
+                  —
+                {/if}
+              </td>
+              <td>
                 <button
                   type="button"
                   class="btn-inline"
                   on:click={() => openItemEditor(item)}
-                  disabled={loading || addingNewSource || decidingItem}
+                  disabled={loading || decidingItem}
                 >
                   Edit
                 </button>
               </td>
-              {#if project?.edit_metadata}
-                <td class="td-actions">
-                  <div class="metadata-actions-row">
-                    <button
-                      type="button"
-                      class="btn-inline"
-                      on:click={() => {
-                        currentItem = item;
-                        openEditMetadata(
-                          'primary_language',
-                          'Language (ISO 639-1)',
-                          item.source_metadata?.primary_language || item.source_metadata?.language,
-                          LANGUAGE_OPTIONS
-                        );
-                      }}
-                    >
-                      Edit Language
-                    </button>
-                    <button
-                      type="button"
-                      class="btn-inline"
-                      on:click={() => {
-                        currentItem = item;
-                        const options = [{ value: '', label: 'None / Not set' }, ...COUNTRY_OPTIONS];
-                        openEditMetadata(
-                          'pub_country',
-                          'Pub country (ISO 3166-1 alpha-3)',
-                          item.source_metadata?.pub_country,
-                          options
-                        );
-                      }}
-                    >
-                      Edit Country
-                    </button>
-                    <button
-                      type="button"
-                      class="btn-inline"
-                      on:click={() => {
-                        currentItem = item;
-                        const storedCountry = item.source_metadata?.pub_country;
-                        if (!storedCountry) {
-                          openEditMetadata(
-                            'pub_state',
-                            'Pub state (ISO 3166-2)',
-                            item.source_metadata?.pub_state,
-                            [],
-                            'Pub state depends on a Pub country value. Please set Pub country first.'
-                          );
-                          return;
-                        }
-
-                        const alpha2Country =
-                          storedCountry.length === 3
-                            ? rawIso3166.iso31661Alpha3ToAlpha2[storedCountry] || storedCountry
-                            : storedCountry;
-
-                        let options = [];
-                        if (iso3166.data[alpha2Country] && iso3166.data[alpha2Country].sub) {
-                          options = Object.keys(iso3166.data[alpha2Country].sub)
-                            .sort()
-                            .map((code) => {
-                              const sub = iso3166.data[alpha2Country].sub[code];
-                              return { value: code, label: `${code} – ${sub.name}` };
-                            });
-                          options = [{ value: '', label: 'None / Not set' }, ...options];
-                        }
-
-                        openEditMetadata(
-                          'pub_state',
-                          `Pub state (ISO 3166-2 for ${storedCountry})`,
-                          item.source_metadata?.pub_state,
-                          options
-                        );
-                      }}
-                    >
-                      Edit State
-                    </button>
-                  </div>
-                </td>
-              {/if}
             </tr>
           {/each}
         </tbody>
       </table>
     </div>
   {/if}
-
-  {#if showEditMetadataError}
-    <div class="error-banner meta-error">{showEditMetadataError}</div>
-  {/if}
-
-  <EditMetadataModal
-    show={showEditMetadataModal}
-    fieldLabel={editFieldLabel}
-    currentValue={editFieldCurrentValue}
-    options={editFieldOptions}
-    readonlyMessage={editFieldReadonlyMessage}
-    on:save={handleEditMetadataSave}
-    on:close={closeEditMetadata}
-  />
 
   <BaseModal show={showEditItemModal} onClose={closeItemEditor}>
     <div class="item-edit-modal-wrap">
@@ -545,12 +381,75 @@
           onRemove={handleEditItemRemove}
           onSkip={handleEditItemSkip}
           showSkip={true}
-          editMetadata={false}
+          editMetadata={!!project?.edit_metadata}
+          onEditLanguage={() =>
+            openEditMetadata(
+              'primary_language',
+              'Language (ISO 639-1)',
+              selectedItem?.source_metadata?.primary_language || selectedItem?.source_metadata?.language,
+              LANGUAGE_OPTIONS
+            )
+          }
+          onEditPubCountry={() => {
+            const options = [{ value: '', label: 'None / Not set' }, ...COUNTRY_OPTIONS];
+            openEditMetadata(
+              'pub_country',
+              'Pub country (ISO 3166-1 alpha-3)',
+              selectedItem?.source_metadata?.pub_country,
+              options
+            );
+          }}
+          onEditPubState={() => {
+            const storedCountry = selectedItem?.source_metadata?.pub_country;
+            if (!storedCountry) {
+              openEditMetadata(
+                'pub_state',
+                'Pub state (ISO 3166-2)',
+                selectedItem?.source_metadata?.pub_state,
+                [],
+                'Pub state depends on a Pub country value. Please set Pub country first.'
+              );
+              return;
+            }
+
+            const alpha2Country =
+              storedCountry.length === 3
+                ? rawIso3166.iso31661Alpha3ToAlpha2[storedCountry] || storedCountry
+                : storedCountry;
+
+            let options = [];
+            if (iso3166.data[alpha2Country] && iso3166.data[alpha2Country].sub) {
+              options = Object.keys(iso3166.data[alpha2Country].sub)
+                .sort()
+                .map((code) => {
+                  const sub = iso3166.data[alpha2Country].sub[code];
+                  return { value: code, label: `${code} – ${sub.name}` };
+                });
+              options = [{ value: '', label: 'None / Not set' }, ...options];
+            }
+
+            openEditMetadata(
+              'pub_state',
+              `Pub state (ISO 3166-2 for ${storedCountry})`,
+              selectedItem?.source_metadata?.pub_state,
+              options
+            );
+          }}
           loading={decidingItem}
         />
       {/if}
     </div>
   </BaseModal>
+
+  <EditMetadataModal
+    show={showEditMetadataModal}
+    fieldLabel={editFieldLabel}
+    currentValue={editFieldCurrentValue}
+    options={editFieldOptions}
+    readonlyMessage={editFieldReadonlyMessage}
+    on:save={handleEditMetadataSave}
+    on:close={closeEditMetadata}
+  />
 
   <RemovalReasonModal
     show={showRemovalModal}
@@ -570,20 +469,6 @@
       decideSelectedItem('skip', null, e.detail);
     }}
     on:close={() => (showSkipNoteModal = false)}
-  />
-
-  <NewSourceModal
-    show={showNewSourceModal}
-    loading={addingNewSource}
-    editMetadata={project?.edit_metadata}
-    languageOptions={LANGUAGE_OPTIONS}
-    countryOptions={COUNTRY_OPTIONS}
-    errorMessage={newSourceModalError}
-    on:confirm={handleNewSourceModalConfirm}
-    on:close={() => {
-      showNewSourceModal = false;
-      newSourceModalError = null;
-    }}
   />
 </div>
 
@@ -617,20 +502,6 @@
     min-width: 0;
   }
 
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .top-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 14px;
-  }
-
   .back-home {
     padding: 4px 8px;
     border: none;
@@ -654,32 +525,11 @@
     text-overflow: ellipsis;
   }
 
-  .propose-button {
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid #3498db;
-    background-color: #3498db;
-    color: white;
-    font-weight: 700;
-    cursor: pointer;
-  }
-
-  .propose-button:disabled {
-    opacity: 0.65;
-    cursor: not-allowed;
-  }
-
   .subheader {
     margin: 0 0 20px;
     font-size: 20px;
     font-weight: 900;
     color: #2c3e50;
-  }
-
-  .count {
-    font-size: 13px;
-    color: #7f8c8d;
-    font-weight: 800;
   }
 
   .loading {
@@ -697,10 +547,6 @@
     border: 1px solid #fcc;
     margin-bottom: 16px;
     text-align: center;
-  }
-
-  .meta-error {
-    margin-top: -6px;
   }
 
   .empty-card {
@@ -730,7 +576,7 @@
     border-radius: 8px;
     border: 1px solid #dee2e6;
     background: white;
-    max-height: 640px;
+    max-height: 700px;
   }
 
   table {
@@ -775,17 +621,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .td-actions {
-    white-space: nowrap;
-  }
-
-  .metadata-actions-row {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    align-items: center;
   }
 
   .btn-inline {
@@ -843,4 +678,3 @@
     cursor: not-allowed;
   }
 </style>
-

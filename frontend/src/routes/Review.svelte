@@ -7,6 +7,7 @@
     proposeNewSource, 
     getReviewByQueueGuid,
     getReviewItemsByQueueGuid,
+    getReviewItemByQueueGuid,
     decideQueueItem,
     proposeNewSourceByQueueGuid,
     getReviewQueueGuidelines,
@@ -52,6 +53,7 @@
   let editFieldOptions = [];
   let editFieldReadonlyMessage = '';
   let newSourceModalError = null;
+  let reevaluatingItemId = null;
 
   const LANGUAGE_OPTIONS = [
     { value: 'en', label: 'en – English' },
@@ -95,6 +97,25 @@
     return { reviewId: null, queueGuid: segment };
   }
 
+  function getReviewBackTarget() {
+    if (isQueueMode && review?.review_project_guid && queueGuid) {
+      return `/review-projects/${review.review_project_guid}/queues/${queueGuid}`;
+    }
+    if (review?.review_project_guid) {
+      return `/review-projects/${review.review_project_guid}`;
+    }
+    return '/';
+  }
+
+  function getReevaluateItemIdFromUrl() {
+    if (!isQueueMode) return null;
+    const params = new URLSearchParams(window.location.search || '');
+    if (params.get('mode') !== 'reevaluate') return null;
+    const parsedId = parseInt(params.get('item_id') || '', 10);
+    if (!Number.isInteger(parsedId) || parsedId <= 0) return null;
+    return parsedId;
+  }
+
   onMount(() => {
     // Listen for URL changes
     const updatePath = () => {
@@ -134,7 +155,21 @@
       await loadAllItems();
       // Load guidelines
       await loadGuidelines();
-      // Also load next undecided item if review is not completed
+      const reevaluateItemId = getReevaluateItemIdFromUrl();
+      if (reevaluateItemId && isQueueMode) {
+        try {
+          const reevaluateItem = await getReviewItemByQueueGuid(queueGuid, reevaluateItemId);
+          if (reevaluateItem) {
+            reevaluatingItemId = reevaluateItem.id;
+            currentItem = reevaluateItem;
+            await refreshCurrentItemMetadata();
+            return;
+          }
+        } catch (reevaluateErr) {
+          console.error('Error loading reevaluate target item:', reevaluateErr);
+        }
+      }
+      // Load next undecided item for normal queue flow
       if (review.status !== 'completed') {
         await loadNextUndecidedItem();
       }
@@ -239,8 +274,7 @@
       } else {
         await decideItem(reviewId, currentItem.id, 'keep');
       }
-      await Promise.all([reloadReviewStatsOnly(), loadAllItems()]);
-      await loadNextUndecidedItem();
+      await handlePostDecisionRefresh();
     } catch (err) {
       error = err.response?.data?.error || err.message || 'Failed to update decision';
       console.error('Error making decision:', err);
@@ -272,8 +306,7 @@
       } else {
         await decideItem(reviewId, currentItem.id, 'skip', null, trimmed);
       }
-      await Promise.all([reloadReviewStatsOnly(), loadAllItems()]);
-      await loadNextUndecidedItem();
+      await handlePostDecisionRefresh();
     } catch (err) {
       error = err.response?.data?.error || err.message || 'Failed to update decision';
       console.error('Error making decision:', err);
@@ -301,8 +334,7 @@
       } else {
         await decideItem(reviewId, currentItem.id, 'remove', removalReason);
       }
-      await Promise.all([reloadReviewStatsOnly(), loadAllItems()]);
-      await loadNextUndecidedItem();
+      await handlePostDecisionRefresh();
     } catch (err) {
       error = err.response?.data?.error || err.message || 'Failed to update decision';
       console.error('Error making decision:', err);
@@ -337,6 +369,34 @@
   function openAllDecisionsModal() {
     if (!allItems || allItems.length === 0) return;
     showAllItemsModal = true;
+  }
+
+  async function handlePostDecisionRefresh() {
+    await Promise.all([reloadReviewStatsOnly(), loadAllItems()]);
+
+    if (reevaluatingItemId !== null) {
+      reevaluatingItemId = null;
+    }
+
+    await loadNextUndecidedItem();
+  }
+
+  async function handleReevaluateItem(event) {
+    const item = event?.detail?.item;
+    if (!item) return;
+    if (isQueueMode && queueGuid) {
+      window.navigate(`/reviews/${queueGuid}?mode=reevaluate&item_id=${item.id}`);
+      return;
+    }
+    reevaluatingItemId = item.id;
+    currentItem = item;
+    showAllItemsModal = false;
+    await refreshCurrentItemMetadata();
+  }
+
+  async function exitReevaluateMode() {
+    reevaluatingItemId = null;
+    await loadNextUndecidedItem();
   }
 
   async function handleNewSource(sourceLabel, sourceHomepage, metadata = null) {
@@ -506,7 +566,7 @@
           <button
             type="button"
             class="back-home"
-            on:click={() => window.navigate(review?.review_project_guid ? `/review-projects/${review.review_project_guid}` : '/')}
+            on:click={() => window.navigate(getReviewBackTarget())}
             title="Return to home"
             aria-label="Return to home"
           >
@@ -518,6 +578,15 @@
             on:click={() => (showContextPanel = !showContextPanel)}
           >
             {showContextPanel ? 'Hide details' : 'Show details'}
+          </button>
+          <button
+            type="button"
+            class="sidebar-toggle"
+            on:click={openAllDecisionsModal}
+            disabled={loading || !allItems || allItems.length === 0}
+            title={allItems && allItems.length > 0 ? 'Open all decisions' : 'No decisions loaded yet'}
+          >
+            All decisions
           </button>
           <div class="footer-title">
             Review: {review.collection_name || `Collection #${review.collection_id}`}
@@ -548,7 +617,7 @@
     >
       <div class="context-inner">
         <div class="context-section">
-          <ReviewHeader {review} onShowAllDecisions={openAllDecisionsModal} />
+          <ReviewHeader {review} />
         </div>
 
         <div class="context-section">
@@ -572,13 +641,6 @@
                 disabled={loading || showNewSourceModal}
               >
                 + Propose new source
-              </button>
-              <button
-                type="button"
-                class="queue-modal-link-secondary"
-                on:click={() => openAllDecisionsModal()}
-              >
-                See all decisions
               </button>
             </div>
           {/if}
@@ -653,7 +715,7 @@
           </div>
         {/if}
 
-        {#if review.status === 'completed'}
+        {#if review.status === 'completed' && reevaluatingItemId === null}
           {#if !isQueueMode}
             <div class="completed-message">
               <p>
@@ -718,7 +780,15 @@
           {/if}
         {/if}
 
-        {#if review.status !== 'completed'}
+        {#if review.status !== 'completed' || reevaluatingItemId !== null}
+          {#if reevaluatingItemId !== null}
+            <div class="reevaluate-banner">
+              <span>Reevaluating a previously reviewed source.</span>
+              <button type="button" class="reevaluate-return" on:click={exitReevaluateMode} disabled={loading}>
+                Return to undecided queue
+              </button>
+            </div>
+          {/if}
           <SourceViewer 
             item={currentItem}
             onKeep={handleKeep}
@@ -825,6 +895,7 @@
       show={showAllItemsModal}
       items={allItems}
       on:close={() => (showAllItemsModal = false)}
+      on:reevaluate={handleReevaluateItem}
     />
   {/if}
 </div>
@@ -1306,6 +1377,43 @@
     padding: 15px;
     border-radius: 4px;
     border: 1px solid #fcc;
+  }
+
+  .reevaluate-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #cfe2ff;
+    background: #f5faff;
+    color: #2c3e50;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .reevaluate-return {
+    border: 1px solid #d0d7de;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #34495e;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    white-space: nowrap;
+  }
+
+  .reevaluate-return:hover:enabled {
+    background: #eef2f7;
+    border-color: #c0c7d0;
+  }
+
+  .reevaluate-return:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   .guidelines-section {

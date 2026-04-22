@@ -1,6 +1,5 @@
 <script>
   export let review;
-  export let onShowAllDecisions;
 </script>
 
 <div class="header">
@@ -44,15 +43,6 @@
         <span class="stat-value stat-undecided">{review.stats.undecided}</span>
       </div>
     </div>
-    {#if onShowAllDecisions}
-      <button
-        type="button"
-        class="all-decisions-button"
-        on:click={onShowAllDecisions}
-      >
-        Show all decisions
-      </button>
-    {/if}
   {/if}
 </div>
 
@@ -135,26 +125,6 @@
     gap: 12px;
     flex-wrap: wrap;
     justify-content: space-between;
-  }
-
-  .all-decisions-button {
-    margin-top: 8px;
-    align-self: stretch;
-    width: 100%;
-    padding: 8px 12px;
-    border-radius: 999px;
-    border: 1px solid #3498db;
-    background-color: #3498db;
-    color: white;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
-  }
-
-  .all-decisions-button:hover {
-    background-color: #2980b9;
-    border-color: #2980b9;
   }
 
   .stat {

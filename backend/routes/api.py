@@ -196,6 +196,9 @@ def start_review_project():
         _queue_count = data.get('queue_count')  # optional; ignored in step 1
         guidelines_template = data.get('guidelines_template', 'default')
         edit_metadata = bool(data.get('edit_metadata', False))
+        show_virtual_queue_links_on_reviewer_landing = bool(
+            data.get('show_virtual_queue_links_on_reviewer_landing', True)
+        )
         project_name = data.get('name') or None
 
         if not isinstance(collection_ids, list) or len(collection_ids) == 0:
@@ -250,6 +253,7 @@ def start_review_project():
             notes=data.get('notes'),
             guidelines_template=guidelines_template,
             edit_metadata=edit_metadata,
+            show_virtual_queue_links_on_reviewer_landing=show_virtual_queue_links_on_reviewer_landing,
         )
         db.session.add(project)
         db.session.flush()
@@ -396,6 +400,30 @@ def set_review_project_edit_metadata(project_guid):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to update review project edit_metadata: {str(e)}'}), 500
+
+
+@api_bp.route('/review-projects/<string:project_guid>/reviewer-landing-virtual-queues', methods=['PATCH'])
+def set_review_project_reviewer_landing_virtual_queues(project_guid):
+    """
+    Toggle whether reviewer landing pages show project virtual queue links.
+    """
+    try:
+        data = request.get_json() or {}
+        if 'show_virtual_queue_links_on_reviewer_landing' not in data:
+            return jsonify({'error': 'show_virtual_queue_links_on_reviewer_landing is required'}), 400
+
+        show_links = bool(data.get('show_virtual_queue_links_on_reviewer_landing'))
+
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+        project.show_virtual_queue_links_on_reviewer_landing = show_links
+        db.session.commit()
+
+        return jsonify({'project': project.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': f'Failed to update reviewer landing virtual queue visibility: {str(e)}'
+        }), 500
 
 
 @api_bp.route('/review-projects/<string:project_guid>/name', methods=['PATCH'])
@@ -658,6 +686,13 @@ def get_review_projects():
 
 
 _SKIP_NOTE_MAX_LEN = 4000
+
+
+def _effective_queue_edit_metadata(queue_review):
+    """Queue-level metadata edit setting aliases to the parent project when present."""
+    if queue_review.review_project is not None:
+        return bool(queue_review.review_project.edit_metadata)
+    return bool(queue_review.edit_metadata)
 
 
 def _apply_review_item_decision_fields(item, decision_enum, data):
@@ -1150,6 +1185,71 @@ def get_removed_items_for_project(project_guid):
         return jsonify({'error': f'Failed to fetch removed items: {str(e)}'}), 500
 
 
+@api_bp.route('/review-projects/<string:project_guid>/kept-items', methods=['GET'])
+def get_kept_items_for_project(project_guid):
+    """
+    Virtual queue: aggregate all KEEP-decision items across all reviewer queues for a project.
+
+    Each returned item includes `queue_guid` and `queue_index`.
+    """
+    try:
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 100, type=int)
+        dedupe_source_id = request.args.get('dedupe_source_id', 'true').lower() in ['1', 'true', 'yes', 'y']
+
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 100
+        page_size = min(page_size, 5000)
+
+        queues = Review.query.filter_by(review_project_id=project.id).all()
+        queue_ids = [q.id for q in queues]
+        if not queue_ids:
+            return jsonify({'items': [], 'total': 0}), 200
+
+        queue_by_review_id = {q.id: q for q in queues}
+
+        kept_query = ReviewItem.query.filter(
+            ReviewItem.review_id.in_(queue_ids),
+            ReviewItem.decision == Decision.KEEP,
+        ).order_by(ReviewItem.id.asc())
+
+        kept_items = kept_query.all()
+
+        if dedupe_source_id:
+            seen_keys = set()
+            deduped = []
+            for item in kept_items:
+                key = item.source_id if item.source_id is not None else f'item:{item.id}'
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                deduped.append(item)
+            kept_items = deduped
+
+        total = len(kept_items)
+
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_items = kept_items[start:end]
+
+        resp_items = []
+        for item in page_items:
+            item_dict = item.to_dict()
+            q = queue_by_review_id.get(item.review_id)
+            item_dict['queue_guid'] = q.queue_guid if q else None
+            item_dict['queue_index'] = q.queue_index if q else None
+            resp_items.append(item_dict)
+
+        return jsonify({'items': resp_items, 'total': total}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch kept items: {str(e)}'}), 500
+
+
 @api_bp.route('/review-queues/<string:queue_guid>/items/<int:item_id>/source-metadata', methods=['PATCH'])
 def update_queue_item_source_metadata(queue_guid, item_id):
     """
@@ -1160,7 +1260,7 @@ def update_queue_item_source_metadata(queue_guid, item_id):
     try:
         queue_review = Review.query.filter_by(queue_guid=queue_guid).first_or_404()
 
-        if not queue_review.edit_metadata:
+        if not _effective_queue_edit_metadata(queue_review):
             return jsonify({'error': 'Metadata editing is disabled for this queue'}), 403
 
         item = ReviewItem.query.filter_by(id=item_id, review_id=queue_review.id).first_or_404()
@@ -1252,6 +1352,7 @@ def get_review_queue(queue_guid):
         queue_data['status'] = derived_status
         queue_data['undecided_count'] = undecided_count
         queue_data['review_project_guid'] = queue_review.review_project.guid if queue_review.review_project else None
+        queue_data['edit_metadata'] = _effective_queue_edit_metadata(queue_review)
 
         return jsonify({'review': queue_data}), 200
 
@@ -1290,6 +1391,16 @@ def get_review_queue_items(queue_guid):
 
     except Exception as e:
         return jsonify({'error': f'Failed to fetch queue items: {str(e)}'}), 500
+
+
+@api_bp.route('/review-queues/<string:queue_guid>/items/<int:item_id>', methods=['GET'])
+def get_review_queue_item(queue_guid, item_id):
+    """
+    Get a single queue item by queue_guid + item_id.
+    """
+    queue_review = Review.query.filter_by(queue_guid=queue_guid).first_or_404()
+    item = ReviewItem.query.filter_by(id=item_id, review_id=queue_review.id).first_or_404()
+    return jsonify({'item': item.to_dict()}), 200
 
 
 @api_bp.route('/review-queues/<string:queue_guid>/items/<int:item_id>/decide', methods=['POST'])
@@ -1363,7 +1474,9 @@ def create_queue_review_item(queue_guid):
         pub_state = data.get('pub_state')
 
         # If metadata editing is enabled for this queue, require these fields.
-        if queue_review.edit_metadata:
+        effective_edit_metadata = _effective_queue_edit_metadata(queue_review)
+
+        if effective_edit_metadata:
             if not primary_language or not pub_country or not pub_state:
                 return jsonify({
                     'error': 'When metadata editing is enabled, primary_language, pub_country, and pub_state are required.'
@@ -1405,7 +1518,7 @@ def create_queue_review_item(queue_guid):
                     return jsonify({'error': 'This source already exists in the ReviewProject'}), 409
 
         metadata = None
-        if queue_review.edit_metadata and (primary_language or pub_country or pub_state):
+        if effective_edit_metadata and (primary_language or pub_country or pub_state):
             metadata = {
                 'primary_language': primary_language,
                 'pub_country': pub_country,

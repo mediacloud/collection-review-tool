@@ -78,6 +78,15 @@
   $: storiesPerWeekLabel =
     storiesPerWeekVal !== null ? formatNumber(storiesPerWeekVal) : null;
 
+  $: directoryStatLedeParts = [
+    storiesTotalLabel ? `~${storiesTotalLabel} total stories` : null,
+    lastStoryLabel ? `last seen ${lastStoryLabel}` : null,
+    storiesPerWeekLabel ? `${storiesPerWeekLabel} new/week` : null,
+  ].filter(Boolean);
+  $: directoryStatLede = directoryStatLedeParts.length
+    ? directoryStatLedeParts.join(" | ")
+    : "Source directory stats unavailable";
+
   $: showDirectoryStats =
     item && !item.is_new_source && item.source_id;
 
@@ -168,26 +177,9 @@
 
       {#if showDirectoryStats}
         <div class="directory-stats" aria-label="Source Directory">
-          <div class="directory-stats-grid">
-            <div class="directory-stat">
-              <div class="directory-stat-label">Total stories (approx.)</div>
-              <div class="directory-stat-value" title="Approximate indexed story count from the Source Directory">
-                {storiesTotalLabel ?? "—"}
-              </div>
-            </div>
-            <div class="directory-stat">
-              <div class="directory-stat-label">Last story seen</div>
-              <div class="directory-stat-value" title="Most recent story date observed for this source">
-                {lastStoryLabel ?? "—"}
-              </div>
-            </div>
-            <div class="directory-stat">
-              <div class="directory-stat-label">New stories / week</div>
-              <div class="directory-stat-value" title="Recent weekly story volume from the Source Directory">
-                {storiesPerWeekLabel ?? "—"}
-              </div>
-            </div>
-          </div>
+          <p class="directory-stats-lede" title="Source Directory context: total stories, last seen date, and recent weekly volume">
+            {directoryStatLede}
+          </p>
         </div>
       {/if}
 
@@ -371,42 +363,15 @@
   }
 
   .directory-stats {
-    margin-top: 14px;
+    margin-top: 10px;
     margin-bottom: 4px;
   }
 
-  .directory-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  @media (max-width: 720px) {
-    .directory-stats-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .directory-stat {
-    background: #f8f9fa;
-    border-radius: 10px;
-    padding: 12px 14px;
-    border: 1px solid #e0e4e8;
-  }
-
-  .directory-stat-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+  .directory-stats-lede {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
     color: #7f8c8d;
-    font-weight: 600;
-    margin-bottom: 6px;
-  }
-
-  .directory-stat-value {
-    font-size: 16px;
-    font-weight: 600;
-    color: #2c3e50;
     font-variant-numeric: tabular-nums;
   }
 

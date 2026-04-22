@@ -1,9 +1,11 @@
 /** API client for backend communication */
 import axios from 'axios';
 
-// Default to same-origin /api, so the built app served by Flask does not need CORS.
-// VITE_API_BASE_URL can override this in special cases, but should normally be unset.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+// In production (served by Flask), use same-origin /api.
+// In local dev, fall back to the Flask dev server directly unless overridden.
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? 'http://localhost:5000/api' : '/api');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -90,6 +92,18 @@ export async function getReviewProject(projectGuid) {
 export async function setReviewProjectEditMetadata(projectGuid, editMetadata) {
   const response = await api.patch(`/review-projects/${projectGuid}/edit-metadata`, {
     edit_metadata: !!editMetadata,
+  });
+  return response.data;
+}
+
+/**
+ * Toggle whether reviewer queue landing pages show project virtual queue links.
+ * @param {string} projectGuid
+ * @param {boolean} showLinks
+ */
+export async function setReviewProjectReviewerLandingVirtualQueues(projectGuid, showLinks) {
+  const response = await api.patch(`/review-projects/${projectGuid}/reviewer-landing-virtual-queues`, {
+    show_virtual_queue_links_on_reviewer_landing: !!showLinks,
   });
   return response.data;
 }
@@ -219,6 +233,25 @@ export async function getRemovedItemsByProjectGuid(projectGuid, options = {}) {
 }
 
 /**
+ * Get aggregated kept items for a ReviewProject (virtual queue).
+ * Each item includes `queue_guid` so follow-up actions can be routed back.
+ * @param {string} projectGuid
+ * @param {Object} options - { page, page_size, dedupe_source_id }
+ */
+export async function getKeptItemsByProjectGuid(projectGuid, options = {}) {
+  const params = new URLSearchParams();
+  if (options.page) params.append('page', options.page);
+  if (options.page_size) params.append('page_size', options.page_size);
+  if (options.dedupe_source_id !== undefined) params.append('dedupe_source_id', options.dedupe_source_id);
+
+  const query = params.toString();
+  const url = `/review-projects/${projectGuid}/kept-items${query ? `?${query}` : ''}`;
+
+  const response = await api.get(url);
+  return response.data;
+}
+
+/**
  * Update per-item source metadata for a queue item.
  * @param {string} queueGuid
  * @param {number} itemId
@@ -249,6 +282,11 @@ export async function getReviewItemsByQueueGuid(queueGuid, options = {}) {
 
   const response = await api.get(`/review-queues/${queueGuid}/items?${params.toString()}`);
   return response.data;
+}
+
+export async function getReviewItemByQueueGuid(queueGuid, itemId) {
+  const response = await api.get(`/review-queues/${queueGuid}/items/${itemId}`);
+  return response.data.item;
 }
 
 export async function decideQueueItem(

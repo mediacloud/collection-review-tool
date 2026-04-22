@@ -25,6 +25,10 @@
   }
 
   function goBack() {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
     if (!projectGuid) return;
     window.navigate(`/review-projects/${projectGuid}`);
   }

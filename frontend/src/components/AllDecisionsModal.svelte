@@ -13,12 +13,18 @@
   export let showProjectCsvColumn = false;
   /** Shown under the description when the item list is truncated (e.g. large projects). */
   export let truncationNote = '';
+  /** Whether to show the reevaluate action column/buttons. */
+  export let showReevaluateAction = true;
   export let loading = false;
 
   const dispatch = createEventDispatcher();
 
   function handleClose() {
     dispatch('close');
+  }
+
+  function handleReevaluate(item) {
+    dispatch('reevaluate', { item });
   }
 </script>
 
@@ -69,6 +75,9 @@
                 {/if}
                 <th>Type</th>
                 <th>Removal Reason</th>
+                {#if showReevaluateAction}
+                  <th>Action</th>
+                {/if}
               </tr>
             </thead>
             <tbody>
@@ -140,6 +149,21 @@
                       <span class="no-reason">—</span>
                     {/if}
                   </td>
+                  {#if showReevaluateAction}
+                    <td>
+                      {#if item.decision !== 'undecided'}
+                        <button
+                          type="button"
+                          class="reevaluate-button"
+                          on:click={() => handleReevaluate(item)}
+                        >
+                          Reevaluate
+                        </button>
+                      {:else}
+                        <span class="no-reason">—</span>
+                      {/if}
+                    </td>
+                  {/if}
                 </tr>
               {/each}
             </tbody>
@@ -360,6 +384,24 @@
     text-align: center;
     color: #7f8c8d;
     font-size: 14px;
+  }
+
+  .reevaluate-button {
+    border: 1px solid #d0d7de;
+    border-radius: 999px;
+    background: #f6f8fa;
+    color: #34495e;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+
+  .reevaluate-button:hover {
+    background: #eef2f7;
+    border-color: #c0c7d0;
   }
 </style>
 

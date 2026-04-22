@@ -278,6 +278,42 @@ def run_all_migrations():
                 else:
                     conn.execute(text("ALTER TABLE review_items ADD COLUMN skip_note TEXT"))
                     print("Successfully added 'skip_note' column to review_items table.")
+
+            # Migration 11: reviewer landing virtual queue links toggle on review_projects
+            print("\nRunning migration: reviewer landing virtual queue links toggle")
+            if is_sqlite:
+                result = conn.execute(text("PRAGMA table_info(review_projects)"))
+                columns = [row[1] for row in result]
+                if 'show_virtual_queue_links_on_reviewer_landing' in columns:
+                    print("Column 'show_virtual_queue_links_on_reviewer_landing' already exists. No migration needed.")
+                else:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE review_projects "
+                            "ADD COLUMN show_virtual_queue_links_on_reviewer_landing BOOLEAN DEFAULT 1"
+                        )
+                    )
+                    print(
+                        "Successfully added 'show_virtual_queue_links_on_reviewer_landing' column "
+                        "to review_projects table."
+                    )
+            else:
+                result = conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name='review_projects' AND column_name='show_virtual_queue_links_on_reviewer_landing'
+                """))
+                if result.fetchone():
+                    print("Column 'show_virtual_queue_links_on_reviewer_landing' already exists. No migration needed.")
+                else:
+                    conn.execute(text(
+                        "ALTER TABLE review_projects "
+                        "ADD COLUMN show_virtual_queue_links_on_reviewer_landing BOOLEAN DEFAULT TRUE"
+                    ))
+                    print(
+                        "Successfully added 'show_virtual_queue_links_on_reviewer_landing' column "
+                        "to review_projects table."
+                    )
             
             trans.commit()
             print("\n✓ All migrations completed successfully.")

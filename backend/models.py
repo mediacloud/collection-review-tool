@@ -46,6 +46,7 @@ class ReviewProject(db.Model, TimestampMixin):
     # If set, this is the final (rendered) Markdown text used for guidelines across all reviewer queues.
     guidelines_custom_markdown = db.Column(db.Text, nullable=True)
     edit_metadata = db.Column(db.Boolean, default=False, nullable=False)
+    show_virtual_queue_links_on_reviewer_landing = db.Column(db.Boolean, default=True, nullable=False)
 
     queues = db.relationship(
         'Review',
@@ -74,6 +75,7 @@ class ReviewProject(db.Model, TimestampMixin):
             'guidelines_template': self.guidelines_template or 'default',
             'has_custom_guidelines': bool(self.guidelines_custom_markdown),
             'edit_metadata': bool(self.edit_metadata),
+            'show_virtual_queue_links_on_reviewer_landing': bool(self.show_virtual_queue_links_on_reviewer_landing),
         }
         if include_queues:
             data['queues'] = [q.to_dict(include_stats=True) for q in (self.queues or [])]
