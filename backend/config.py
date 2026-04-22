@@ -17,6 +17,15 @@ class Config:
     
     # MediaCloud API configuration
     MEDIACLOUD_API_KEY = os.getenv('MEDIACLOUD_API_KEY')
+    # Optional alternate base URL for write operations (eg staging/dev MediaCloud API).
+    MEDIACLOUD_UPLOAD_BASE_URL = os.getenv('MEDIACLOUD_UPLOAD_BASE_URL')
+    MEDIACLOUD_PUBLISH_ENABLED = os.getenv('MEDIACLOUD_PUBLISH_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'y')
+    # When false, publish ignores apply_metadata_updates_to_existing_sources (opt-in per request).
+    MEDIACLOUD_PUBLISH_METADATA_UPDATES_ENABLED = os.getenv(
+        'MEDIACLOUD_PUBLISH_METADATA_UPDATES_ENABLED', 'true'
+    ).lower() in ('1', 'true', 'yes', 'y')
+    # Optional base URL for building MediaCloud web links in the UI/API responses.
+    MEDIACLOUD_SEARCH_BASE_URL = os.getenv('MEDIACLOUD_SEARCH_BASE_URL', 'https://search.mediacloud.org')
     
     # Flask configuration
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')

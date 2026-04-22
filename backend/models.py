@@ -47,6 +47,9 @@ class ReviewProject(db.Model, TimestampMixin):
     guidelines_custom_markdown = db.Column(db.Text, nullable=True)
     edit_metadata = db.Column(db.Boolean, default=False, nullable=False)
     show_virtual_queue_links_on_reviewer_landing = db.Column(db.Boolean, default=True, nullable=False)
+    # MediaCloud collection id used as publish target.
+    # First publish creates it; later publishes sync into the same collection.
+    publish_to_collection = db.Column(db.Integer, nullable=True)
 
     queues = db.relationship(
         'Review',
@@ -76,6 +79,7 @@ class ReviewProject(db.Model, TimestampMixin):
             'has_custom_guidelines': bool(self.guidelines_custom_markdown),
             'edit_metadata': bool(self.edit_metadata),
             'show_virtual_queue_links_on_reviewer_landing': bool(self.show_virtual_queue_links_on_reviewer_landing),
+            'publish_to_collection': self.publish_to_collection,
         }
         if include_queues:
             data['queues'] = [q.to_dict(include_stats=True) for q in (self.queues or [])]

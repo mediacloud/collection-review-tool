@@ -204,23 +204,20 @@ class MediaCloudService:
             Exception: If API call fails
         """
         try:
-            # Use source_list with source_id filter or get source directly
-            # The API might support filtering by source_id
-            response = self.directory.source_list(
-                source_id=source_id,
-                limit=1
-            )
-            
-            sources = response.get('results', [])
-            if sources and len(sources) > 0:
-                source = sources[0]
-                source_dict = dict(source)  # Copy all fields
-                source_id_val = source.get('media_id') or source.get('id') or source.get('source_id')
+            if hasattr(self.directory, 'source'):
+                source = self.directory.source(int(source_id))
+                if not source:
+                    raise ValueError(f"Source {source_id} not found")
+                source_dict = dict(source)
+                source_id_val = source_dict.get('media_id') or source_dict.get('id') or source_dict.get('source_id')
                 source_dict['id'] = source_id_val
                 return source_dict
-            else:
-                raise ValueError(f"Source {source_id} not found")
-                
+
+            raise ValueError(
+                f"Source {source_id}: DirectoryApi.source() is not available in this mediacloud client version"
+            )
+        except ValueError:
+            raise
         except Exception as e:
             error_msg = f"Failed to fetch source {source_id}: {str(e)}"
             raise Exception(error_msg) from e

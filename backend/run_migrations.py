@@ -314,6 +314,32 @@ def run_all_migrations():
                         "Successfully added 'show_virtual_queue_links_on_reviewer_landing' column "
                         "to review_projects table."
                     )
+
+            # Migration 12: publish_to_collection on review_projects
+            print("\nRunning migration: publish_to_collection on review_projects")
+            if is_sqlite:
+                result = conn.execute(text("PRAGMA table_info(review_projects)"))
+                columns = [row[1] for row in result]
+                if 'publish_to_collection' in columns:
+                    print("Column 'publish_to_collection' already exists. No migration needed.")
+                else:
+                    conn.execute(
+                        text("ALTER TABLE review_projects ADD COLUMN publish_to_collection INTEGER")
+                    )
+                    print("Successfully added 'publish_to_collection' column to review_projects table.")
+            else:
+                result = conn.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name='review_projects' AND column_name='publish_to_collection'
+                """))
+                if result.fetchone():
+                    print("Column 'publish_to_collection' already exists. No migration needed.")
+                else:
+                    conn.execute(
+                        text("ALTER TABLE review_projects ADD COLUMN publish_to_collection INTEGER")
+                    )
+                    print("Successfully added 'publish_to_collection' column to review_projects table.")
             
             trans.commit()
             print("\n✓ All migrations completed successfully.")

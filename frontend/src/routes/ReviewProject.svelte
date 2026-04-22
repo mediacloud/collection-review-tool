@@ -11,12 +11,18 @@
     setReviewProjectReviewerLandingVirtualQueues,
     getReviewProjectGuidelines,
     setReviewProjectGuidelines,
+    publishReviewProject,
+    previewPublishReviewProject,
+    MEDIACLOUD_SEARCH_BASE_URL,
   } from '../lib/api.js';
 
   let projectGuid = null;
   let project = null;
   let queues = [];
   let derivedStatus = null;
+  let publishEnabled = true;
+  let publishMetadataUpdatesEnabled = true;
+  let publishTargetApiBaseUrl = 'https://search.mediacloud.org/api/';
   function queueProgressPercent(q) {
     if (!q || !q.stats || !q.stats.total) return 0;
     const total = q.stats.total;
@@ -78,7 +84,23 @@
   }
 
   function mediacloudCollectionUrl(collectionId) {
-    return `https://search.mediacloud.org/collections/${collectionId}`;
+    return `${MEDIACLOUD_SEARCH_BASE_URL}/collections/${collectionId}`;
+  }
+
+  function mediacloudSourceUrl(sourceId) {
+    return `${MEDIACLOUD_SEARCH_BASE_URL}/sources/${sourceId}`;
+  }
+
+  async function handlePublishProject(payload) {
+    if (!projectGuid) return null;
+    const result = await publishReviewProject(projectGuid, payload);
+    await loadProject();
+    return result;
+  }
+
+  async function handlePreviewPublishProject(payload) {
+    if (!projectGuid) return null;
+    return await previewPublishReviewProject(projectGuid, payload);
   }
 
   /** Seed collections for display: parallel `collection_ids` / `collection_names` from the API. */
@@ -135,6 +157,9 @@
     try {
       const data = await getReviewProject(projectGuid);
       project = data.project;
+      publishEnabled = data.publish_enabled !== false;
+      publishMetadataUpdatesEnabled = data.publish_metadata_updates_enabled !== false;
+      publishTargetApiBaseUrl = data.publish_target_api_base_url || 'https://search.mediacloud.org/api/';
       projectNameDraft = project?.name || '';
       showProjectNameEditor = false;
       projectNameError = null;
@@ -839,6 +864,15 @@
         canDownloadMainCsv={canDownloadMainCsv}
         canDownloadAuditCsv={canDownloadAuditCsv}
         onDecisionsPreview={openProjectDecisionsPreview}
+        onPublish={handlePublishProject}
+        onPreviewPublish={handlePreviewPublishProject}
+        projectName={project?.name || ''}
+        existingPublishCollection={project?.publish_to_collection || null}
+        {mediacloudCollectionUrl}
+        {mediacloudSourceUrl}
+        publishEnabled={publishEnabled}
+        publishMetadataUpdatesEnabled={publishMetadataUpdatesEnabled}
+        publishTargetApiBaseUrl={publishTargetApiBaseUrl}
       />
 
       <div class="queues">

@@ -7,6 +7,9 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.DEV ? 'http://localhost:5000/api' : '/api');
 
+export const MEDIACLOUD_SEARCH_BASE_URL =
+  (import.meta.env.VITE_MEDIACLOUD_SEARCH_BASE_URL || 'https://search.mediacloud.org').replace(/\/+$/, '');
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -139,6 +142,27 @@ export async function setReviewProjectGuidelines(projectGuid, markdown) {
   const response = await api.patch(`/review-projects/${projectGuid}/guidelines`, {
     guidelines: String(markdown ?? ''),
   });
+  return response.data;
+}
+
+/**
+ * Publish a ReviewProject directly to MediaCloud.
+ * First publish creates a collection; subsequent publishes sync into existing target.
+ * @param {string} projectGuid
+ * @param {{api_token: string, collection_name?: string}} payload
+ */
+export async function publishReviewProject(projectGuid, payload) {
+  const response = await api.post(`/review-projects/${projectGuid}/publish`, payload);
+  return response.data;
+}
+
+/**
+ * Build publish preview and run token preflight.
+ * @param {string} projectGuid
+ * @param {{api_token: string, collection_name?: string}} payload
+ */
+export async function previewPublishReviewProject(projectGuid, payload) {
+  const response = await api.post(`/review-projects/${projectGuid}/publish/preview`, payload);
   return response.data;
 }
 

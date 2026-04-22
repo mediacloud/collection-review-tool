@@ -3,7 +3,9 @@ from flask import Blueprint, request, jsonify, Response
 from database import db
 from models import Review, ReviewItem, ReviewStatus, Decision, ReviewProject, ReviewProjectSource
 from services.mediacloud import get_mediacloud_service
+from services.mediacloud_publish import MediaCloudPublishService
 from services.guidelines import get_guidelines_service
+from config import get_config
 from datetime import datetime
 from urllib.parse import urlparse
 import csv
@@ -13,6 +15,165 @@ import json
 import uuid
 
 api_bp = Blueprint('api', __name__)
+
+
+def _default_publish_collection_name(project):
+    project_name = (project.name or '').strip() or f'ReviewProject-{project.guid[:8]}'
+    return f'{project_name} | Collection-Review'
+
+
+def _build_publish_plan(project, apply_metadata_updates=False, metadata_updates_feature_enabled=True):
+    queues = Review.query.filter_by(review_project_id=project.id).all()
+    queue_ids = [q.id for q in queues]
+    if not queue_ids:
+        return {
+            'rows': [],
+            'summary': {
+                'processed_items': 0,
+                'ensure_association': 0,
+                'create_source_and_associate': 0,
+                'remove_association': 0,
+                'metadata_updates_planned': 0,
+                'metadata_updates_skipped_unchanged': 0,
+                'metadata_remote_lookup_skipped': 0,
+                'noop_items': 0,
+            },
+        }
+
+    items = (
+        ReviewItem.query.filter(ReviewItem.review_id.in_(queue_ids))
+        .order_by(ReviewItem.id.asc())
+        .all()
+    )
+    # Use service reduction logic without requiring a real token.
+    reduced = {}
+    for item in sorted(items, key=lambda x: x.id):
+        if item.source_id is not None:
+            key = f"source:{int(item.source_id)}"
+        else:
+            homepage = (item.source_homepage or '').strip().lower().rstrip('/')
+            key = f"new:{homepage}"
+        if key.endswith('new:'):
+            key = f"item:{item.id}"
+        reduced[key] = item
+
+    reduced_items = list(reduced.values())
+    rows = []
+    summary = {
+        'processed_items': len(reduced_items),
+        'ensure_association': 0,
+        'create_source_and_associate': 0,
+        'remove_association': 0,
+        'metadata_updates_planned': 0,
+        'metadata_updates_skipped_unchanged': 0,
+        'metadata_remote_lookup_skipped': 0,
+        'noop_items': 0,
+    }
+
+    do_meta = bool(apply_metadata_updates) and bool(metadata_updates_feature_enabled)
+
+    for item in reduced_items:
+        decision = item.decision.value if item.decision else 'undecided'
+        operation = 'noop'
+        reason = None
+        metadata_update = None
+        metadata_on_create = None
+
+        if decision in ('undecided', 'skip'):
+            operation = 'noop'
+            reason = f'{decision} is non-publishing state'
+        elif decision in ('keep', 'add'):
+            if item.source_id is None:
+                operation = 'create_source_and_associate'
+                summary['create_source_and_associate'] += 1
+                if do_meta:
+                    mc_create = MediaCloudPublishService.metadata_patch_from_item(item)
+                    if mc_create:
+                        metadata_on_create = dict(mc_create)
+            else:
+                operation = 'ensure_association'
+                summary['ensure_association'] += 1
+                if do_meta:
+                    patch = MediaCloudPublishService.metadata_patch_from_item(item)
+                    if patch:
+                        metadata_update = patch
+        elif decision == 'remove':
+            if item.source_id is None:
+                operation = 'noop'
+                reason = 'new source without source_id cannot be removed from collection'
+            else:
+                operation = 'remove_association'
+                summary['remove_association'] += 1
+
+        if operation == 'noop':
+            summary['noop_items'] += 1
+
+        rows.append({
+            'item_id': item.id,
+            'source_id': item.source_id,
+            'source_label': item.source_label,
+            'source_homepage': item.source_homepage,
+            'is_new_source': bool(item.is_new_source),
+            'decision': decision,
+            'operation': operation,
+            'reason': reason,
+            'queue_review_id': item.review_id,
+            'metadata_update': metadata_update,
+            'metadata_on_create': metadata_on_create,
+        })
+
+    actionable_rows = [r for r in rows if r['operation'] != 'noop']
+    return {'rows': actionable_rows, 'summary': summary}
+
+
+def _refine_publish_plan_metadata_with_remote(publish_service, plan):
+    """
+    For preview rows with planned metadata updates, compare against live DirectoryApi
+    source records and shrink metadata_update to fields that actually differ.
+    """
+    rows = plan.get('rows') or []
+    summary = plan.setdefault('summary', {})
+    summary['metadata_updates_skipped_unchanged'] = 0
+    summary['metadata_remote_lookup_skipped'] = 0
+
+    for row in rows:
+        desired = row.get('metadata_update')
+        if not desired or not row.get('source_id'):
+            continue
+
+        record = publish_service.fetch_source_directory_record(int(row['source_id']))
+        row['metadata_desired'] = dict(desired)
+
+        if record is None:
+            if publish_service.directory is None:
+                row['metadata_remote_status'] = 'lookup_skipped_no_directory_api'
+            else:
+                row['metadata_remote_status'] = 'lookup_failed_or_source_missing'
+            summary['metadata_remote_lookup_skipped'] += 1
+            continue
+
+        remote_fields = MediaCloudPublishService.metadata_fields_from_directory_record(record)
+        row['metadata_current'] = {k: remote_fields.get(k, '') for k in MediaCloudPublishService.METADATA_KEYS}
+        pruned = MediaCloudPublishService.prune_metadata_patch_to_changes(desired, remote_fields)
+        if not pruned:
+            row['metadata_update'] = None
+            row['metadata_remote_status'] = 'unchanged'
+            summary['metadata_updates_skipped_unchanged'] += 1
+        else:
+            row['metadata_update'] = pruned
+            row['metadata_remote_status'] = 'changed'
+
+    # Only count rows where we successfully compared to MediaCloud and the patch is non-empty.
+    # Rows with failed lookup may still have metadata_update (full desired patch) for publish,
+    # but those are counted only under metadata_remote_lookup_skipped — not here — so the
+    # summary does not double-count the same sources.
+    summary['metadata_updates_planned'] = sum(
+        1
+        for r in rows
+        if r.get('metadata_remote_status') == 'changed'
+        and r.get('metadata_update')
+        and len(r['metadata_update']) > 0
+    )
 
 
 def _country_collections_path():
@@ -364,10 +525,246 @@ def get_review_project(project_guid):
             'stats': stats,
             'collections_count': collections_count,
             'sources_total': sources_total,
+            'publish_enabled': bool(get_config().MEDIACLOUD_PUBLISH_ENABLED),
+            'publish_metadata_updates_enabled': bool(get_config().MEDIACLOUD_PUBLISH_METADATA_UPDATES_ENABLED),
+            'publish_target_api_base_url': (
+                (get_config().MEDIACLOUD_UPLOAD_BASE_URL or '').strip() or 'https://search.mediacloud.org/api/'
+            ),
         }), 200
 
     except Exception as e:
         return jsonify({'error': f'Failed to fetch review project: {str(e)}'}), 500
+
+
+@api_bp.route('/review-projects/<string:project_guid>/publish/preview', methods=['POST'])
+def preview_publish_review_project(project_guid):
+    """
+    Build a publish preview plan and run token preflight.
+    """
+    try:
+        if not bool(get_config().MEDIACLOUD_PUBLISH_ENABLED):
+            return jsonify({'error': 'Direct MediaCloud publish is disabled by server configuration'}), 403
+
+        data = request.get_json() or {}
+        api_token = (data.get('api_token') or '').strip()
+        if not api_token:
+            return jsonify({'error': 'api_token is required'}), 400
+
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+        publish_service = MediaCloudPublishService(api_token=api_token)
+
+        preflight = publish_service.preflight()
+        cfg = get_config()
+        apply_metadata = bool(data.get('apply_metadata_updates_to_existing_sources'))
+        plan = _build_publish_plan(
+            project,
+            apply_metadata_updates=apply_metadata,
+            metadata_updates_feature_enabled=bool(cfg.MEDIACLOUD_PUBLISH_METADATA_UPDATES_ENABLED),
+        )
+        if (
+            apply_metadata
+            and bool(cfg.MEDIACLOUD_PUBLISH_METADATA_UPDATES_ENABLED)
+            and (plan.get('rows') or [])
+        ):
+            _refine_publish_plan_metadata_with_remote(publish_service, plan)
+        default_collection_name = _default_publish_collection_name(project)
+
+        return jsonify({
+            'preflight': preflight,
+            'target': {
+                'is_existing_collection': project.publish_to_collection is not None,
+                'collection_id': project.publish_to_collection,
+                'collection_name': (
+                    (data.get('collection_name') or '').strip() or default_collection_name
+                ),
+            },
+            'preview': plan,
+            'apply_metadata_updates_to_existing_sources': apply_metadata,
+            'metadata_updates_feature_enabled': bool(cfg.MEDIACLOUD_PUBLISH_METADATA_UPDATES_ENABLED),
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to preview publish: {str(e)}'}), 500
+
+
+@api_bp.route('/review-projects/<string:project_guid>/publish', methods=['POST'])
+def publish_review_project(project_guid):
+    """
+    Publish ReviewProject decisions directly into MediaCloud.
+
+    - First publish creates a new collection and stores its id on the project.
+    - Later publishes sync into the same collection.
+    - KEEP/ADD ensure source is associated with collection.
+    - REMOVE removes source association from collection (does not delete source globally).
+    - SKIP/UNDECIDED are no-op.
+    """
+    try:
+        if not bool(get_config().MEDIACLOUD_PUBLISH_ENABLED):
+            return jsonify({'error': 'Direct MediaCloud publish is disabled by server configuration'}), 403
+
+        data = request.get_json() or {}
+        api_token = (data.get('api_token') or '').strip()
+        if not api_token:
+            return jsonify({'error': 'api_token is required'}), 400
+
+        project = ReviewProject.query.filter_by(guid=project_guid).first_or_404()
+        publish_service = MediaCloudPublishService(api_token=api_token)
+        cfg = get_config()
+        apply_metadata = (
+            bool(data.get('apply_metadata_updates_to_existing_sources'))
+            and bool(cfg.MEDIACLOUD_PUBLISH_METADATA_UPDATES_ENABLED)
+        )
+
+        created_collection = False
+        collection_name = (data.get('collection_name') or '').strip() or _default_publish_collection_name(project)
+
+        if project.publish_to_collection is None:
+            collection_id, _created_payload = publish_service.create_collection(collection_name)
+            project.publish_to_collection = int(collection_id)
+            created_collection = True
+        else:
+            collection_id = int(project.publish_to_collection)
+
+        queues = Review.query.filter_by(review_project_id=project.id).all()
+        queue_ids = [q.id for q in queues]
+        if not queue_ids:
+            db.session.commit()
+            return jsonify({
+                'created_collection': created_collection,
+                'collection_id': collection_id,
+                'collection_name': collection_name,
+                'summary': {
+                    'processed_items': 0,
+                    'ensured_associations': 0,
+                    'removed_associations': 0,
+                    'created_sources': 0,
+                    'metadata_updates_attempted': 0,
+                    'metadata_updates_succeeded': 0,
+                    'metadata_updates_failed': 0,
+                    'noop_items': 0,
+                    'errors': [],
+                    'warnings': [],
+                }
+            }), 200
+
+        items = (
+            ReviewItem.query.filter(ReviewItem.review_id.in_(queue_ids))
+            .order_by(ReviewItem.id.asc())
+            .all()
+        )
+        reduced_items = publish_service.reduce_items_for_publish(items)
+
+        seen_associations = set()
+        seen_removals = set()
+        ensured_associations = 0
+        removed_associations = 0
+        created_sources = 0
+        metadata_updates_attempted = 0
+        metadata_updates_succeeded = 0
+        metadata_updates_failed = 0
+        noop_items = 0
+        errors = []
+        warnings = []
+
+        for item in reduced_items:
+            decision = item.decision
+            if decision in (Decision.UNDECIDED, Decision.SKIP):
+                noop_items += 1
+                continue
+
+            try:
+                original_source_id = item.source_id
+                source_id = item.source_id
+                if source_id is None and decision in (Decision.KEEP, Decision.ADD):
+                    source_id, _created = publish_service.create_source(item)
+                    created_sources += 1
+
+                if source_id is None:
+                    warnings.append(f'Item {item.id} has no source id and was skipped.')
+                    noop_items += 1
+                    continue
+
+                source_id = int(source_id)
+
+                if decision in (Decision.KEEP, Decision.ADD):
+                    if apply_metadata and original_source_id is not None:
+                        patch, _remote, dir_record = publish_service.metadata_patch_needed_for_source(item)
+                        if patch:
+                            metadata_updates_attempted += 1
+                            try:
+                                publish_service.update_source_metadata(
+                                    source_id, item, patch, directory_record=dir_record
+                                )
+                                metadata_updates_succeeded += 1
+                            except Exception as meta_err:
+                                metadata_updates_failed += 1
+                                message = MediaCloudPublishService.describe_client_exception(meta_err)
+                                lower = message.lower()
+                                if (
+                                    'already' in lower
+                                    or 'exists' in lower
+                                    or 'not found' in lower
+                                    or 'does not exist' in lower
+                                ):
+                                    warnings.append(f'Item {item.id} metadata update: {message}')
+                                else:
+                                    errors.append(f'Item {item.id} metadata update: {message}')
+                    key = (source_id, collection_id)
+                    if key not in seen_associations:
+                        publish_service.ensure_source_in_collection(source_id, collection_id)
+                        seen_associations.add(key)
+                        ensured_associations += 1
+                elif decision == Decision.REMOVE:
+                    key = (source_id, collection_id)
+                    if key not in seen_removals:
+                        publish_service.remove_source_from_collection(source_id, collection_id)
+                        seen_removals.add(key)
+                        removed_associations += 1
+                else:
+                    noop_items += 1
+
+            except Exception as item_error:
+                message = MediaCloudPublishService.describe_client_exception(item_error)
+                lower = message.lower()
+                # Keep republish behavior resilient: duplicates/missing links are no-op warnings.
+                if (
+                    'already' in lower
+                    or 'exists' in lower
+                    or 'not found' in lower
+                    or 'does not exist' in lower
+                ):
+                    warnings.append(f'Item {item.id}: {message}')
+                else:
+                    errors.append(f'Item {item.id}: {message}')
+
+        if not created_collection:
+            try:
+                publish_service.append_update_note(collection_id)
+            except Exception as note_error:
+                warnings.append(
+                    f'Collection note update failed: {MediaCloudPublishService.describe_client_exception(note_error)}'
+                )
+
+        db.session.commit()
+        return jsonify({
+            'created_collection': created_collection,
+            'collection_id': collection_id,
+            'collection_name': collection_name,
+            'summary': {
+                'processed_items': len(reduced_items),
+                'ensured_associations': ensured_associations,
+                'removed_associations': removed_associations,
+                'created_sources': created_sources,
+                'metadata_updates_attempted': metadata_updates_attempted,
+                'metadata_updates_succeeded': metadata_updates_succeeded,
+                'metadata_updates_failed': metadata_updates_failed,
+                'noop_items': noop_items,
+                'errors': errors,
+                'warnings': warnings,
+            }
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to publish review project: {str(e)}'}), 500
 
 
 @api_bp.route('/review-projects/<string:project_guid>/edit-metadata', methods=['PATCH'])
