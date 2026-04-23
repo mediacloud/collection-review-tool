@@ -88,7 +88,9 @@ npm run dev
 
 The frontend will run on `http://localhost:5173` and proxy API requests to the backend.
 
-3. Open your browser and navigate to `http://localhost:5173`
+3. Open your browser:
+   - Manager interface (create/open review projects): `http://localhost:5173/manage`
+   - Root landing page (static): `http://localhost:5173/`
 
 ### Production Build (Local)
 

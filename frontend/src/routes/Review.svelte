@@ -385,7 +385,12 @@
     const item = event?.detail?.item;
     if (!item) return;
     if (isQueueMode && queueGuid) {
-      window.navigate(`/reviews/${queueGuid}?mode=reevaluate&item_id=${item.id}`);
+      // In queue mode, reevaluate in-place so it works reliably even when already on /reviews/:queueGuid.
+      reevaluatingItemId = item.id;
+      currentItem = item;
+      showAllItemsModal = false;
+      window.history.replaceState({}, '', `/reviews/${queueGuid}?mode=reevaluate&item_id=${item.id}`);
+      await refreshCurrentItemMetadata();
       return;
     }
     reevaluatingItemId = item.id;
@@ -395,6 +400,9 @@
   }
 
   async function exitReevaluateMode() {
+    if (isQueueMode && queueGuid) {
+      window.history.replaceState({}, '', `/reviews/${queueGuid}`);
+    }
     reevaluatingItemId = null;
     await loadNextUndecidedItem();
   }
