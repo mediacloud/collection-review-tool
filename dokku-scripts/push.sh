@@ -203,13 +203,5 @@ set -e
 
 git push $PUSH_FLAGS "$DOKKU_GIT_REMOTE" "$BRANCH:main"
 
-if dokku run "$APP" /bin/sh -lc 'test -f /app/postdeploy.sh'; then
-    if ! dokku run "$APP" /bin/sh -lc 'cd /app && ./postdeploy.sh'; then
-        echo "Warning: postdeploy.sh failed; deployment completed but tracking may be missing." 1>&2
-    fi
-else
-    echo "Warning: /app/postdeploy.sh not found in container; skipping deployment tracking." 1>&2
-fi
-
 echo "Deployment to $APP complete."
 

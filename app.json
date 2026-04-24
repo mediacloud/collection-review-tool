@@ -2,7 +2,8 @@
   "name": "undp-collections-review",
   "scripts": {
     "dokku": {
-      "predeploy": "cd frontend && npm ci --include=dev && npx vite build"
+      "predeploy": "cd frontend && npm ci --include=dev && npx vite build",
+      "postdeploy": "cd /app && ./postdeploy.sh"
     }
   }
 }
