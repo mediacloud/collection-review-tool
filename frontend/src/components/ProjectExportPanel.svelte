@@ -265,7 +265,7 @@
 
         <li class="export-option">
           <div class="export-option-main">
-            <h3 class="export-option-title">Publish to MediaCloud <span class="experimental-tag">[Experimental]</span></h3>
+            <h3 class="export-option-title">Publish to MediaCloud <span class="experimental-tag">[For authorized users]</span></h3>
             <p class="export-option-desc">
               {#if publishEnabled}
                 Sync reviewer decisions directly to {publishTargetLabel}. First publish creates
