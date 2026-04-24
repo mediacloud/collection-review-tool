@@ -15,16 +15,18 @@ if [ -z "${AIRTABLE_NAME:-}" ]; then
     AIRTABLE_NAME=collection-review
 fi
 
+VERSION="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+
 echo "postdeploy: attempting Airtable deployment update for ${AIRTABLE_NAME} (${AIRTABLE_ENV})"
 
-if python -m mc_manage.airtable_deployment_update; then
+if MEAG_BASE_ID="$AIRTABLE_BASE_ID" \
+    python -m mc-manage.airtable-deployment-update \
+        --codebase "collection-review" \
+        --env "$AIRTABLE_ENV" \
+        --hardware "${AIRTABLE_HARDWARE:-unknown}" \
+        --name "$AIRTABLE_NAME" \
+        --version "$VERSION"; then
     exit 0
-fi
-
-if command -v mc-manage >/dev/null 2>&1; then
-    if mc-manage airtable-deployment-update; then
-        exit 0
-    fi
 fi
 
 echo "postdeploy: unable to run mc-manage deployment update command; skipping."
