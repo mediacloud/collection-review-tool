@@ -4,6 +4,81 @@
 # Patterned after mediacloud/web-search dokku-scripts/push.sh
 
 SCRIPT_DIR=$(dirname "$0")
+ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
+
+load_env_file() {
+    _env_file=$1
+    if [ -f "$_env_file" ]; then
+        echo "Loading environment from $_env_file"
+        # Export sourced variables so they are available to child processes.
+        set -a
+        # shellcheck disable=SC1090
+        . "$_env_file"
+        set +a
+        return 0
+    fi
+    return 1
+}
+
+load_management_config() {
+    MGMT_REPO_URL=${MANAGEMENT_CONFIG_REPO_URL:-https://github.com/mediacloud/management-config.git}
+    MGMT_DIR=${MANAGEMENT_CONFIG_DIR:-"$HOME/.cache/management-config"}
+
+    if [ ! -d "$MGMT_DIR/.git" ]; then
+        echo "Cloning management-config to $MGMT_DIR"
+        if ! git clone "$MGMT_REPO_URL" "$MGMT_DIR" >/dev/null 2>&1; then
+            echo "Warning: unable to clone $MGMT_REPO_URL; continuing without centralized secrets." 1>&2
+            return 1
+        fi
+    else
+        echo "Refreshing management-config in $MGMT_DIR"
+        if ! (cd "$MGMT_DIR" && git pull --ff-only >/dev/null 2>&1); then
+            echo "Warning: unable to refresh $MGMT_DIR; continuing with existing checkout." 1>&2
+        fi
+    fi
+
+    for CANDIDATE in \
+        "$MGMT_DIR/env.sh" \
+        "$MGMT_DIR/.env" \
+        "$MGMT_DIR/management-config/env.sh" \
+        "$MGMT_DIR/management-config/.env"
+    do
+        if load_env_file "$CANDIDATE"; then
+            return 0
+        fi
+    done
+
+    echo "Warning: no env file found in management-config checkout." 1>&2
+    return 1
+}
+
+set_dokku_config_var() {
+    _key=$1
+    eval "_value=\${$_key-}"
+    if [ -n "$_value" ]; then
+        dokku config:set --no-restart "$APP" "$_key=$_value" >/dev/null
+    fi
+}
+
+derive_airtable_hardware() {
+    if [ -n "${AIRTABLE_HARDWARE:-}" ]; then
+        return
+    fi
+
+    DOKKU_HOST=$(printf "%s" "$FQDN" | awk -F@ '{print $NF}')
+    DOKKU_HOST=$(printf "%s" "$DOKKU_HOST" | awk -F: '{print $1}')
+
+    if [ -z "$DOKKU_HOST" ] || [ "$DOKKU_HOST" = "localhost" ]; then
+        HOST_RAW=$(hostname -f 2>/dev/null || hostname 2>/dev/null || true)
+    else
+        HOST_RAW=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "dokku@$DOKKU_HOST" "hostname -f || hostname" 2>/dev/null || true)
+    fi
+
+    if [ -n "$HOST_RAW" ]; then
+        AIRTABLE_HARDWARE=$(printf "%s" "$HOST_RAW" | awk -F. '{print $1}')
+        export AIRTABLE_HARDWARE
+    fi
+}
 
 usage() {
     cat 1>&2 <<-EOF
@@ -61,6 +136,22 @@ export INSTANCE
 
 check_not_root
 
+# Load local .env and optional centralized secrets before configuring Dokku.
+load_env_file "$ROOT_DIR/.env" || true
+load_management_config || true
+
+if [ -z "${AIRTABLE_ENV:-}" ]; then
+    AIRTABLE_ENV=prod
+    export AIRTABLE_ENV
+fi
+
+if [ -z "${AIRTABLE_NAME:-}" ]; then
+    AIRTABLE_NAME=collection-review
+    export AIRTABLE_NAME
+fi
+
+derive_airtable_hardware
+
 # Ensure dokku app exists
 if ! dokku apps:exists "$APP" >/dev/null 2>&1; then
     echo "$0: dokku app $APP does not exist." 1>&2
@@ -86,11 +177,38 @@ fi
 # Set deploy branch inside Dokku to main (idempotent)
 dokku git:set "$APP" deploy-branch main >/dev/null 2>&1 || true
 
+# Sync local/deploy environment variables to Dokku (when defined).
+if [ -f "$ROOT_DIR/.env" ]; then
+    awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/{print $1}' "$ROOT_DIR/.env" | while read -r ENV_KEY; do
+        [ -n "$ENV_KEY" ] || continue
+        set_dokku_config_var "$ENV_KEY"
+    done
+fi
+
+# Always include Airtable deployment vars, even if not listed in .env.
+set_dokku_config_var AIRTABLE_API_KEY
+set_dokku_config_var AIRTABLE_BASE_ID
+set_dokku_config_var AIRTABLE_ENV
+set_dokku_config_var AIRTABLE_HARDWARE
+set_dokku_config_var AIRTABLE_NAME
+
+if [ -z "${AIRTABLE_API_KEY:-}" ] || [ -z "${AIRTABLE_BASE_ID:-}" ]; then
+    echo "Warning: AIRTABLE_API_KEY or AIRTABLE_BASE_ID missing; deploy tracking will be skipped." 1>&2
+fi
+
 echo "Deploying branch $BRANCH to dokku app $APP (instance=$INSTANCE) on $FQDN"
 
 set -e
 
 git push $PUSH_FLAGS "$DOKKU_GIT_REMOTE" "$BRANCH:main"
+
+if dokku run "$APP" /bin/sh -lc 'test -f /app/postdeploy.sh'; then
+    if ! dokku run "$APP" /bin/sh -lc 'cd /app && ./postdeploy.sh'; then
+        echo "Warning: postdeploy.sh failed; deployment completed but tracking may be missing." 1>&2
+    fi
+else
+    echo "Warning: /app/postdeploy.sh not found in container; skipping deployment tracking." 1>&2
+fi
 
 echo "Deployment to $APP complete."
 
