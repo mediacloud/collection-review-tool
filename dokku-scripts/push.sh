@@ -21,7 +21,8 @@ load_env_file() {
 }
 
 load_management_config() {
-    MGMT_REPO_URL=${MANAGEMENT_CONFIG_REPO_URL:-https://github.com/mediacloud/management-config.git}
+    # Default to SSH so deploy uses the current user's GitHub credentials/agent.
+    MGMT_REPO_URL=${MANAGEMENT_CONFIG_REPO_URL:-git@github.com:mediacloud/management-config.git}
     MGMT_DIR=${MANAGEMENT_CONFIG_DIR:-"$HOME/.cache/management-config"}
 
     if [ ! -d "$MGMT_DIR/.git" ]; then
