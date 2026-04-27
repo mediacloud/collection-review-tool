@@ -1,4 +1,7 @@
 <script>
+  import iso3166 from "iso-3166-2";
+  import * as rawIso3166 from "iso-3166";
+
   export let item;
   export let onKeep;
   export let onRemove;
@@ -10,6 +13,16 @@
   export let onEditPubState;
   export let loading = false;
   export let showSkip = true;
+  export let showBackButton = false;
+  export let onBack = null;
+  export let backButtonTitle = "Back to recently reviewed source";
+  export let showForwardButton = false;
+  export let onForward = null;
+  export let forwardButtonTitle = "Forward toward current queue item";
+  export let reviewedDecisionLabel = "";
+  export let reviewedModeMessage = "";
+  export let showReturnToQueueButton = false;
+  export let onReturnToQueue = null;
 
   let faviconUrl = null;
   let metadata = {};
@@ -65,6 +78,38 @@
     return Number.isFinite(n) ? n : null;
   }
 
+  function formatPubState(pubState, pubCountry) {
+    if (!pubState) return "—";
+
+    const normalizedState = String(pubState).trim().toUpperCase();
+    const subdivision = iso3166.subdivision(normalizedState);
+    if (!subdivision) return normalizedState;
+
+    if (pubCountry) {
+      const normalizedCountry = String(pubCountry).trim().toUpperCase();
+      const alpha2Country =
+        normalizedCountry.length === 3
+          ? rawIso3166.iso31661Alpha3ToAlpha2[normalizedCountry] || normalizedCountry
+          : normalizedCountry;
+      if (subdivision.countryCode && subdivision.countryCode !== alpha2Country) {
+        return normalizedState;
+      }
+    }
+
+    return `${normalizedState} – ${subdivision.name}`;
+  }
+
+  function formatPubCountry(pubCountry) {
+    if (!pubCountry) return "—";
+    const normalizedCountry = String(pubCountry).trim().toUpperCase();
+    const alpha2Country =
+      normalizedCountry.length === 3
+        ? rawIso3166.iso31661Alpha3ToAlpha2[normalizedCountry] || normalizedCountry
+        : normalizedCountry;
+    const countryName = iso3166.data[alpha2Country]?.name;
+    return countryName ? `${normalizedCountry} – ${countryName}` : normalizedCountry;
+  }
+
   $: metadata = item && item.source_metadata ? item.source_metadata : {};
 
   $: storiesTotalApprox = pickNumericMeta(metadata, "stories_total", "storiesTotal");
@@ -75,17 +120,14 @@
   $: lastStoryLabel = formatLastStory(lastStoryRaw);
 
   $: storiesPerWeekVal = pickNumericMeta(metadata, "stories_per_week", "storiesPerWeek");
-  $: storiesPerWeekLabel =
-    storiesPerWeekVal !== null ? formatNumber(storiesPerWeekVal) : null;
-
-  $: directoryStatLedeParts = [
-    storiesTotalLabel ? `~${storiesTotalLabel} total stories` : null,
-    lastStoryLabel ? `last seen ${lastStoryLabel}` : null,
-    storiesPerWeekLabel ? `${storiesPerWeekLabel} new/week` : null,
-  ].filter(Boolean);
-  $: directoryStatLede = directoryStatLedeParts.length
-    ? directoryStatLedeParts.join(" | ")
+  $: isActivelyIndexing = storiesPerWeekVal !== null && storiesPerWeekVal > 0;
+  $: directoryStatLede = storiesTotalLabel
+    ? `~${storiesTotalLabel} stories in Media Cloud, ${
+        isActivelyIndexing ? "actively indexing" : "not actively indexing"
+      }`
     : "Source directory stats unavailable";
+  $: pubStateLabel = formatPubState(metadata.pub_state, metadata.pub_country);
+  $: pubCountryLabel = formatPubCountry(metadata.pub_country);
 
   $: showDirectoryStats =
     item && !item.is_new_source && item.source_id;
@@ -126,10 +168,63 @@
   }
 
   $: canKeep = !loading && (!editMetadata || (correctLanguage && correctPubCountry && correctPubState));
+  $: reviewedDecisionClass =
+    reviewedDecisionLabel === "keep"
+      ? "decision-keep"
+      : reviewedDecisionLabel === "remove"
+      ? "decision-remove"
+      : reviewedDecisionLabel === "add"
+      ? "decision-add"
+      : reviewedDecisionLabel === "skip"
+      ? "decision-skip"
+      : "";
 </script>
 
 {#if item}
   <div class="source-viewer">
+    {#if showBackButton}
+      <button
+        type="button"
+        class="review-back-button"
+        on:click={onBack}
+        title={backButtonTitle}
+        aria-label={backButtonTitle}
+      >
+        ←
+      </button>
+    {/if}
+    {#if showForwardButton}
+      <button
+        type="button"
+        class="review-forward-button"
+        on:click={onForward}
+        title={forwardButtonTitle}
+        aria-label={forwardButtonTitle}
+      >
+        →
+      </button>
+    {/if}
+    {#if reviewedModeMessage || reviewedDecisionLabel || showReturnToQueueButton}
+      <div class="reviewed-mode-center">
+        {#if reviewedModeMessage}
+          <div class="reviewed-mode-chip reviewed-mode-message">{reviewedModeMessage}</div>
+        {/if}
+        {#if reviewedDecisionLabel}
+          <div class={`reviewed-mode-chip reviewed-decision-pill ${reviewedDecisionClass}`}>
+            Previous decision: {reviewedDecisionLabel}
+          </div>
+        {/if}
+        {#if showReturnToQueueButton}
+          <button
+            type="button"
+            class="reviewed-mode-chip return-to-queue-button"
+            on:click={onReturnToQueue}
+          >
+            Back to undecided queue →
+          </button>
+        {/if}
+      </div>
+    {/if}
     <div class="source-info">
       <div class="source-header">
         <div class="source-title-row">
@@ -211,7 +306,7 @@
               <div class="meta-label">Pub country</div>
               <div class="meta-row">
                 <div class="meta-value">
-                  {metadata.pub_country || '—'}
+                  {pubCountryLabel}
                 </div>
                 {#if editMetadata}
                   <div class="meta-controls">
@@ -232,7 +327,7 @@
               <div class="meta-label">Pub state</div>
               <div class="meta-row">
                 <div class="meta-value">
-                  {metadata.pub_state || '—'}
+                  {pubStateLabel}
                 </div>
                 {#if editMetadata}
                   <div class="meta-controls">
@@ -297,12 +392,153 @@
 
 <style>
   .source-viewer {
+    position: relative;
     background: white;
     padding: 30px;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     margin: 0 auto 20px;
     width: 80%;
+  }
+
+  .review-back-button {
+    position: absolute;
+    top: auto;
+    bottom: -40px;
+    left: -16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    border: 1px solid #cfd8e3;
+    background: #ffffff;
+    color: #2c3e50;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
+  }
+
+  .review-back-button:hover {
+    background: #f6f8fa;
+    border-color: #b8c2cc;
+  }
+
+  .review-back-button:active {
+    transform: translateY(1px);
+  }
+
+  .review-forward-button {
+    position: absolute;
+    top: auto;
+    bottom: -40px;
+    right: -16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    border: 1px solid #cfd8e3;
+    background: #ffffff;
+    color: #2c3e50;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
+  }
+
+  .review-forward-button:hover {
+    background: #f6f8fa;
+    border-color: #b8c2cc;
+  }
+
+  .review-forward-button:active {
+    transform: translateY(1px);
+  }
+
+  .reviewed-mode-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 1.2;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .reviewed-decision-pill {
+    border: 1px solid #d0d7de;
+    background: #f6f8fa;
+    color: #34495e;
+    text-transform: capitalize;
+  }
+
+  .reviewed-decision-pill.decision-keep {
+    background-color: #d4edda;
+    border-color: #badbcc;
+    color: #155724;
+  }
+
+  .reviewed-decision-pill.decision-remove {
+    background-color: #f8d7da;
+    border-color: #f5c2c7;
+    color: #721c24;
+  }
+
+  .reviewed-decision-pill.decision-add {
+    background-color: #d1ecf1;
+    border-color: #bcdfe6;
+    color: #0c5460;
+  }
+
+  .reviewed-decision-pill.decision-skip {
+    background-color: #e2e3e5;
+    border-color: #d3d6d8;
+    color: #495057;
+  }
+
+  .reviewed-mode-center {
+    position: absolute;
+    left: 50%;
+    bottom: -48px;
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    max-width: calc(100% - 112px);
+  }
+
+  .reviewed-mode-message {
+    border: 1px solid #cfe2ff;
+    background: #f5faff;
+    color: #2c3e50;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .return-to-queue-button {
+    border: 1px solid #cfe2ff;
+    background: #f5faff;
+    color: #2c3e50;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+
+  .return-to-queue-button:hover {
+    background: #e9f4ff;
+    border-color: #b7d6ff;
   }
 
   .source-info {

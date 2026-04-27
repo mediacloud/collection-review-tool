@@ -81,6 +81,13 @@ derive_airtable_hardware() {
     fi
 }
 
+normalize_airtable_hardware() {
+    if [ -n "${AIRTABLE_HARDWARE:-}" ]; then
+        AIRTABLE_HARDWARE=$(printf "%s" "$AIRTABLE_HARDWARE" | tr '[:upper:]' '[:lower:]')
+        export AIRTABLE_HARDWARE
+    fi
+}
+
 usage() {
     cat 1>&2 <<-EOF
 $0: push current branch to dokku instance (depending on branch)
@@ -152,6 +159,7 @@ if [ -z "${AIRTABLE_NAME:-}" ]; then
 fi
 
 derive_airtable_hardware
+normalize_airtable_hardware
 
 # Ensure dokku app exists
 if ! dokku apps:exists "$APP" >/dev/null 2>&1; then

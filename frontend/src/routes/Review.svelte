@@ -54,6 +54,7 @@
   let editFieldReadonlyMessage = '';
   let newSourceModalError = null;
   let reevaluatingItemId = null;
+  let reviewHistoryIndex = -1;
 
   const LANGUAGE_OPTIONS = [
     { value: 'en', label: 'en – English' },
@@ -161,6 +162,8 @@
           const reevaluateItem = await getReviewItemByQueueGuid(queueGuid, reevaluateItemId);
           if (reevaluateItem) {
             reevaluatingItemId = reevaluateItem.id;
+            const historyIdx = reviewedHistoryItems.findIndex((x) => x.id === reevaluateItem.id);
+            reviewHistoryIndex = historyIdx >= 0 ? historyIdx : 0;
             currentItem = reevaluateItem;
             await refreshCurrentItemMetadata();
             return;
@@ -261,6 +264,20 @@
         return Math.round((decided / total) * 1000) / 10; // one decimal place
       })()
     : null;
+
+  $: reviewedHistoryItems = [...(allItems || [])]
+    .filter((item) => item && item.decision && item.decision !== 'undecided')
+    .sort((a, b) => {
+      const aTs = a?.decided_at ? new Date(a.decided_at).getTime() : 0;
+      const bTs = b?.decided_at ? new Date(b.decided_at).getTime() : 0;
+      if (bTs !== aTs) return bTs - aTs;
+      return (b?.id || 0) - (a?.id || 0);
+    });
+  $: canStepBackReviewed =
+    isQueueMode &&
+    reviewedHistoryItems.length > 0 &&
+    reviewHistoryIndex < reviewedHistoryItems.length - 1;
+  $: canStepForwardReviewed = isQueueMode && reevaluatingItemId !== null;
 
   async function handleKeep() {
     if (!currentItem || loading) return;
@@ -377,8 +394,53 @@
     if (reevaluatingItemId !== null) {
       reevaluatingItemId = null;
     }
+    reviewHistoryIndex = -1;
 
     await loadNextUndecidedItem();
+  }
+
+  async function handleStepBackReviewed() {
+    if (loading || !canStepBackReviewed) return;
+
+    const nextIndex = Math.min(reviewHistoryIndex + 1, reviewedHistoryItems.length - 1);
+    const target = reviewedHistoryItems[nextIndex];
+    if (!target) return;
+
+    reviewHistoryIndex = nextIndex;
+    reevaluatingItemId = target.id;
+    currentItem = target;
+
+    if (isQueueMode && queueGuid) {
+      window.history.replaceState({}, '', `/reviews/${queueGuid}?mode=reevaluate&item_id=${target.id}`);
+    }
+
+    await refreshCurrentItemMetadata();
+  }
+
+  async function handleStepForwardReviewed() {
+    if (loading || !canStepForwardReviewed) return;
+
+    if (reviewHistoryIndex <= 0) {
+      await exitReevaluateMode();
+      return;
+    }
+
+    const nextIndex = reviewHistoryIndex - 1;
+    const target = reviewedHistoryItems[nextIndex];
+    if (!target) {
+      await exitReevaluateMode();
+      return;
+    }
+
+    reviewHistoryIndex = nextIndex;
+    reevaluatingItemId = target.id;
+    currentItem = target;
+
+    if (isQueueMode && queueGuid) {
+      window.history.replaceState({}, '', `/reviews/${queueGuid}?mode=reevaluate&item_id=${target.id}`);
+    }
+
+    await refreshCurrentItemMetadata();
   }
 
   async function handleReevaluateItem(event) {
@@ -387,6 +449,8 @@
     if (isQueueMode && queueGuid) {
       // In queue mode, reevaluate in-place so it works reliably even when already on /reviews/:queueGuid.
       reevaluatingItemId = item.id;
+      const historyIdx = reviewedHistoryItems.findIndex((x) => x.id === item.id);
+      reviewHistoryIndex = historyIdx >= 0 ? historyIdx : 0;
       currentItem = item;
       showAllItemsModal = false;
       window.history.replaceState({}, '', `/reviews/${queueGuid}?mode=reevaluate&item_id=${item.id}`);
@@ -394,6 +458,8 @@
       return;
     }
     reevaluatingItemId = item.id;
+    const historyIdx = reviewedHistoryItems.findIndex((x) => x.id === item.id);
+    reviewHistoryIndex = historyIdx >= 0 ? historyIdx : 0;
     currentItem = item;
     showAllItemsModal = false;
     await refreshCurrentItemMetadata();
@@ -404,6 +470,7 @@
       window.history.replaceState({}, '', `/reviews/${queueGuid}`);
     }
     reevaluatingItemId = null;
+    reviewHistoryIndex = -1;
     await loadNextUndecidedItem();
   }
 
@@ -589,12 +656,12 @@
           </button>
           <button
             type="button"
-            class="sidebar-toggle"
+            class="sidebar-toggle review-decisions-button"
             on:click={openAllDecisionsModal}
             disabled={loading || !allItems || allItems.length === 0}
-            title={allItems && allItems.length > 0 ? 'Open all decisions' : 'No decisions loaded yet'}
+            title={allItems && allItems.length > 0 ? 'Open review decisions' : 'No decisions loaded yet'}
           >
-            All decisions
+            Review Decisions
           </button>
           <div class="footer-title">
             Review: {review.collection_name || `Collection #${review.collection_id}`}
@@ -734,13 +801,23 @@
           {:else}
             <div class="queue-exhausted-card">
               <div class="queue-exhausted-header">
-                ✓ Queue Exhausted
+                ✓ Queue complete.
               </div>
               <div class="queue-exhausted-subtitle">
-                Here are some next steps:
+                You can review or edit prior decisions, then notify your project coordinator.
               </div>
 
               <div class="queue-exhausted-actions-row">
+                <button
+                  type="button"
+                  class="queue-exhausted-link queue-exhausted-action-button"
+                  on:click={handleStepBackReviewed}
+                  disabled={!canStepBackReviewed}
+                  title={!canStepBackReviewed ? 'No reviewed sources available yet' : 'Flip back through reviewed sources'}
+                >
+                  ← Review recently decided sources
+                </button>
+
                 <button
                   type="button"
                   class="propose-next-button queue-exhausted-action-button"
@@ -782,26 +859,30 @@
                 on:click={openAllDecisionsModal}
                 disabled={loading || !allItems || allItems.length === 0}
               >
-                Show review choices
+                Review decisions
               </button>
             </div>
           {/if}
         {/if}
 
         {#if review.status !== 'completed' || reevaluatingItemId !== null}
-          {#if reevaluatingItemId !== null}
-            <div class="reevaluate-banner">
-              <span>Reevaluating a previously reviewed source.</span>
-              <button type="button" class="reevaluate-return" on:click={exitReevaluateMode} disabled={loading}>
-                Return to undecided queue
-              </button>
-            </div>
-          {/if}
           <SourceViewer 
             item={currentItem}
             onKeep={handleKeep}
             onRemove={handleRemove}
             onSkip={handleSkip}
+            showBackButton={canStepBackReviewed}
+            onBack={handleStepBackReviewed}
+            backButtonTitle="Back to recently reviewed story"
+            showForwardButton={canStepForwardReviewed}
+            onForward={handleStepForwardReviewed}
+            forwardButtonTitle="Forward toward current queue item"
+            reviewedDecisionLabel={reevaluatingItemId !== null && currentItem?.decision && currentItem.decision !== 'undecided'
+              ? currentItem.decision
+              : ''}
+            reviewedModeMessage={reevaluatingItemId !== null ? 'Reevaluating a previously reviewed source.' : ''}
+            showReturnToQueueButton={reevaluatingItemId !== null}
+            onReturnToQueue={exitReevaluateMode}
             editMetadata={review?.edit_metadata}
             onEditLanguage={() =>
               openEditMetadata(
@@ -1014,6 +1095,24 @@
     border-color: #e1e4e8;
   }
 
+  .review-decisions-button {
+    border-color: #3498db;
+    background-color: #3498db;
+    color: #ffffff;
+    font-weight: 700;
+    box-shadow: 0 1px 6px rgba(52, 152, 219, 0.35);
+  }
+
+  .review-decisions-button:hover:enabled {
+    background-color: #2980b9;
+    border-color: #2980b9;
+  }
+
+  .review-decisions-button:disabled {
+    opacity: 0.6;
+    box-shadow: none;
+  }
+
   .propose-button {
     padding: 8px 16px;
     border-radius: 999px;
@@ -1187,33 +1286,35 @@
   }
 
   .queue-exhausted-card {
-    background: white;
-    border: 1px solid #d0d7de;
-    border-radius: 12px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
-    padding: 16px 16px;
-    margin-top: 12px;
+    background: #f3fbf5;
+    border: 1px solid #b7e2c4;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 30px;
+    margin: 0 auto 20px;
+    width: 80%;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
 
   .queue-exhausted-header {
-    font-size: 16px;
-    font-weight: 900;
-    color: #27ae60;
+    font-size: 20px;
+    font-weight: 800;
+    color: #1f7a3d;
   }
 
   .queue-exhausted-subtitle {
-    font-size: 13px;
-    color: #7f8c8d;
-    line-height: 1.35;
-    font-weight: 700;
+    font-size: 14px;
+    color: #2f6f46;
+    line-height: 1.45;
+    font-weight: 600;
   }
 
   .queue-exhausted-actions-row {
     display: flex;
-    gap: 10px;
+    gap: 12px;
+    flex-wrap: wrap;
     align-items: stretch;
   }
 
@@ -1385,43 +1486,6 @@
     padding: 15px;
     border-radius: 4px;
     border: 1px solid #fcc;
-  }
-
-  .reevaluate-banner {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid #cfe2ff;
-    background: #f5faff;
-    color: #2c3e50;
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  .reevaluate-return {
-    border: 1px solid #d0d7de;
-    border-radius: 999px;
-    background: #ffffff;
-    color: #34495e;
-    font-size: 12px;
-    font-weight: 700;
-    padding: 6px 10px;
-    cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
-    white-space: nowrap;
-  }
-
-  .reevaluate-return:hover:enabled {
-    background: #eef2f7;
-    border-color: #c0c7d0;
-  }
-
-  .reevaluate-return:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
   }
 
   .guidelines-section {

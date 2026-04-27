@@ -16,6 +16,7 @@ if [ -z "${AIRTABLE_NAME:-}" ]; then
 fi
 
 VERSION="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+AIRTABLE_HARDWARE_NORMALIZED="$(printf "%s" "${AIRTABLE_HARDWARE:-unknown}" | tr '[:upper:]' '[:lower:]')"
 
 echo "postdeploy: attempting Airtable deployment update for ${AIRTABLE_NAME} (${AIRTABLE_ENV})"
 
@@ -23,7 +24,7 @@ if MEAG_BASE_ID="$AIRTABLE_BASE_ID" \
     python -m mc-manage.airtable-deployment-update \
         --codebase "collection-review" \
         --env "$AIRTABLE_ENV" \
-        --hardware "${AIRTABLE_HARDWARE:-unknown}" \
+        --hardware "$AIRTABLE_HARDWARE_NORMALIZED" \
         --name "$AIRTABLE_NAME" \
         --version "$VERSION"; then
     exit 0
