@@ -2,6 +2,7 @@
   import Nav from './Nav.svelte';
   import DecisionBar from './DecisionBar.svelte';
   import { MOCK } from './mockData.js';
+  import { sessionCounts } from './mockStore.js';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';
@@ -9,14 +10,22 @@
   const p = MOCK.project;
   const q = p.queues[0];
 
-  $: queueTotals = { reviewed: q.done, kept: q.kept, removed: q.removed, added: q.added, skipped: q.skipped, undecided: q.undecided };
-  $: queuePct = q.total > 0 ? Math.round((q.done / q.total) * 100) : 0;
+  // Merge base queue stats with live session decisions from the store.
+  $: queueTotals = {
+    reviewed:  $sessionCounts.totalDecided,
+    kept:      $sessionCounts.totalKept,
+    removed:   $sessionCounts.totalRemoved,
+    added:     $sessionCounts.totalAdded,
+    skipped:   $sessionCounts.totalSkipped,
+    undecided: $sessionCounts.totalUndecided,
+  };
+  $: queuePct = q.total > 0 ? Math.round(($sessionCounts.totalDecided / q.total) * 100) : 0;
 
-  const DECISIONS = [
-    { k: 'kept',    n: 'Kept',    v: q.kept,    color: '#E25C40' },
-    { k: 'removed', n: 'Removed', v: q.removed, color: '#1A1C1F' },
-    { k: 'added',   n: 'Added',   v: q.added,   color: '#F5A48A' },
-    { k: 'skipped', n: 'Skipped', v: q.skipped, color: '#9CA0A8' },
+  $: DECISIONS = [
+    { k: 'kept',    n: 'Kept',    v: $sessionCounts.totalKept,    color: '#E25C40' },
+    { k: 'removed', n: 'Removed', v: $sessionCounts.totalRemoved, color: '#1A1C1F' },
+    { k: 'added',   n: 'Added',   v: $sessionCounts.totalAdded,   color: '#F5A48A' },
+    { k: 'skipped', n: 'Skipped', v: $sessionCounts.totalSkipped, color: '#9CA0A8' },
   ];
 
   let highlight = null;
@@ -52,12 +61,12 @@
     <div class="card">
       <div class="card-header">
         <span class="card-title">Your queue</span>
-        <span class="card-header-right">{q.undecided} left to decide</span>
+        <span class="card-header-right">{$sessionCounts.totalUndecided} left to decide</span>
       </div>
 
       <div class="progress-section">
         <div class="progress-row">
-          <span class="progress-label">Progress · <b class="mono">{q.done}</b> of {q.total} sources decided</span>
+          <span class="progress-label">Progress · <b class="mono">{$sessionCounts.totalDecided}</b> of {q.total} sources decided</span>
           <span class="progress-pct">{queuePct}%</span>
         </div>
         <div class="bar-wrap">
@@ -94,11 +103,11 @@
       </div>
 
       <div class="card-footer">
-        <button class="btn btn-primary btn-lg" on:click={() => onNavigate('review')}>
+        <button class="btn btn-primary btn-lg" on:click={() => onNavigate('/demo/reviews/124')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           Open my queue
         </button>
-        <button class="btn btn-lg" on:click={() => onNavigate('review')}>
+        <button class="btn btn-lg" on:click={() => onNavigate('/demo/reviews/124')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5z"/><path d="m2 14 10 5 10-5M2 11l10 5 10-5"/></svg>
           Review all decisions
         </button>
