@@ -96,6 +96,8 @@
     if (e.key === 'k' || e.key === 'Enter') keep();
     if (e.key === 'r') remove();
     if (e.key === 's') skip();
+    if (e.key === 'ArrowLeft' && $reviewState.sourceIdx > 0) navigateToSource($reviewState.sourceIdx - 1);
+    if (e.key === 'ArrowRight' && $reviewState.sourceIdx < QUEUE_SOURCES.length - 1) navigateToSource($reviewState.sourceIdx + 1);
   }
 
   // ── Propose-new-source modal ──────────────────────────────────────────────
@@ -166,22 +168,14 @@
           Back to queue
         </button>
         <div class="action-divider"></div>
-        <button class="btn btn-sm"
-          disabled={$reviewState.sourceIdx === 0}
-          on:click={() => navigateToSource($reviewState.sourceIdx - 1)}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(180deg)"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-          Prev
-        </button>
-        <button class="btn btn-sm"
-          disabled={$reviewState.sourceIdx >= QUEUE_SOURCES.length - 1}
-          on:click={() => navigateToSource($reviewState.sourceIdx + 1)}>
-          Next
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-        </button>
 
         <div class="progress-pill">
           <span class="progress-current">{$reviewState.sourceIdx + 1}</span>
-          <span class="progress-sep">of {QUEUE_SOURCES.length}</span>
+          <span class="progress-sep">/ {QUEUE_SOURCES.length}</span>
+          <div class="progress-mini-track">
+            <div class="progress-mini-fill" style:width="{Math.round(($reviewState.sourceIdx + 1) / QUEUE_SOURCES.length * 100)}%"></div>
+          </div>
+          <span class="progress-pct-label">{Math.round(($reviewState.sourceIdx + 1) / QUEUE_SOURCES.length * 100)}%</span>
         </div>
 
         <div class="action-spacer"></div>
@@ -204,37 +198,52 @@
       <div class="card">
         <!-- Source header -->
         <div class="source-header">
-          <div class="chips-row">
-            {#if src.isNew}
-              <span class="chip chip-accent"><span class="chip-dot chip-dot-accent"></span>New source</span>
-            {:else}
-              <span class="chip chip-neutral"><span class="chip-dot chip-dot-mute"></span>Existing source</span>
-            {/if}
-            <span class="chip chip-neutral">{src.mediaType}</span>
-            <!-- Fix 3: show current decision badge when revisiting -->
-            {#if currentDecision}
-              {@const VCOLORS = { kept: '#E25C40', removed: '#1A1C1F', added: '#F5A48A', skipped: '#9CA0A8' }}
-              {@const VLABELS = { kept: 'Kept', removed: 'Removed', added: 'Added', skipped: 'Skipped' }}
-              <span class="chip chip-decided" style:background="{VCOLORS[currentDecision.verdict]}1a" style:color={VCOLORS[currentDecision.verdict]}>
-                <span class="chip-dot" style:background={VCOLORS[currentDecision.verdict]}></span>
-                {VLABELS[currentDecision.verdict]}
-              </span>
-            {/if}
+          <div class="source-header-row">
+            <div class="source-header-left">
+              <h1 class="source-title">{src.title}</h1>
+              {#if currentDecision}
+                {@const VCOLORS = { kept: '#E25C40', removed: '#1A1C1F', added: '#F5A48A', skipped: '#9CA0A8' }}
+                {@const VLABELS = { kept: 'Kept', removed: 'Removed', added: 'Added', skipped: 'Skipped' }}
+                <div class="chips-row">
+                  <span class="chip chip-decided" style:background="{VCOLORS[currentDecision.verdict]}1a" style:color={VCOLORS[currentDecision.verdict]}>
+                    <span class="chip-dot" style:background={VCOLORS[currentDecision.verdict]}></span>
+                    {VLABELS[currentDecision.verdict]}
+                  </span>
+                </div>
+              {/if}
+              <div class="source-links">
+                <span class="source-link-static">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+                  {src.homepage}
+                </span>
+                <a class="source-link" href="https://{src.homepage}" target="_blank" rel="noreferrer">
+                  Review in Media Cloud
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
+                </a>
+              </div>
+              {#if currentDecision?.reason}
+                <div class="prev-reason">Previous note: "{currentDecision.reason}"</div>
+              {/if}
+            </div>
+            <div class="source-nav">
+              <button
+                class="nav-circle"
+                disabled={$reviewState.sourceIdx === 0}
+                on:click={() => navigateToSource($reviewState.sourceIdx - 1)}
+                aria-label="Previous source"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <button
+                class="nav-circle"
+                disabled={$reviewState.sourceIdx >= QUEUE_SOURCES.length - 1}
+                on:click={() => navigateToSource($reviewState.sourceIdx + 1)}
+                aria-label="Next source"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+              </button>
+            </div>
           </div>
-          <h1 class="source-title">{src.title}</h1>
-          <div class="source-links">
-            <span class="source-link-static">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
-              {src.homepage}
-            </span>
-            <a class="source-link" href="https://{src.homepage}" target="_blank" rel="noreferrer">
-              Review in Media Cloud
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
-            </a>
-          </div>
-          {#if currentDecision?.reason}
-            <div class="prev-reason">Previous note: "{currentDecision.reason}"</div>
-          {/if}
         </div>
 
         <!-- Metadata section -->
@@ -291,7 +300,6 @@
             class:dock-active-remove={currentDecision?.verdict === 'removed'}
             on:click={remove}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
             Remove
             <kbd class="kbd">R</kbd>
           </button>
@@ -300,8 +308,7 @@
             class:dock-active-skip={currentDecision?.verdict === 'skipped'}
             on:click={skip}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 4 8 8-8 8M14 4v16"/></svg>
-            Skip for now
+            Skip
             <kbd class="kbd">S</kbd>
           </button>
           <button
@@ -309,7 +316,6 @@
             class:dock-active-keep={currentDecision?.verdict === 'kept'}
             on:click={keep}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5l9-11"/></svg>
             Keep
             <kbd class="kbd kbd-light">K · ↵</kbd>
           </button>
@@ -492,7 +498,7 @@
   .done-actions { display: flex; gap: 10px; justify-content: center; }
 
   /* ── Action bar ── */
-  .action-bar-wrap { padding: 34px 40px 0; }
+  .action-bar-wrap { padding: 34px 120px 0; }
   .action-bar {
     padding: 10px 14px; display: flex; align-items: center; gap: 10px;
     background: rgba(255,255,255,.84); backdrop-filter: blur(8px);
@@ -502,17 +508,20 @@
   .action-divider { height: 18px; width: 1px; background: var(--v2-line); flex-shrink: 0; }
   .action-spacer  { flex: 1; }
   .progress-pill {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; align-items: center; gap: 8px;
     padding: 5px 12px; background: var(--v2-surface);
     border: 1px solid var(--v2-line); border-radius: 8px;
-    font-size: 13.5px; margin-left: 6px;
+    font-size: 13.5px;
   }
   .progress-current { font-weight: 600; font-family: var(--v2-mono); }
-  .progress-sep     { color: var(--v2-mute); }
+  .progress-sep { color: var(--v2-mute); font-family: var(--v2-mono); }
+  .progress-mini-track { width: 52px; height: 4px; background: var(--v2-line); border-radius: 999px; overflow: hidden; flex-shrink: 0; }
+  .progress-mini-fill  { height: 100%; background: var(--v2-accent); border-radius: 999px; transition: width .2s; }
+  .progress-pct-label  { font-size: 12.5px; color: var(--v2-mute); font-family: var(--v2-mono); min-width: 28px; }
 
   /* ── Main grid ── */
   .main-grid {
-    padding: 34px 40px 0; display: grid;
+    padding: 34px 120px 0; display: grid;
     grid-template-columns: 1fr 340px; gap: 28px; align-items: flex-start;
   }
 
@@ -537,19 +546,28 @@
 
   /* ── Source header ── */
   .source-header { padding: 24px 28px 8px; }
-  .chips-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .source-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .source-header-left { flex: 1; min-width: 0; }
+  .source-nav { display: flex; gap: 8px; flex-shrink: 0; padding-top: 4px; }
+  .nav-circle {
+    width: 46px; height: 46px; border-radius: 50%;
+    border: 1px solid var(--v2-line); background: var(--v2-card);
+    color: var(--v2-body); cursor: pointer;
+    display: grid; place-items: center;
+    transition: border-color .15s, color .15s, background .15s;
+    flex-shrink: 0;
+  }
+  .nav-circle:hover:not(:disabled) { border-color: var(--v2-accent); color: var(--v2-accent); background: var(--v2-surface); }
+  .nav-circle:disabled { opacity: .35; cursor: not-allowed; }
+  .chips-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
   .chip {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 3px 9px; border-radius: 999px; font-size: 13.5px; font-weight: 500;
   }
-  .chip-accent   { background: var(--v2-accent-soft); color: var(--v2-accent-ink); }
-  .chip-neutral  { background: var(--v2-neutral);     color: var(--v2-body);       }
   .chip-decided  { font-weight: 600; }
   .chip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-  .chip-dot-accent { background: var(--v2-accent); }
-  .chip-dot-mute   { background: var(--v2-mute); }
 
-  .source-title { font-size: 44px; font-weight: 600; letter-spacing: -1.2px; line-height: 1.02; margin: 0; color: var(--v2-ink); }
+  .source-title { font-size: 50px; font-weight: 600; letter-spacing: -1.2px; line-height: 1.02; margin: 0; color: var(--v2-ink); }
   .source-links { display: flex; align-items: center; gap: 22px; margin-top: 12px; font-size: 13.5px; flex-wrap: wrap; }
   .source-link-static { display: inline-flex; align-items: center; gap: 6px; color: var(--v2-body); }
   .source-link { display: inline-flex; align-items: center; gap: 6px; color: var(--v2-accent); text-decoration: none; font-weight: 500; }
@@ -558,13 +576,13 @@
 
   /* ── Metadata ── */
   .meta-heading-row { border-top: 1px solid var(--v2-line-soft); margin-top: 18px; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
-  .meta-heading { font-size: 16px; font-weight: 600; }
+  .meta-heading { font-size: 18px; font-weight: 600; }
   .meta-hint    { font-size: 13.5px; color: var(--v2-mute); }
   .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--v2-line-soft); }
   .meta-cell { padding: 18px 22px; }
   .meta-cell.has-right-border { border-right: 1px solid var(--v2-line-soft); }
-  .meta-label { font-size: 14px; color: var(--v2-mute); letter-spacing: .5px; text-transform: uppercase; font-weight: 500; }
-  .meta-value { font-size: 15px; font-weight: 600; letter-spacing: -0.4px; margin-top: 6px; }
+  .meta-label { font-size: 15.5px; color: var(--v2-mute); letter-spacing: .5px; text-transform: uppercase; font-weight: 500; }
+  .meta-value { font-size: 16.5px; font-weight: 600; letter-spacing: -0.4px; margin-top: 6px; }
   .meta-actions { margin-top: 14px; display: flex; align-items: center; justify-content: space-between; }
   .meta-edit-input { width: 100%; margin-top: 6px; padding: 7px 10px; border: 1.5px solid var(--v2-accent); border-radius: 8px; font-size: 15px; font-weight: 500; font-family: var(--v2-sans); outline: none; background: #fff; color: var(--v2-ink); }
   .meta-edit-actions { display: flex; gap: 6px; margin-top: 10px; }
@@ -581,7 +599,7 @@
   .dock-btn {
     flex: 1; display: flex; align-items: center; justify-content: center;
     gap: 10px; padding: 13px 14px; border-radius: 12px;
-    font-family: var(--v2-sans); font-size: 14px; font-weight: 500; cursor: pointer;
+    font-family: var(--v2-sans); font-size: 15.5px; font-weight: 500; cursor: pointer;
     transition: opacity .12s, box-shadow .15s;
   }
   .dock-btn:hover  { opacity: .85; }
