@@ -43,7 +43,8 @@ fi
 APP_BASE=undp-collections-review
 
 # Git remote name used for Dokku
-DOKKU_GIT_REMOTE=dokku
+DOKKU_GIT_REMOTE=${APP_BASE}_$INSTANCE
+
 
 # Dokku SSH host (for git pushes).
 # Default assumes you are running these scripts *on the Dokku host itself*,
