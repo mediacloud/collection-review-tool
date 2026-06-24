@@ -7,6 +7,9 @@
 # please copy from one of those, or maybe it's time to have a repo
 # with a single/common version of the scripts??
 
+FQDN=$(hostname -f | tr A-Z a-z)
+HOST=$(hostname -s)
+
 if [ "x$(whoami)" = xroot ]; then
     # for crontab.sh
     # no dokku function needed
@@ -45,12 +48,6 @@ APP_BASE=undp-collections-review
 # Git remote name used for Dokku
 DOKKU_GIT_REMOTE=${APP_BASE}_$INSTANCE
 
-
-# Dokku SSH host (for git pushes).
-# Default assumes you are running these scripts *on the Dokku host itself*,
-# so we talk to dokku@localhost. You can override, e.g.:
-#   FQDN=my-dokku-host ./dokku-scripts/push.sh
-FQDN=${FQDN:-localhost}
 
 # INSTANCE is provided by the caller (prod, staging, or username)
 # Phil: conform to convention used w/ other apps:
