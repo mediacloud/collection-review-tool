@@ -1,17 +1,88 @@
 <script>
   import Nav from './Nav.svelte';
   import DecisionBar from './DecisionBar.svelte';
-  import { PROJECTS } from './mockData.js';
-  import { reviewState, decisionsStore, changeDecision, saveGuidelines, downloadCSV } from './mockStore.js';
+  import {  decisionsStore, changeDecision, downloadCSV, loadProject } from './mockStore.js';
+  import {
+  generateReviewProjectQueues,
+  setReviewProjectName,
+  getReviewProjectGuidelines,
+  setReviewProjectGuidelines,
+  setReviewProjectReviewerLandingVirtualQueues,
+  setReviewProjectEditMetadata
+} from '../../lib/api.js';
   import { get } from 'svelte/store';
+  import { onMount } from 'svelte';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';
 
   const projectGuid = window.location.pathname.split('/').pop();
-  const p = PROJECTS[projectGuid] ?? null;
-  const heroMain = p ? p.name.split(' · ')[0] : '';
-  const heroSub  = p ? p.name.split(' · ').slice(1).join(' · ') : '';
+
+  let p = null;
+  let loadError = '';
+
+  $: heroMain = p ? p.name.split(' · ')[0] : '';
+  $: heroSub = p
+    ? p.name.split(' · ').slice(1).join(' · ')
+    : '';
+
+  onMount(() => {
+    loadProject(projectGuid)
+      .then((project) => {
+        p = project;
+      })
+      .catch((error) => {
+        console.error(error);
+        loadError = 'Could not load the project from the backend.';
+      });
+  });
+
+  async function handleGenerateQueues() {
+  const parsedQueueCount = Number(queueCount);
+
+  if (
+    !Number.isInteger(parsedQueueCount) ||
+    parsedQueueCount < 1
+  ) {
+    queueGenerateError =
+      'Queue count must be a positive integer.';
+    return;
+  }
+
+  if ((p?.queues?.length ?? 0) > 0) {
+    queueGenerateError =
+      'Reviewer queues have already been generated.';
+    return;
+  }
+
+  try {
+    queueGenerating = true;
+    queueGenerateError = '';
+    queueGenerateWarning = '';
+
+    const result =
+      await generateReviewProjectQueues(
+        projectGuid,
+        parsedQueueCount
+      );
+
+    queueGenerateWarning = result.warning || '';
+
+    // Reload the project so the new queues appear immediately.
+    p = await loadProject(projectGuid);
+
+    showGenerateQueue = false;
+  } catch (error) {
+    console.error(error);
+
+    queueGenerateError =
+      error.response?.data?.error ||
+      error.message ||
+      'Could not generate reviewer queues.';
+  } finally {
+    queueGenerating = false;
+  }
+}
 
   const VERDICT_LABELS  = { kept: 'Kept', removed: 'Removed', added: 'Added', skipped: 'Skipped' };
   const VERDICT_COLORS  = { kept: '#E25C40', removed: '#1A1C1F', added: '#F5A48A', skipped: '#9CA0A8' };
@@ -25,41 +96,41 @@
   // ── Compute all stats from decisionsStore ─────────────────────────────
   $: projectDecisions = $decisionsStore[projectGuid] ?? {};
 
-  function queueStats(decisions) {
-    const kept    = decisions.filter(d => d.verdict === 'kept').length;
-    const removed = decisions.filter(d => d.verdict === 'removed').length;
-    const added   = decisions.filter(d => d.verdict === 'added').length;
-    const skipped = decisions.filter(d => d.verdict === 'skipped').length;
-    return { kept, removed, added, skipped, done: kept + removed + added + skipped };
-  }
+  $: projectStats = p?.stats ?? {
+  kept: 0,
+  removed: 0,
+  added: 0,
+  skipped: 0,
+  decided: 0,
+  undecided: 0,
+  total: 0,
+  progress: 0
+};
 
-  $: projectStats = (() => {
-    if (!p) return { kept: 0, removed: 0, added: 0, skipped: 0, reviewed: 0, undecided: 0, total: 0, progress: 0 };
-    let kept = 0, removed = 0, added = 0, skipped = 0, done = 0, total = 0;
-    for (const q of p.queues) {
-      const qs = queueStats(projectDecisions[q.id] ?? []);
-      kept += qs.kept; removed += qs.removed; added += qs.added; skipped += qs.skipped;
-      done += qs.done; total += q.total;
-    }
-    return { kept, removed, added, skipped, reviewed: done, undecided: total - done, total, progress: total > 0 ? done / total : 0 };
-  })();
-
-  // ── Highlight state ────────────────────────────────────────────────────
   let highlight = null;
   let showSettings = false;
+  let showGenerateQueue = false;
+  let queueCount = 1;
+  let queueGenerating = false;
+  let queueGenerateError = '';
+  let queueGenerateWarning = '';
 
-  // ── Bucket modal (Fix 4) ───────────────────────────────────────────────
-  let bucketModal = null; // { verdict, sources: [{source, homepage, verdict, queue, reason}] }
+  // Decision bucket modal — still backed by mock decision data
+  let bucketModal = null;
 
   function openBucket(verdict) {
-    const sources = p.queues.flatMap(q => (projectDecisions[q.id] ?? []).filter(d => d.verdict === verdict));
+    const sources = p.queues.flatMap((queue) =>
+      (projectDecisions[queue.id] ?? []).filter(
+        (decision) => decision.verdict === verdict
+      )
+    );
     bucketModal = { verdict, sources };
   }
-
   // Change decision from inside bucket modal
   let bucketChangeTarget = null; // { source, queueId }
   let bucketNewVerdict = '';
   let bucketReason = '';
+
   $: bucketReasonRequired = bucketNewVerdict === 'kept' || bucketNewVerdict === 'removed';
   $: bucketCanConfirm = bucketNewVerdict && (!bucketReasonRequired || bucketReason.trim());
 
@@ -97,13 +168,121 @@
   }
 
   // ── Guidelines modal ───────────────────────────────────────────────────
-  let localGuidelines = get(reviewState).guidelines;
+  
+  // ── Project settings ──
+  let settingsName = '';
+  let localGuidelines = '';
+  let settingsShowVirtualQueueLinks = true;
+  let settingsEditMetadata = false;
+
+  let settingsLoading = false;
+  let settingsSaving = false;
+  let settingsError = '';
   let guidelinesSaved = false;
-  function handleSaveSettings() {
-    saveGuidelines(localGuidelines);
-    guidelinesSaved = true;
-    setTimeout(() => { guidelinesSaved = false; showSettings = false; }, 1200);
+
+  async function openProjectSettings() {
+  if (!p) return;
+
+  settingsName = p.name;
+  settingsShowVirtualQueueLinks =
+    p.showVirtualQueueLinks;
+  settingsEditMetadata =
+    p.editMetadata;
+
+  localGuidelines = '';
+  settingsError = '';
+  guidelinesSaved = false;
+  settingsLoading = true;
+  showSettings = true;
+
+  try {
+    const result =
+      await getReviewProjectGuidelines(
+        projectGuid
+      );
+
+    localGuidelines =
+      result.guidelines || '';
+  } catch (error) {
+    console.error(error);
+
+    settingsError =
+      error.response?.data?.error ||
+      error.message ||
+      'Could not load project settings.';
+  } finally {
+    settingsLoading = false;
   }
+}
+  
+  async function handleSaveSettings() {
+  const trimmedName = settingsName.trim();
+  const trimmedGuidelines =
+    localGuidelines.trim();
+
+  if (!trimmedName) {
+    settingsError =
+      'Project name is required.';
+    return;
+  }
+
+  if (!trimmedGuidelines) {
+    settingsError =
+      'Annotation guidelines cannot be empty.';
+    return;
+  }
+
+  if (settingsSaving || settingsLoading) {
+    return;
+  }
+
+  try {
+    settingsSaving = true;
+    settingsError = '';
+    guidelinesSaved = false;
+
+    await Promise.all([
+      setReviewProjectName(
+        projectGuid,
+        trimmedName
+      ),
+
+      setReviewProjectGuidelines(
+        projectGuid,
+        trimmedGuidelines
+      ),
+
+      setReviewProjectReviewerLandingVirtualQueues(
+        projectGuid,
+        settingsShowVirtualQueueLinks
+      ),
+
+      setReviewProjectEditMetadata(
+        projectGuid,
+        settingsEditMetadata
+      ),
+    ]);
+
+    // Reload the page data with the saved settings.
+    p = await loadProject(projectGuid);
+
+    guidelinesSaved = true;
+
+    setTimeout(() => {
+      guidelinesSaved = false;
+      showSettings = false;
+    }, 1200);
+  } catch (error) {
+    console.error(error);
+
+    settingsError =
+      error.response?.data?.error ||
+      error.message ||
+      'Could not save project settings.';
+  } finally {
+    settingsSaving = false;
+  }
+}
 </script>
 
 <div class="project-page">
@@ -113,7 +292,11 @@
     {projectGuid}
     {onNavigate}
     variant={navVariant}
-    onTab={(t) => { if (t === 'Settings' && p) showSettings = true; }}
+    onTab={(tab) => {
+  if (tab === 'Settings') {
+    openProjectSettings();
+  }
+}}
   />
 
   {#if p}
@@ -165,7 +348,7 @@
         <div>
           <div class="stats-label">Reviewed</div>
           <div class="stats-count">
-            {projectStats.reviewed.toLocaleString()}<span class="stats-total"> / {projectStats.total.toLocaleString()}</span>
+            {projectStats.decided.toLocaleString()}<span class="stats-total"> / {projectStats.total.toLocaleString()}</span>
           </div>
         </div>
         <div class="stats-right">
@@ -175,7 +358,7 @@
       </div>
 
       <div class="stats-bar-wrap">
-        <DecisionBar totals={{ reviewed: projectStats.reviewed, kept: projectStats.kept, removed: projectStats.removed, added: projectStats.added, skipped: projectStats.skipped, undecided: projectStats.undecided }} height={16} {highlight} />
+        <DecisionBar totals={{ decided: projectStats.decided, kept: projectStats.kept, removed: projectStats.removed, added: projectStats.added, skipped: projectStats.skipped, undecided: projectStats.undecided }} height={16} {highlight} />
       </div>
 
       <!-- Decision tiles — click ↗ to open bucket modal -->
@@ -231,26 +414,56 @@
     <div class="queues-divider"></div>
     <div class="queues-header">
       <span class="queues-title">Reviewer queues</span>
-      <button class="btn btn-sm">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        Generate queue
+      <button
+        class="btn btn-sm"
+        disabled={
+          (p?.queues?.length ?? 0) > 0 ||
+          queueGenerating
+        }
+        title={
+          (p?.queues?.length ?? 0) > 0
+            ? 'Reviewer queues have already been generated.'
+            : 'Generate reviewer queues'
+        }
+        on:click={() => {
+          queueCount = 1;
+          queueGenerateError = '';
+          queueGenerateWarning = '';
+          showGenerateQueue = true;
+        }}
+      >
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+        >
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+
+        {queueGenerating
+          ? 'Generating...'
+          : 'Generate queues'}
       </button>
     </div>
 
     <div class="queues-list">
       {#each p.queues as q, i}
-        {@const qd = projectDecisions[q.id] ?? []}
-        {@const qs = queueStats(qd)}
-        {@const pct = q.total > 0 ? qs.done / q.total : 0}
-        {@const isDone = q.total > 0 && qs.done === q.total}
-        {@const isNew  = qs.done === 0}
+        {@const qs = q.stats}
+        {@const pct = q.total > 0 ? qs.decided / q.total : 0}
+        {@const isComplete = q.total > 0 && qs.decided === q.total}
+        {@const isNew = qs.decided === 0}
+
         <div class="queue-card">
           <div class="queue-header">
             <div class="queue-id-row">
               <span class="queue-id">{q.id}</span>
               <span class="queue-pct">{Math.round(pct * 100)}%</span>
             </div>
-            {#if isDone}
+            {#if isComplete}
               <span class="chip chip-skipped"><span class="chip-dot chip-dot-skipped"></span>Completed</span>
             {:else if isNew}
               <span class="chip chip-warn"><span class="chip-dot chip-dot-warn"></span>Unassigned</span>
@@ -269,7 +482,7 @@
           </div>
 
           <div class="queue-bar">
-            <DecisionBar totals={{ reviewed: qs.done, kept: qs.kept, removed: qs.removed, added: qs.added, skipped: qs.skipped, undecided: q.total - qs.done }} height={6} />
+            <DecisionBar totals={{ decided: qs.decided, kept: qs.kept, removed: qs.removed, added: qs.added, skipped: qs.skipped, undecided: q.total - qs.decided }} height={6} />
           </div>
 
           <div class="queue-footer">
@@ -304,7 +517,16 @@
 
 <!-- ── BUCKET MODAL (Fix 4) ── -->
 {#if bucketModal}
-  <div class="modal-overlay" on:click={() => { bucketModal = null; bucketChangeTarget = null; }} role="dialog" aria-modal="true">
+  <div
+  class="modal-overlay"
+  on:click={() => {
+    if (!settingsSaving) {
+      showSettings = false;
+    }
+  }}
+  role="dialog"
+  aria-modal="true"
+>
     <div class="modal" on:click|stopPropagation>
       <div class="modal-header">
         <div>
@@ -372,6 +594,144 @@
   <div class="toast">{csvToast}</div>
 {/if}
 
+<!-- Queue generating modal -->
+{#if queueGenerateWarning}
+  <div class="toast">
+    {queueGenerateWarning}
+  </div>
+{/if}
+
+{#if showGenerateQueue && p}
+  <div
+    class="modal-overlay"
+    on:click={() => {
+      if (!queueGenerating) {
+        showGenerateQueue = false;
+      }
+    }}
+    role="dialog"
+    aria-modal="true"
+  >
+    <div
+      class="modal"
+      on:click|stopPropagation
+    >
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">
+            Generate reviewer queues
+          </div>
+
+          <div class="modal-subtitle">
+            Split {p.stats.total} sources into reviewer queues.
+          </div>
+        </div>
+
+        <button
+          class="modal-close"
+          disabled={queueGenerating}
+          on:click={() => {
+            showGenerateQueue = false;
+          }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+          >
+            <path d="M6 6l12 12M18 6 6 18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+
+        {#if settingsLoading}
+          <div
+            class="setting-desc"
+            style="margin-bottom: 12px;"
+          >
+            Loading project settings...
+          </div>
+        {/if}
+
+        {#if settingsError}
+          <div
+            class="setting-desc"
+            style="color: #b42318; margin-bottom: 12px;"
+            role="alert"
+          >
+            {settingsError}
+          </div>
+        {/if}
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-title">
+              Number of queues
+            </div>
+
+            <div class="setting-desc">
+              Sources will be distributed as evenly as possible.
+            </div>
+          </div>
+
+          <div class="setting-control">
+            <input
+              class="setting-input"
+              type="number"
+              min="1"
+              max={p.stats.total}
+              bind:value={queueCount}
+              disabled={queueGenerating}
+              on:keydown={(event) => {
+                if (event.key === 'Enter') {
+                  handleGenerateQueues();
+                }
+              }}
+            />
+          </div>
+        </div>
+
+        {#if queueGenerateError}
+          <div
+            class="setting-desc"
+            style="color: #b42318; margin-top: 12px;"
+          >
+            {queueGenerateError}
+          </div>
+        {/if}
+      </div>
+
+      <div class="modal-footer">
+        <button
+          class="btn"
+          disabled={queueGenerating}
+          on:click={() => {
+            showGenerateQueue = false;
+          }}
+        >
+          Cancel
+        </button>
+
+        <button
+          class="btn btn-primary"
+          disabled={queueGenerating}
+          on:click={handleGenerateQueues}
+        >
+          {queueGenerating
+            ? 'Generating...'
+            : 'Generate queues'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 {#if showSettings && p}
   <div class="modal-overlay" on:click={() => showSettings = false} role="dialog" aria-modal="true">
     <div class="modal" on:click|stopPropagation>
@@ -380,7 +740,15 @@
           <div class="modal-title">Project settings</div>
           <div class="modal-subtitle">Change what reviewers see or whether they can edit source metadata.</div>
         </div>
-        <button class="modal-close" on:click={() => showSettings = false}>
+        <button
+          class="modal-close"
+          disabled={settingsSaving}
+          on:click={() => {
+            if (!settingsSaving) {
+              showSettings = false;
+            }
+          }}
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
         </button>
       </div>
@@ -391,7 +759,7 @@
             <div class="setting-desc">Display name used across admin and reviewer views.</div>
           </div>
           <div class="setting-control">
-            <input class="setting-input" type="text" value={p ? p.name : ''} />
+            <input class="setting-input" type="text" bind:value={settingsName} disabled={settingsLoading || settingsSaving} />
           </div>
         </div>
         <div class="setting-row">
@@ -400,7 +768,12 @@
             <div class="setting-desc">Markdown shown to reviewers while they work.</div>
           </div>
           <div class="setting-control">
-            <textarea class="setting-textarea" rows="5" bind:value={localGuidelines}></textarea>
+            <textarea
+              class="setting-textarea"
+              rows="5"
+              bind:value={localGuidelines}
+              disabled={settingsLoading || settingsSaving}
+            ></textarea>
           </div>
         </div>
         <div class="setting-row setting-row-toggle">
@@ -408,20 +781,79 @@
             <div class="setting-title">Reviewer landing: project virtual queues</div>
             <div class="setting-desc">Show project-wide virtual-queue links on reviewer landing pages.</div>
           </div>
-          <div class="toggle toggle-on"><div class="toggle-knob toggle-knob-on"></div></div>
+          <button
+            type="button"
+            class="toggle"
+            class:toggle-on={settingsShowVirtualQueueLinks}
+            class:toggle-off={!settingsShowVirtualQueueLinks}
+            disabled={settingsLoading || settingsSaving}
+            aria-pressed={settingsShowVirtualQueueLinks}
+            aria-label="Show project virtual queue links"
+            on:click={() => {
+              settingsShowVirtualQueueLinks =
+                !settingsShowVirtualQueueLinks;
+            }}
+          >
+            <div
+              class="toggle-knob"
+              class:toggle-knob-on={
+                settingsShowVirtualQueueLinks
+              }
+            ></div>
+          </button>
         </div>
         <div class="setting-row setting-row-toggle">
           <div class="setting-info">
             <div class="setting-title">Source metadata editing</div>
             <div class="setting-desc">Require reviewers to confirm language and country/state before keeping.</div>
           </div>
-          <div class="toggle toggle-off"><div class="toggle-knob"></div></div>
+          <button
+            type="button"
+            class="toggle"
+            class:toggle-on={settingsEditMetadata}
+            class:toggle-off={!settingsEditMetadata}
+            disabled={settingsLoading || settingsSaving}
+            aria-pressed={settingsEditMetadata}
+            aria-label="Allow source metadata editing"
+            on:click={() => {
+              settingsEditMetadata =
+                !settingsEditMetadata;
+            }}
+          >
+            <div
+              class="toggle-knob"
+              class:toggle-knob-on={settingsEditMetadata}
+            ></div>
+          </button>
         </div>
       </div>
       <div class="modal-footer">
         {#if guidelinesSaved}<span class="saved-note">Saved ✓</span>{/if}
-        <button class="btn" on:click={() => showSettings = false}>Cancel</button>
-        <button class="btn btn-primary" on:click={handleSaveSettings}>Save changes</button>
+        <button
+          class="btn"
+          disabled={settingsSaving}
+          on:click={() => {
+            if (!settingsSaving) {
+              showSettings = false;
+            }
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          class="btn btn-primary"
+          disabled={
+            settingsLoading ||
+            settingsSaving ||
+            !settingsName.trim() ||
+            !localGuidelines.trim()
+          }
+          on:click={handleSaveSettings}
+        >
+          {settingsSaving
+            ? 'Saving...'
+            : 'Save changes'}
+        </button>
       </div>
     </div>
   </div>
@@ -593,7 +1025,7 @@
   .setting-control { margin-top: 10px; width: 100%; box-sizing: border-box; }
   .setting-input { width: 100%; box-sizing: border-box; border: 1px solid var(--v2-line); border-radius: 10px; padding: 10px 12px; font-size: 14px; font-family: var(--v2-sans); color: var(--v2-ink); outline: none; }
   .setting-textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--v2-line); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; font-family: var(--v2-mono); color: var(--v2-body); outline: none; resize: vertical; line-height: 1.5; }
-  .toggle { width: 34px; height: 20px; border-radius: 999px; position: relative; cursor: pointer; flex-shrink: 0; margin-top: 2px; }
+  .toggle { width: 34px; height: 20px; border-radius: 999px; position: relative; cursor: pointer; flex-shrink: 0; margin-top: 2px; border: 0; padding: 0;}
   .toggle-off { background: var(--v2-line-soft); }
   .toggle-on  { background: var(--v2-accent); }
   .toggle-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,.18); }
