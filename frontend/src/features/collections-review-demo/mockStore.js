@@ -1,4 +1,5 @@
-import { writable, derived, get } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
+
 import { PROJECTS } from './mockData.js';
 
 // ── Queue sources for the live demo session (proj_8fa221 / q1) ───────────
