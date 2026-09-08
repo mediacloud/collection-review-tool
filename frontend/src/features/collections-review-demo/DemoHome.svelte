@@ -654,7 +654,6 @@ import {
     box-shadow: 0 1px 0 rgba(0,0,0,.04), inset 0 1px 0 rgba(255,255,255,.18);
   }
   .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
-  .btn-ghost { background: transparent; border-color: transparent; box-shadow: none; }
   .btn-lg { padding: 12px 22px; font-size: 15px; }
   .btn-sm { padding: 7px 12px; font-size: 12.5px; }
 
@@ -816,7 +815,6 @@ import {
     display: grid; place-items: center;
     font-weight: 600; font-size: 14.5px; flex-shrink: 0;
   }
-  .project-avatar.sm { width: 28px; height: 28px; font-size: 13px; flex-shrink: 0; }
   .project-meta { min-width: 0; }
   .project-name { font-size: 16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .project-seeds { font-size: 15px; color: var(--v2-mute); font-family: var(--v2-mono); margin-top: 1px; }
@@ -927,5 +925,4 @@ import {
   .modal-row .review-info { flex: 1; min-width: 0; }
   .modal-row-right { display: flex; align-items: center; flex-shrink: 0; padding-left: 8px; }
   .modal-progress { flex-shrink: 0; width: 140px; }
-  .pct-badge { font-size: 13.5px; font-family: var(--v2-mono); color: var(--v2-mute); }
 </style>

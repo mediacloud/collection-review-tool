@@ -18,7 +18,6 @@ const queueGuid = window.location.pathname.split('/').pop();
 
 let projectGuid = '';
 let projectName = '';
-let queue = null;
 let items = [];
 let sourceIdx = 0;
 let loading = true;
@@ -69,7 +68,6 @@ onMount(async () => {
       }),
     ]);
 
-    queue = queueData;
     projectGuid = queueData.review_project_guid || '';
     projectName =
       queueData.name ||
@@ -899,7 +897,6 @@ async function skip() {
     cursor: pointer; white-space: nowrap;
     box-shadow: 0 1px 0 rgba(0,0,0,.02);
   }
-  .btn[disabled] { opacity: .4; pointer-events: none; }
   .btn-primary { background: var(--v2-ink); color: #fff; border: none; box-shadow: 0 1px 0 rgba(0,0,0,.04), inset 0 1px 0 rgba(255,255,255,.18); }
   .btn-accent  { background: var(--v2-accent); color: #fff; border: none; }
   .btn-sm      { padding: 7px 12px; font-size: 12.5px; }
@@ -1001,9 +998,6 @@ async function skip() {
 .guidelines-error {
   color: #b42318;
 }
-  .guideline-row { display: flex; gap: 10px; font-size: 14px; align-items: baseline; }
-  .guideline-verb { font-weight: 600; min-width: 50px; }
-  .guideline-text { color: var(--v2-body); }
   .status-grid { padding: 14px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .status-cell { padding: 10px 12px; background: var(--v2-surface); border-radius: 10px; border: 1px solid var(--v2-line-soft); }
   .status-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--v2-mute); text-transform: uppercase; letter-spacing: .6px; font-weight: 500; }

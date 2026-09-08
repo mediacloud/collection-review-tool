@@ -19,7 +19,6 @@
   const projectGuid = window.location.pathname.split('/').pop();
 
   let p = null;
-  let loadError = '';
 
   $: heroMain = p ? p.name.split(' · ')[0] : '';
   $: heroSub = p
@@ -33,7 +32,6 @@
       })
       .catch((error) => {
         console.error(error);
-        loadError = 'Could not load the project from the backend.';
       });
   });
 

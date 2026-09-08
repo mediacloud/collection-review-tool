@@ -42,10 +42,6 @@
     }
   });
 
-  // Bucket modal still uses mock decisions for now
-  $: qDecisions =
-    q ? ($decisionsStore[projectGuid]?.[q.id] ?? []) : [];
-
   // Real queue API stats
   $: displayStats = q?.stats ?? EMPTY_STATS;
 
@@ -120,11 +116,6 @@
     bucketReason = '';
   }
 
-  function queueStatusLabel(qq) {
-    if (qq.decided === qq.total && qq.total > 0) return 'Completed';
-    if (qq.decided === 0) return 'Unassigned';
-    return 'In progress';
-  }
 </script>
 
 {#if loadError}
