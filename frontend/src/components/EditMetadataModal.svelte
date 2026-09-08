@@ -27,41 +27,28 @@
   }
 </script>
 
-<BaseModal show={show} onClose={handleClose}>
-  <div
-    class="modal-content"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="edit-metadata-title"
-  >
+<BaseModal {show} onClose={handleClose}>
+  <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="edit-metadata-title">
     <h2 id="edit-metadata-title">Edit {fieldLabel}</h2>
     <div class="form-group">
       <label for="edit-field">{fieldLabel}</label>
       {#if readonlyMessage}
         <p class="readonly-message">{readonlyMessage}</p>
       {:else if options && options.length > 0}
-        <select id="edit-field" bind:value={value}>
+        <select id="edit-field" bind:value>
           <option value="">-- Select {fieldLabel.toLowerCase()} --</option>
           {#each options as opt}
             <option value={opt.value}>{opt.label}</option>
           {/each}
         </select>
       {:else}
-        <input
-          id="edit-field"
-          type="text"
-          bind:value={value}
-        />
+        <input id="edit-field" type="text" bind:value />
       {/if}
     </div>
     <div class="modal-actions">
-      <button type="button" class="btn btn-secondary" on:click={handleClose}>
-        Cancel
-      </button>
+      <button type="button" class="btn btn-secondary" on:click={handleClose}> Cancel </button>
       {#if !readonlyMessage}
-        <button type="button" class="btn btn-primary" on:click={handleSave}>
-          Save
-        </button>
+        <button type="button" class="btn btn-primary" on:click={handleSave}> Save </button>
       {/if}
     </div>
   </div>
@@ -131,7 +118,9 @@
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
   }
 
   .btn-secondary {
@@ -155,4 +144,3 @@
     border-color: #2980b9;
   }
 </style>
-

@@ -1,10 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import Nav from './Nav.svelte';
-  import {
-    projectsStore,
-    loadProjects
-  } from './mockStore.js';
+  import { projectsStore, loadProjects } from './mockStore.js';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';
@@ -41,16 +38,17 @@
         <div></div>
       </div>
       {#each $projectsStore as r}
-        <button
-          class="projects-row"
-          on:click={() => onNavigate(`/demo/review-projects/${r.guid}`)}
-        >
+        <button class="projects-row" on:click={() => onNavigate(`/demo/review-projects/${r.guid}`)}>
           <div class="project-avatar">{r.name[0]}</div>
           <div class="project-meta">
             <div class="project-name">{r.name}</div>
-            <div class="project-seeds">{r.seeds} seed {r.seeds === 1 ? 'collection' : 'collections'}</div>
+            <div class="project-seeds">
+              {r.seeds} seed {r.seeds === 1 ? 'collection' : 'collections'}
+            </div>
           </div>
-          <div class="project-queues">{r.queueCount} reviewer {r.queueCount === 1 ? 'queue' : 'queues'}</div>
+          <div class="project-queues">
+            {r.queueCount} reviewer {r.queueCount === 1 ? 'queue' : 'queues'}
+          </div>
           <div class="project-progress">
             <div class="progress-track">
               <div
@@ -62,7 +60,16 @@
             <span class="progress-pct">{Math.round(r.progress * 100)}%</span>
           </div>
           <div class="project-arrow">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg
+            >
           </div>
         </button>
       {/each}
@@ -99,42 +106,113 @@
     font-family: var(--v2-mono);
   }
 
-  .card-wrap { padding: 0 72px; }
-  .card { background: var(--v2-card); border: 1px solid var(--v2-line); border-radius: 16px; overflow: hidden; }
+  .card-wrap {
+    padding: 0 72px;
+  }
+  .card {
+    background: var(--v2-card);
+    border: 1px solid var(--v2-line);
+    border-radius: 16px;
+    overflow: hidden;
+  }
 
   .projects-thead {
-    display: grid; grid-template-columns: 42px 1.6fr 1fr 1.1fr 30px;
-    font-size: 12px; color: var(--v2-mute); font-weight: 600;
-    letter-spacing: .6px; text-transform: uppercase;
-    padding: 14px 22px 10px; gap: 14px; align-items: center;
+    display: grid;
+    grid-template-columns: 42px 1.6fr 1fr 1.1fr 30px;
+    font-size: 12px;
+    color: var(--v2-mute);
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 14px 22px 10px;
+    gap: 14px;
+    align-items: center;
   }
 
   .projects-row {
-    display: grid; grid-template-columns: 42px 1.6fr 1fr 1.1fr 30px;
-    align-items: center; padding: 14px 22px;
+    display: grid;
+    grid-template-columns: 42px 1.6fr 1fr 1.1fr 30px;
+    align-items: center;
+    padding: 14px 22px;
     border-top: 1px solid var(--v2-line-soft);
-    cursor: pointer; gap: 14px;
-    background: transparent; border-left: none; border-right: none; border-bottom: none;
-    width: 100%; text-align: left; font-family: var(--v2-sans); color: var(--v2-ink);
-    transition: background .12s;
+    cursor: pointer;
+    gap: 14px;
+    background: transparent;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    width: 100%;
+    text-align: left;
+    font-family: var(--v2-sans);
+    color: var(--v2-ink);
+    transition: background 0.12s;
   }
-  .projects-row:hover { background: var(--v2-line-soft); }
+  .projects-row:hover {
+    background: var(--v2-line-soft);
+  }
 
   .project-avatar {
-    width: 32px; height: 32px; border-radius: 8px;
-    background: var(--v2-accent-soft); color: var(--v2-accent);
-    display: grid; place-items: center;
-    font-weight: 600; font-size: 14.5px; flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--v2-accent-soft);
+    color: var(--v2-accent);
+    display: grid;
+    place-items: center;
+    font-weight: 600;
+    font-size: 14.5px;
+    flex-shrink: 0;
   }
-  .project-meta { min-width: 0; }
-  .project-name { font-size: 14.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .project-seeds { font-size: 14px; color: var(--v2-mute); font-family: var(--v2-mono); margin-top: 1px; }
-  .project-queues { font-size: 14.5px; color: var(--v2-body); }
+  .project-meta {
+    min-width: 0;
+  }
+  .project-name {
+    font-size: 14.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .project-seeds {
+    font-size: 14px;
+    color: var(--v2-mute);
+    font-family: var(--v2-mono);
+    margin-top: 1px;
+  }
+  .project-queues {
+    font-size: 14.5px;
+    color: var(--v2-body);
+  }
 
-  .project-progress { display: flex; align-items: center; gap: 8px; }
-  .progress-track { flex: 1; height: 5px; background: var(--v2-line-soft); border-radius: 999px; overflow: hidden; }
-  .progress-fill { height: 100%; background: var(--v2-accent); transition: width .3s; }
-  .progress-fill.fill-done { background: var(--v2-skipped); }
-  .progress-pct { font-size: 14px; color: var(--v2-body); font-family: var(--v2-mono); min-width: 36px; text-align: right; }
-  .project-arrow { text-align: right; color: var(--v2-mute); }
+  .project-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .progress-track {
+    flex: 1;
+    height: 5px;
+    background: var(--v2-line-soft);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--v2-accent);
+    transition: width 0.3s;
+  }
+  .progress-fill.fill-done {
+    background: var(--v2-skipped);
+  }
+  .progress-pct {
+    font-size: 14px;
+    color: var(--v2-body);
+    font-family: var(--v2-mono);
+    min-width: 36px;
+    text-align: right;
+  }
+  .project-arrow {
+    text-align: right;
+    color: var(--v2-mute);
+  }
 </style>

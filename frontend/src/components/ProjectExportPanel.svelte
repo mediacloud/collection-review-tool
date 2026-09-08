@@ -1,8 +1,5 @@
 <script>
-  import {
-    getReviewProjectExportUrl,
-    getReviewProjectAuditExportUrl,
-  } from '../lib/api.js';
+  import { getReviewProjectExportUrl, getReviewProjectAuditExportUrl } from '../lib/api.js';
 
   /** @type {string} */
   export let projectGuid = '';
@@ -33,7 +30,9 @@
   let previewLoading = false;
   let previewError = null;
   $: publishDefaultName = `${(projectName || 'Review Project').trim() || 'Review Project'} | Collection-Review`;
-  $: publishTargetLabel = existingPublishCollection ? `Collection ${existingPublishCollection}` : 'a new collection';
+  $: publishTargetLabel = existingPublishCollection
+    ? `Collection ${existingPublishCollection}`
+    : 'a new collection';
   $: previewHasRows = (publishPreviewRows || []).length > 0;
   $: previewTargetCollectionId = publishResult?.collection_id || existingPublishCollection;
 
@@ -77,7 +76,8 @@
       publishPreviewSummary = previewData?.preview?.summary || null;
       showPublishPreviewModal = true;
     } catch (err) {
-      previewError = err?.response?.data?.error || err?.message || 'Failed to generate publish preview';
+      previewError =
+        err?.response?.data?.error || err?.message || 'Failed to generate publish preview';
     } finally {
       previewLoading = false;
     }
@@ -114,7 +114,8 @@
 
   const MAIN_CSV_DISABLED_TITLE =
     'Available after at least one source is marked keep or add in a reviewer queue. That file lists only those rows for Media Cloud.';
-  const AUDIT_DISABLED_TITLE = 'Create reviewer queues and assign sources before exporting or previewing.';
+  const AUDIT_DISABLED_TITLE =
+    'Create reviewer queues and assign sources before exporting or previewing.';
 
   /** @param {string} operation */
   function operationPrimaryLabel(operation) {
@@ -161,7 +162,8 @@
       aria-controls="export-project-panel"
       aria-label={exportPanelExpanded ? 'Collapse export project' : 'Expand export project'}
     >
-      <span class="export-collapse-chevron" class:open={exportPanelExpanded} aria-hidden="true"></span>
+      <span class="export-collapse-chevron" class:open={exportPanelExpanded} aria-hidden="true"
+      ></span>
       <span class="export-collapse-label">{exportPanelExpanded ? 'Hide' : 'Show'}</span>
     </button>
   </div>
@@ -174,8 +176,8 @@
       aria-labelledby="export-project-heading"
     >
       <p class="export-intro">
-        CSVs and the table preview are all based on the same underlying queue data. Use this section when you need files
-        for Media Cloud or a full decision audit.
+        CSVs and the table preview are all based on the same underlying queue data. Use this section
+        when you need files for Media Cloud or a full decision audit.
       </p>
 
       <ul class="export-options">
@@ -183,9 +185,9 @@
           <div class="export-option-main">
             <h3 class="export-option-title">Project CSV</h3>
             <p class="export-option-desc">
-              Media Cloud-style spreadsheet: <strong>one row per source marked keep or add</strong> (combined across
-              all queues). Skip, remove, and undecided sources are omitted. This is the file reviewers usually hand off
-              for collection updates.
+              Media Cloud-style spreadsheet: <strong>one row per source marked keep or add</strong> (combined
+              across all queues). Skip, remove, and undecided sources are omitted. This is the file reviewers
+              usually hand off for collection updates.
             </p>
           </div>
           <div class="export-option-actions">
@@ -214,9 +216,11 @@
           <div class="export-option-main">
             <h3 class="export-option-title">Audit CSV</h3>
             <p class="export-option-desc">
-          <strong>Every</strong> queue row: same source columns as above, plus
-          <strong>review_decision</strong>, <strong>removal_reason</strong>, <strong>skip_note</strong>, and
-          <strong>reviewer_queue</strong> (queue number). Use for QA, reporting, or reconciling against the Project CSV.
+              <strong>Every</strong> queue row: same source columns as above, plus
+              <strong>review_decision</strong>, <strong>removal_reason</strong>,
+              <strong>skip_note</strong>, and
+              <strong>reviewer_queue</strong> (queue number). Use for QA, reporting, or reconciling against
+              the Project CSV.
             </p>
           </div>
           <div class="export-option-actions">
@@ -246,8 +250,8 @@
             <h3 class="export-option-title">Decisions preview</h3>
             <p class="export-option-desc">
               Opens a table of all sources in all queues. The <strong>Project CSV</strong> column is
-              <strong>Yes</strong> only when that row would appear in the Project CSV file (decision is keep or add),
-              and <strong>No</strong> otherwise.
+              <strong>Yes</strong> only when that row would appear in the Project CSV file (decision
+              is keep or add), and <strong>No</strong> otherwise.
             </p>
           </div>
           <div class="export-option-actions">
@@ -265,61 +269,70 @@
 
         <li class="export-option">
           <div class="export-option-main">
-            <h3 class="export-option-title">Publish to MediaCloud <span class="experimental-tag">[For authorized users]</span></h3>
+            <h3 class="export-option-title">
+              Publish to MediaCloud <span class="experimental-tag">[For authorized users]</span>
+            </h3>
             <p class="export-option-desc">
               {#if publishEnabled}
                 Sync reviewer decisions directly to {publishTargetLabel}. First publish creates
-                <strong> {publishDefaultName} </strong>; later publishes reuse the same target collection.
+                <strong> {publishDefaultName} </strong>; later publishes reuse the same target
+                collection.
               {:else}
                 Direct publish is currently disabled by server configuration.
               {/if}
             </p>
             {#if publishEnabled}
               <div class="publish-form">
-              <label class="publish-label" for="publish-token-input">MediaCloud API token</label>
-              <input
-                id="publish-token-input"
-                class="publish-input"
-                type="password"
-                bind:value={apiToken}
-                placeholder="Paste your token (not stored)"
-                disabled={publishLoading}
-              />
-              <label class="publish-label" for="publish-name-input">Collection name override (optional)</label>
-              <input
-                id="publish-name-input"
-                class="publish-input"
-                type="text"
-                bind:value={collectionName}
-                placeholder={publishDefaultName}
-                disabled={publishLoading || !!existingPublishCollection}
-              />
-              {#if existingPublishCollection}
-                <div class="publish-note">
-                  Reusing existing target collection:
-                  <a
-                    href={mediacloudCollectionUrl(existingPublishCollection)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                <label class="publish-label" for="publish-token-input">MediaCloud API token</label>
+                <input
+                  id="publish-token-input"
+                  class="publish-input"
+                  type="password"
+                  bind:value={apiToken}
+                  placeholder="Paste your token (not stored)"
+                  disabled={publishLoading}
+                />
+                <label class="publish-label" for="publish-name-input"
+                  >Collection name override (optional)</label
+                >
+                <input
+                  id="publish-name-input"
+                  class="publish-input"
+                  type="text"
+                  bind:value={collectionName}
+                  placeholder={publishDefaultName}
+                  disabled={publishLoading || !!existingPublishCollection}
+                />
+                {#if existingPublishCollection}
+                  <div class="publish-note">
+                    Reusing existing target collection:
+                    <a
+                      href={mediacloudCollectionUrl(existingPublishCollection)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {existingPublishCollection}
+                    </a>
+                  </div>
+                {/if}
+                {#if publishMetadataUpdatesEnabled}
+                  <label
+                    class="publish-metadata-toggle"
+                    title="PATCH primary_language, pub_country, pub_state on existing MediaCloud sources (KEEP/ADD only)"
                   >
-                    {existingPublishCollection}
-                  </a>
+                    <input
+                      type="checkbox"
+                      bind:checked={applyMetadataUpdates}
+                      on:change={handleMetadataCheckboxChange}
+                      disabled={publishLoading || previewLoading}
+                    />
+                    <span>Also push language / geography metadata to existing sources</span>
+                  </label>
+                {/if}
+                <div class="publish-note">
+                  KEEP/ADD are synced, REMOVE unlinks from the target collection, SKIP/UNDECIDED are
+                  no-op.
                 </div>
-              {/if}
-              {#if publishMetadataUpdatesEnabled}
-                <label class="publish-metadata-toggle" title="PATCH primary_language, pub_country, pub_state on existing MediaCloud sources (KEEP/ADD only)">
-                  <input
-                    type="checkbox"
-                    bind:checked={applyMetadataUpdates}
-                    on:change={handleMetadataCheckboxChange}
-                    disabled={publishLoading || previewLoading}
-                  />
-                  <span>Also push language / geography metadata to existing sources</span>
-                </label>
-              {/if}
-              <div class="publish-note">
-                KEEP/ADD are synced, REMOVE unlinks from the target collection, SKIP/UNDECIDED are no-op.
-              </div>
               </div>
             {/if}
           </div>
@@ -409,8 +422,14 @@
       on:click|stopPropagation
     >
       <div class="publish-preview-header">
-        <h3 id="publish-preview-title">Publish Preview <span class="experimental-tag">[Experimental]</span></h3>
-        <button type="button" class="publish-preview-close" on:click={() => (showPublishPreviewModal = false)}>×</button>
+        <h3 id="publish-preview-title">
+          Publish Preview <span class="experimental-tag">[Experimental]</span>
+        </h3>
+        <button
+          type="button"
+          class="publish-preview-close"
+          on:click={() => (showPublishPreviewModal = false)}>×</button
+        >
       </div>
       <p class="publish-preview-description">
         These are the rows that will result in MediaCloud operations if you continue.
@@ -420,7 +439,8 @@
       </div>
       <div class="publish-preflight">
         {#if preflight?.ok}
-          Token preflight passed{#if preflight?.profile?.email} as <strong>{preflight.profile.email}</strong>{/if}.
+          Token preflight passed{#if preflight?.profile?.email}
+            as <strong>{preflight.profile.email}</strong>{/if}.
         {:else}
           Token preflight failed.
         {/if}
@@ -468,7 +488,9 @@
                   <td>{row.source_label || 'N/A'}</td>
                   <td>
                     {#if row.source_homepage}
-                      <a href={row.source_homepage} target="_blank" rel="noopener noreferrer">{row.source_homepage}</a>
+                      <a href={row.source_homepage} target="_blank" rel="noopener noreferrer"
+                        >{row.source_homepage}</a
+                      >
                     {:else}
                       —
                     {/if}
@@ -482,7 +504,9 @@
                         </div>
                         <div class="metadata-diff-block">
                           <div class="metadata-diff-heading">After create</div>
-                          <code class="metadata-patch-code">{JSON.stringify(row.metadata_on_create)}</code>
+                          <code class="metadata-patch-code"
+                            >{JSON.stringify(row.metadata_on_create)}</code
+                          >
                         </div>
                       </div>
                     {:else if row.metadata_remote_status === 'unchanged'}
@@ -491,7 +515,9 @@
                           <div class="metadata-diff-heading">Before / after (MediaCloud)</div>
                           <span class="metadata-in-sync">Already in sync</span>
                           {#if row.metadata_current && Object.keys(row.metadata_current).length > 0}
-                            <code class="metadata-patch-code metadata-patch-sub">{JSON.stringify(row.metadata_current)}</code>
+                            <code class="metadata-patch-code metadata-patch-sub"
+                              >{JSON.stringify(row.metadata_current)}</code
+                            >
                           {/if}
                         </div>
                       </div>
@@ -499,7 +525,9 @@
                       <div class="metadata-diff">
                         <div class="metadata-diff-block">
                           <div class="metadata-diff-heading">Before (MediaCloud)</div>
-                          <code class="metadata-patch-code">{JSON.stringify(row.metadata_current || {})}</code>
+                          <code class="metadata-patch-code"
+                            >{JSON.stringify(row.metadata_current || {})}</code
+                          >
                           <div class="metadata-patch-footnote">
                             PATCH updates only:
                             {Object.keys(row.metadata_update || {}).join(', ')}
@@ -507,12 +535,12 @@
                         </div>
                         <div class="metadata-diff-block">
                           <div class="metadata-diff-heading">After (publish)</div>
-                          <code class="metadata-patch-code metadata-after-code">{JSON.stringify(
-                              metaAfterMerged(row, row.metadata_update)
-                            )}</code>
+                          <code class="metadata-patch-code metadata-after-code"
+                            >{JSON.stringify(metaAfterMerged(row, row.metadata_update))}</code
+                          >
                           <div class="metadata-patch-footnote">
-                            Full language / geography snapshot after applying the PATCH above (unchanged fields keep
-                            their MediaCloud values).
+                            Full language / geography snapshot after applying the PATCH above
+                            (unchanged fields keep their MediaCloud values).
                           </div>
                         </div>
                       </div>
@@ -520,12 +548,16 @@
                       <div class="metadata-diff">
                         <div class="metadata-diff-block">
                           <div class="metadata-diff-heading">Before (MediaCloud)</div>
-                          <div class="metadata-diff-unknown">Unknown — could not load the current source.</div>
+                          <div class="metadata-diff-unknown">
+                            Unknown — could not load the current source.
+                          </div>
                         </div>
                         <div class="metadata-diff-block">
                           <div class="metadata-diff-heading">After (if you publish)</div>
                           {#if row.metadata_desired && Object.keys(row.metadata_desired).length > 0}
-                            <code class="metadata-patch-code">{JSON.stringify(row.metadata_desired)}</code>
+                            <code class="metadata-patch-code"
+                              >{JSON.stringify(row.metadata_desired)}</code
+                            >
                           {:else}
                             <div class="metadata-diff-muted">—</div>
                           {/if}
@@ -537,7 +569,11 @@
                   </td>
                   <td>
                     {#if row.source_id}
-                      <a href={mediacloudSourceUrl(row.source_id)} target="_blank" rel="noopener noreferrer">
+                      <a
+                        href={mediacloudSourceUrl(row.source_id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
                         View ↗
                       </a>
                     {:else}
@@ -555,7 +591,8 @@
 
       {#if publishPreviewSummary}
         <div class="publish-preview-summary">
-          Planned: {publishPreviewSummary.ensure_association || 0} ensure, {publishPreviewSummary.create_source_and_associate || 0} create+associate, {publishPreviewSummary.remove_association || 0} remove
+          Planned: {publishPreviewSummary.ensure_association || 0} ensure, {publishPreviewSummary.create_source_and_associate ||
+            0} create+associate, {publishPreviewSummary.remove_association || 0} remove
           {#if (publishPreviewSummary.metadata_updates_planned || 0) > 0}
             , {publishPreviewSummary.metadata_updates_planned} metadata change(s) vs MediaCloud
           {/if}
@@ -563,14 +600,19 @@
             , {publishPreviewSummary.metadata_updates_skipped_unchanged} metadata already matched MediaCloud
           {/if}
           {#if (publishPreviewSummary.metadata_remote_lookup_skipped || 0) > 0}
-            , {publishPreviewSummary.metadata_remote_lookup_skipped} source(s) could not be read for compare (publish may still PATCH from review if you continue)
+            , {publishPreviewSummary.metadata_remote_lookup_skipped} source(s) could not be read for
+            compare (publish may still PATCH from review if you continue)
           {/if}
           .
         </div>
       {/if}
 
       <div class="publish-preview-actions">
-        <button type="button" class="export-btn export-btn-secondary" on:click={() => (showPublishPreviewModal = false)}>
+        <button
+          type="button"
+          class="export-btn export-btn-secondary"
+          on:click={() => (showPublishPreviewModal = false)}
+        >
           Cancel
         </button>
         <button
@@ -585,7 +627,11 @@
       {#if previewTargetCollectionId}
         <div class="publish-note">
           Target collection:
-          <a href={mediacloudCollectionUrl(previewTargetCollectionId)} target="_blank" rel="noopener noreferrer">
+          <a
+            href={mediacloudCollectionUrl(previewTargetCollectionId)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {previewTargetCollectionId}
           </a>
         </div>

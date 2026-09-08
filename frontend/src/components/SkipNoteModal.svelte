@@ -30,7 +30,7 @@
   }
 </script>
 
-<BaseModal show={show} onClose={handleCancel}>
+<BaseModal {show} onClose={handleCancel}>
   <div
     class="modal-content"
     role="dialog"
@@ -40,8 +40,8 @@
   >
     <h2 id="skip-modal-title">Skip for now</h2>
     <p class="modal-description">
-      Optionally add a note for coordinators about <strong>{sourceLabel || 'this source'}</strong>. Notes appear in the
-      skipped queue and in the audit CSV.
+      Optionally add a note for coordinators about <strong>{sourceLabel || 'this source'}</strong>.
+      Notes appear in the skipped queue and in the audit CSV.
     </p>
 
     <div class="form-group">

@@ -1,10 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import {
-    getReviewProject,
-    getRemovedItemsByProjectGuid,
-    decideQueueItem,
-  } from '../lib/api.js';
+  import { getReviewProject, getRemovedItemsByProjectGuid, decideQueueItem } from '../lib/api.js';
 
   let projectGuid = null;
   let project = null;
@@ -18,9 +14,7 @@
   let requeueLoadingId = null;
 
   function parseProjectGuidFromUrl() {
-    const match = window.location.pathname.match(
-      /^\/review-projects\/([0-9a-fA-F-]+)\/removed$/
-    );
+    const match = window.location.pathname.match(/^\/review-projects\/([0-9a-fA-F-]+)\/removed$/);
     return match ? match[1] : null;
   }
 
@@ -137,7 +131,11 @@
                   —
                 {/if}
               </td>
-              <td>{item.source_metadata?.primary_language || item.source_metadata?.language || '—'}</td>
+              <td
+                >{item.source_metadata?.primary_language ||
+                  item.source_metadata?.language ||
+                  '—'}</td
+              >
               <td>{item.source_metadata?.pub_country || '—'}</td>
               <td>{item.source_metadata?.pub_state || '—'}</td>
               <td class="td-reason">{item.removal_reason || '—'}</td>
@@ -364,4 +362,3 @@
     cursor: not-allowed;
   }
 </style>
-

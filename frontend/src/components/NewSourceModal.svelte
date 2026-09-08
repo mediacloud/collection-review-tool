@@ -149,11 +149,7 @@
 
             <div class="form-group">
               <label for="primary-language">Primary language *</label>
-              <select
-                id="primary-language"
-                bind:value={primaryLanguage}
-                disabled={loading}
-              >
+              <select id="primary-language" bind:value={primaryLanguage} disabled={loading}>
                 <option value="">Select language...</option>
                 {#each languageOptions as opt}
                   <option value={opt.value}>{opt.label}</option>
@@ -163,11 +159,7 @@
 
             <div class="form-group">
               <label for="pub-country">Pub country (ISO 3166-1 alpha-3) *</label>
-              <select
-                id="pub-country"
-                bind:value={pubCountry}
-                disabled={loading}
-              >
+              <select id="pub-country" bind:value={pubCountry} disabled={loading}>
                 <option value="">Select country...</option>
                 {#each countryOptions as opt}
                   <option value={opt.value}>{opt.label}</option>
@@ -200,19 +192,10 @@
         {/if}
 
         <div class="modal-actions">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            on:click={handleClose}
-            disabled={loading}
-          >
+          <button type="button" class="btn btn-secondary" on:click={handleClose} disabled={loading}>
             Cancel
           </button>
-          <button
-            type="submit"
-            class="btn btn-primary"
-            disabled={loading}
-          >
+          <button type="submit" class="btn btn-primary" disabled={loading}>
             {loading ? 'Adding...' : 'Add Source'}
           </button>
         </div>
@@ -348,7 +331,9 @@
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition: background-color 0.2s, opacity 0.2s;
+    transition:
+      background-color 0.2s,
+      opacity 0.2s;
   }
 
   .btn-primary {
@@ -374,4 +359,3 @@
     cursor: not-allowed;
   }
 </style>
-

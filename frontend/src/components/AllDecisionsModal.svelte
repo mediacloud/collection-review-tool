@@ -104,7 +104,7 @@
                   </td>
                   <td>
                     {#if !item.is_new_source && item.source_id}
-                      <a 
+                      <a
                         href={`https://search.mediacloud.org/sources/${item.source_id}`}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -223,7 +223,9 @@
     color: #7f8c8d;
     padding: 4px 6px;
     border-radius: 999px;
-    transition: background-color 0.2s, color 0.2s;
+    transition:
+      background-color 0.2s,
+      color 0.2s;
   }
 
   .close-button:hover {
@@ -396,7 +398,9 @@
     padding: 5px 10px;
     cursor: pointer;
     white-space: nowrap;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
   }
 
   .reevaluate-button:hover {
@@ -404,4 +408,3 @@
     border-color: #c0c7d0;
   }
 </style>
-

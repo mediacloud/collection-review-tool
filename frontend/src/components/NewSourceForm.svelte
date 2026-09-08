@@ -35,7 +35,7 @@
 
 <div class="new-source-form">
   <h3>Propose New Source</h3>
-  
+
   <form on:submit|preventDefault={handleSubmit}>
     <div class="form-group">
       <label for="source-label">Source Label</label>

@@ -7,7 +7,12 @@
   import RemovalReasonModal from '../components/RemovalReasonModal.svelte';
   import SkipNoteModal from '../components/SkipNoteModal.svelte';
   import EditMetadataModal from '../components/EditMetadataModal.svelte';
-  import { getReviewProject, getSkippedItemsByProjectGuid, decideQueueItem, updateQueueItemSourceMetadata } from '../lib/api.js';
+  import {
+    getReviewProject,
+    getSkippedItemsByProjectGuid,
+    decideQueueItem,
+    updateQueueItemSourceMetadata,
+  } from '../lib/api.js';
 
   let projectGuid = null;
   let project = null;
@@ -46,7 +51,7 @@
     { value: 'tr', label: 'tr – Turkish' },
     { value: 'vi', label: 'vi – Vietnamese' },
     { value: 'sw', label: 'sw – Swahili' },
-    { value: 'fa', label: 'fa – Persian' }
+    { value: 'fa', label: 'fa – Persian' },
   ];
 
   const COUNTRY_OPTIONS = Object.keys(iso3166.data)
@@ -74,8 +79,8 @@
         getSkippedItemsByProjectGuid(projectGuid, {
           page: 1,
           page_size: 1000,
-          dedupe_source_id: true
-        })
+          dedupe_source_id: true,
+        }),
       ]);
 
       project = projectResp.project;
@@ -241,9 +246,13 @@
 
     try {
       showEditMetadataError = null;
-      const response = await updateQueueItemSourceMetadata(selectedItem.queue_guid, selectedItem.id, {
-        [editFieldKey]: newValue
-      });
+      const response = await updateQueueItemSourceMetadata(
+        selectedItem.queue_guid,
+        selectedItem.id,
+        {
+          [editFieldKey]: newValue,
+        }
+      );
       const updated = response?.item;
       if (updated) {
         const merged = {
@@ -320,7 +329,11 @@
                   —
                 {/if}
               </td>
-              <td>{item.source_metadata?.primary_language || item.source_metadata?.language || '—'}</td>
+              <td
+                >{item.source_metadata?.primary_language ||
+                  item.source_metadata?.language ||
+                  '—'}</td
+              >
               <td>{item.source_metadata?.pub_country || '—'}</td>
               <td>{item.source_metadata?.pub_state || '—'}</td>
               <td class="td-note">{item.skip_note || '—'}</td>
@@ -375,10 +388,10 @@
             openEditMetadata(
               'primary_language',
               'Language (ISO 639-1)',
-              selectedItem?.source_metadata?.primary_language || selectedItem?.source_metadata?.language,
+              selectedItem?.source_metadata?.primary_language ||
+                selectedItem?.source_metadata?.language,
               LANGUAGE_OPTIONS
-            )
-          }
+            )}
           onEditPubCountry={() => {
             const options = [{ value: '', label: 'None / Not set' }, ...COUNTRY_OPTIONS];
             openEditMetadata(
@@ -689,4 +702,3 @@
     cursor: not-allowed;
   }
 </style>
-

@@ -65,9 +65,7 @@
     });
 
   function parseProjectGuidFromUrl() {
-    const match = window.location.pathname.match(
-      /^\/review-projects\/([0-9a-fA-F-]+)\/kept$/
-    );
+    const match = window.location.pathname.match(/^\/review-projects\/([0-9a-fA-F-]+)\/kept$/);
     return match ? match[1] : null;
   }
 
@@ -239,9 +237,13 @@
 
     try {
       actionError = null;
-      const response = await updateQueueItemSourceMetadata(selectedItem.queue_guid, selectedItem.id, {
-        [editFieldKey]: newValue,
-      });
+      const response = await updateQueueItemSourceMetadata(
+        selectedItem.queue_guid,
+        selectedItem.id,
+        {
+          [editFieldKey]: newValue,
+        }
+      );
       const updated = response?.item;
       if (updated) {
         const merged = {
@@ -319,7 +321,11 @@
                   —
                 {/if}
               </td>
-              <td>{item.source_metadata?.primary_language || item.source_metadata?.language || '—'}</td>
+              <td
+                >{item.source_metadata?.primary_language ||
+                  item.source_metadata?.language ||
+                  '—'}</td
+              >
               <td>{item.source_metadata?.pub_country || '—'}</td>
               <td>{item.source_metadata?.pub_state || '—'}</td>
               <td>
@@ -386,10 +392,10 @@
             openEditMetadata(
               'primary_language',
               'Language (ISO 639-1)',
-              selectedItem?.source_metadata?.primary_language || selectedItem?.source_metadata?.language,
+              selectedItem?.source_metadata?.primary_language ||
+                selectedItem?.source_metadata?.language,
               LANGUAGE_OPTIONS
-            )
-          }
+            )}
           onEditPubCountry={() => {
             const options = [{ value: '', label: 'None / Not set' }, ...COUNTRY_OPTIONS];
             openEditMetadata(

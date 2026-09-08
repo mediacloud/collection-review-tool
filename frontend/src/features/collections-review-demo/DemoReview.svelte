@@ -6,7 +6,7 @@
     decideQueueItem,
     proposeNewSourceByQueueGuid,
     updateQueueItemSourceMetadata,
-    getReviewQueueGuidelines
+    getReviewQueueGuidelines,
   } from '../../lib/api.js';
   import { onMount } from 'svelte';
 
@@ -14,209 +14,169 @@
   export let navVariant = 'glass';
 
   // Queue GUID from /demo/reviews/{queueGuid}
-const queueGuid = window.location.pathname.split('/').pop();
+  const queueGuid = window.location.pathname.split('/').pop();
 
-let projectGuid = '';
-let projectName = '';
-let items = [];
-let sourceIdx = 0;
-let loading = true;
-let loadError = '';
-let saving = false;
-let guidelines = '';
-let guidelinesLoading = true;
-let guidelinesError = '';
+  let projectGuid = '';
+  let projectName = '';
+  let items = [];
+  let sourceIdx = 0;
+  let loading = true;
+  let loadError = '';
+  let saving = false;
+  let guidelines = '';
+  let guidelinesLoading = true;
+  let guidelinesError = '';
 
-function adaptItem(item) {
-  const metadata = item.source_metadata ?? {};
+  function adaptItem(item) {
+    const metadata = item.source_metadata ?? {};
 
-  return {
-    ...item,
-    title:
-      item.source_label ||
-      `Source ${item.source_id ?? item.id}`,
-    homepage: item.source_homepage || '',
-    language: metadata.primary_language || '—',
-    country: metadata.pub_country || '—',
-    state: metadata.pub_state || '—',
-  };
-}
+    return {
+      ...item,
+      title: item.source_label || `Source ${item.source_id ?? item.id}`,
+      homepage: item.source_homepage || '',
+      language: metadata.primary_language || '—',
+      country: metadata.pub_country || '—',
+      state: metadata.pub_state || '—',
+    };
+  }
 
-onMount(async () => {
+  onMount(async () => {
     getReviewQueueGuidelines(queueGuid)
-    .then((result) => {
-      guidelines = result || '';
-    })
-    .catch((error) => {
+      .then((result) => {
+        guidelines = result || '';
+      })
+      .catch((error) => {
+        console.error(error);
+
+        guidelinesError =
+          error.response?.data?.error || error.message || 'Could not load guidelines.';
+      })
+      .finally(() => {
+        guidelinesLoading = false;
+      });
+
+    try {
+      const [queueData, itemData] = await Promise.all([
+        getReviewByQueueGuid(queueGuid),
+        getReviewItemsByQueueGuid(queueGuid, {
+          page: 1,
+          page_size: 1000,
+        }),
+      ]);
+
+      projectGuid = queueData.review_project_guid || '';
+      projectName = queueData.name || queueData.collection_name || 'Review project';
+
+      items = (itemData.items || []).map(adaptItem);
+
+      const firstUndecided = items.findIndex((item) => item.decision === 'undecided');
+
+      sourceIdx = firstUndecided >= 0 ? firstUndecided : Math.max(0, items.length - 1);
+    } catch (error) {
       console.error(error);
 
-      guidelinesError =
-        error.response?.data?.error ||
-        error.message ||
-        'Could not load guidelines.';
-    })
-    .finally(() => {
-      guidelinesLoading = false;
-    });
+      loadError = error.response?.data?.error || error.message || 'Could not load this queue.';
+    } finally {
+      loading = false;
+    }
+  });
 
-  try {
-    const [queueData, itemData] = await Promise.all([
-      getReviewByQueueGuid(queueGuid),
-      getReviewItemsByQueueGuid(queueGuid, {
-        page: 1,
-        page_size: 1000,
-      }),
-    ]);
+  $: src = items[sourceIdx] ?? null;
 
-    projectGuid = queueData.review_project_guid || '';
-    projectName =
-      queueData.name ||
-      queueData.collection_name ||
-      'Review project';
+  $: allDone = !loading && items.length > 0 && items.every((item) => item.decision !== 'undecided');
 
-    items = (itemData.items || []).map(adaptItem);
+  $: currentDecision =
+    src && src.decision !== 'undecided'
+      ? {
+          verdict: {
+            keep: 'kept',
+            remove: 'removed',
+            add: 'added',
+            skip: 'skipped',
+          }[src.decision],
+          reason: src.removal_reason || src.skip_note || '',
+        }
+      : null;
 
-    const firstUndecided = items.findIndex(
-      (item) => item.decision === 'undecided'
-    );
-
-    sourceIdx =
-      firstUndecided >= 0
-        ? firstUndecided
-        : Math.max(0, items.length - 1);
-  } catch (error) {
-    console.error(error);
-
-    loadError =
-      error.response?.data?.error ||
-      error.message ||
-      'Could not load this queue.';
-  } finally {
-    loading = false;
-  }
-});
-
-$: src = items[sourceIdx] ?? null;
-
-$: allDone =
-  !loading &&
-  items.length > 0 &&
-  items.every((item) => item.decision !== 'undecided');
-
-$: currentDecision =
-  src && src.decision !== 'undecided'
-    ? {
-        verdict: {
-          keep: 'kept',
-          remove: 'removed',
-          add: 'added',
-          skip: 'skipped',
-        }[src.decision],
-        reason:
-          src.removal_reason ||
-          src.skip_note ||
-          '',
-      }
-    : null;
-
-$: meta = src
-  ? [
-      {
-        k: 'primary_language',
-        label: 'Language',
-        v: src.language,
-      },
-      {
-        k: 'pub_country',
-        label: 'Pub country',
-        v: src.country,
-      },
-      {
-        k: 'pub_state',
-        label: 'Pub state',
-        v: src.state,
-      },
-    ]
-  : [];
+  $: meta = src
+    ? [
+        {
+          k: 'primary_language',
+          label: 'Language',
+          v: src.language,
+        },
+        {
+          k: 'pub_country',
+          label: 'Pub country',
+          v: src.country,
+        },
+        {
+          k: 'pub_state',
+          label: 'Pub state',
+          v: src.state,
+        },
+      ]
+    : [];
 
   $: counts = {
-  totalKept: items.filter(
-    (item) => item.decision === 'keep'
-  ).length,
+    totalKept: items.filter((item) => item.decision === 'keep').length,
 
-  totalRemoved: items.filter(
-    (item) => item.decision === 'remove'
-  ).length,
+    totalRemoved: items.filter((item) => item.decision === 'remove').length,
 
-  totalSkipped: items.filter(
-    (item) => item.decision === 'skip'
-  ).length,
+    totalSkipped: items.filter((item) => item.decision === 'skip').length,
 
-  totalAdded: items.filter(
-    (item) => item.decision === 'add'
-  ).length,
+    totalAdded: items.filter((item) => item.decision === 'add').length,
 
-  totalDecided: items.filter(
-    (item) => item.decision !== 'undecided'
-  ).length,
-};
+    totalDecided: items.filter((item) => item.decision !== 'undecided').length,
+  };
 
-function navigateToSource(index) {
-  sourceIdx = Math.max(
-    0,
-    Math.min(index, items.length - 1)
-  );
-}
+  function navigateToSource(index) {
+    sourceIdx = Math.max(0, Math.min(index, items.length - 1));
+  }
 
-function replaceItem(updatedItem) {
-  items = items.map((item) =>
-    item.id === updatedItem.id
-      ? adaptItem(updatedItem)
-      : item
-  );
-}
+  function replaceItem(updatedItem) {
+    items = items.map((item) => (item.id === updatedItem.id ? adaptItem(updatedItem) : item));
+  }
 
-$: sourceHref = src?.homepage
-  ? /^https?:\/\//i.test(src.homepage)
-    ? src.homepage
-    : `https://${src.homepage}`
-  : '#';
+  $: sourceHref = src?.homepage
+    ? /^https?:\/\//i.test(src.homepage)
+      ? src.homepage
+      : `https://${src.homepage}`
+    : '#';
 
   // ── Metadata editing ──────────────────────────────────────────────────────
   let editingField = null;
   let editVal = '';
 
-  function startEdit(field) { editingField = field.k; editVal = field.v; }
+  function startEdit(field) {
+    editingField = field.k;
+    editVal = field.v;
+  }
 
   async function saveEdit() {
-  if (!src || !editingField || saving) return;
+    if (!src || !editingField || saving) return;
 
-  try {
-    saving = true;
+    try {
+      saving = true;
 
-    const data = await updateQueueItemSourceMetadata(
-      queueGuid,
-      src.id,
-      {
+      const data = await updateQueueItemSourceMetadata(queueGuid, src.id, {
         [editingField]: editVal,
-      }
-    );
+      });
 
-    replaceItem(data.item);
-    editingField = null;
-  } catch (error) {
-    console.error(error);
+      replaceItem(data.item);
+      editingField = null;
+    } catch (error) {
+      console.error(error);
 
-    loadError =
-      error.response?.data?.error ||
-      error.message ||
-      'Could not update metadata.';
-  } finally {
-    saving = false;
+      loadError = error.response?.data?.error || error.message || 'Could not update metadata.';
+    } finally {
+      saving = false;
+    }
   }
-}
 
-  function cancelEdit() { editingField = null; }
+  function cancelEdit() {
+    editingField = null;
+  }
 
   let confirmedFields = {};
 
@@ -229,7 +189,7 @@ $: sourceHref = src?.homepage
     confirmedFields = { ...confirmedFields, [k]: !confirmedFields[k] };
   }
 
-  $: isConfirmed = (k) => confirmedFields[k] ?? (k !== 'pub_state');
+  $: isConfirmed = (k) => confirmedFields[k] ?? k !== 'pub_state';
 
   // ── Reason modal (Fix 5) ─────────────────────────────────────────────────
   // Keep and Remove require a reason before committing.
@@ -240,150 +200,127 @@ $: sourceHref = src?.homepage
 
   function openReasonModal(verdict) {
     reasonModal = { pendingVerdict: verdict };
-    reasonText  = currentDecision?.reason ?? '';
+    reasonText = currentDecision?.reason ?? '';
   }
 
   function cancelReason() {
     reasonModal = null;
-    reasonText  = '';
+    reasonText = '';
   }
 
   async function confirmReason() {
-  if (!reasonCanConfirm || !src || saving) return;
+    if (!reasonCanConfirm || !src || saving) return;
 
-  const reason = reasonText.trim();
-  const decision = reasonModal.pendingVerdict;
+    const reason = reasonText.trim();
+    const decision = reasonModal.pendingVerdict;
 
-  try {
-    saving = true;
+    try {
+      saving = true;
 
-    const updatedItem = await decideQueueItem(
-      queueGuid,
-      src.id,
-      decision,
-      decision === 'remove' ? reason : null
-    );
+      const updatedItem = await decideQueueItem(
+        queueGuid,
+        src.id,
+        decision,
+        decision === 'remove' ? reason : null
+      );
 
-    replaceItem(updatedItem);
+      replaceItem(updatedItem);
 
-    if (sourceIdx < items.length - 1) {
-      sourceIdx += 1;
+      if (sourceIdx < items.length - 1) {
+        sourceIdx += 1;
+      }
+
+      reasonModal = null;
+      reasonText = '';
+    } catch (error) {
+      console.error(error);
+
+      loadError = error.response?.data?.error || error.message || 'Could not save the decision.';
+    } finally {
+      saving = false;
     }
-
-    reasonModal = null;
-    reasonText = '';
-  } catch (error) {
-    console.error(error);
-
-    loadError =
-      error.response?.data?.error ||
-      error.message ||
-      'Could not save the decision.';
-  } finally {
-    saving = false;
   }
-}
 
   // ── Decisions ─────────────────────────────────────────────────────────────
   // Keep/Remove open reason modal; Skip is immediate.
- async function keep() {
-  if (!src || saving) return;
+  async function keep() {
+    if (!src || saving) return;
 
-  try {
-    saving = true;
+    try {
+      saving = true;
 
-    const updatedItem = await decideQueueItem(
-      queueGuid,
-      src.id,
-      'keep'
-    );
+      const updatedItem = await decideQueueItem(queueGuid, src.id, 'keep');
 
-    replaceItem(updatedItem);
+      replaceItem(updatedItem);
 
-    if (sourceIdx < items.length - 1) {
-      sourceIdx += 1;
+      if (sourceIdx < items.length - 1) {
+        sourceIdx += 1;
+      }
+    } catch (error) {
+      console.error(error);
+
+      loadError = error.response?.data?.error || error.message || 'Could not save the decision.';
+    } finally {
+      saving = false;
     }
-  } catch (error) {
-    console.error(error);
-
-    loadError =
-      error.response?.data?.error ||
-      error.message ||
-      'Could not save the decision.';
-  } finally {
-    saving = false;
   }
-}
 
-function remove() {
-  openReasonModal('remove');
-}
+  function remove() {
+    openReasonModal('remove');
+  }
 
-async function skip() {
-  if (!src || saving) return;
+  async function skip() {
+    if (!src || saving) return;
 
-  try {
-    saving = true;
+    try {
+      saving = true;
 
-    const updatedItem = await decideQueueItem(
-      queueGuid,
-      src.id,
-      'skip'
-    );
+      const updatedItem = await decideQueueItem(queueGuid, src.id, 'skip');
 
-    replaceItem(updatedItem);
+      replaceItem(updatedItem);
 
-    if (sourceIdx < items.length - 1) {
-      sourceIdx += 1;
+      if (sourceIdx < items.length - 1) {
+        sourceIdx += 1;
+      }
+    } catch (error) {
+      console.error(error);
+
+      loadError = error.response?.data?.error || error.message || 'Could not save the decision.';
+    } finally {
+      saving = false;
     }
-  } catch (error) {
-    console.error(error);
-
-    loadError =
-      error.response?.data?.error ||
-      error.message ||
-      'Could not save the decision.';
-  } finally {
-    saving = false;
   }
-}
 
   // Keyboard shortcuts
   function onKey(e) {
-  if (
-    e.target.tagName === 'INPUT' ||
-    e.target.tagName === 'TEXTAREA'
-  ) {
-    return;
-  }
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+      return;
+    }
 
-  if (allDone || reasonModal || saving) {
-    return;
-  }
+    if (allDone || reasonModal || saving) {
+      return;
+    }
 
-  if (e.key === 'k' || e.key === 'Enter') {
-    keep();
-  }
+    if (e.key === 'k' || e.key === 'Enter') {
+      keep();
+    }
 
-  if (e.key === 'r') {
-    remove();
-  }
+    if (e.key === 'r') {
+      remove();
+    }
 
-  if (e.key === 's') {
-    skip();
-  }
+    if (e.key === 's') {
+      skip();
+    }
 
-  if (e.key === 'ArrowLeft' && sourceIdx > 0) {
-    navigateToSource(sourceIdx - 1);
-  }
+    if (e.key === 'ArrowLeft' && sourceIdx > 0) {
+      navigateToSource(sourceIdx - 1);
+    }
 
-  if (
-    e.key === 'ArrowRight' &&
-    sourceIdx < items.length - 1
-  ) {
-    navigateToSource(sourceIdx + 1);
+    if (e.key === 'ArrowRight' && sourceIdx < items.length - 1) {
+      navigateToSource(sourceIdx + 1);
+    }
   }
-}
 
   // ── Propose-new-source modal ──────────────────────────────────────────────
   let showPropose = false;
@@ -392,100 +329,85 @@ async function skip() {
   let proposeToast = '';
 
   async function submitPropose() {
-  if (
-    !proposeLabel.trim() ||
-    !proposeUrl.trim() ||
-    saving
-  ) {
-    return;
-  }
+    if (!proposeLabel.trim() || !proposeUrl.trim() || saving) {
+      return;
+    }
 
-  try {
-    saving = true;
+    try {
+      saving = true;
 
-    const createdItem =
-      await proposeNewSourceByQueueGuid(
+      const createdItem = await proposeNewSourceByQueueGuid(
         queueGuid,
         proposeLabel.trim(),
         proposeUrl.trim()
       );
 
-    items = [
-      ...items,
-      adaptItem(createdItem)
-    ];
+      items = [...items, adaptItem(createdItem)];
 
-    proposeLabel = '';
-    proposeUrl = '';
-    showPropose = false;
-    proposeToast =
-      'Source added — it appears in Added.';
+      proposeLabel = '';
+      proposeUrl = '';
+      showPropose = false;
+      proposeToast = 'Source added — it appears in Added.';
 
-    setTimeout(() => {
-      proposeToast = '';
-    }, 2500);
-  } catch (error) {
-    console.error(error);
+      setTimeout(() => {
+        proposeToast = '';
+      }, 2500);
+    } catch (error) {
+      console.error(error);
 
-    loadError =
-      error.response?.data?.error ||
-      error.message ||
-      'Could not add the source.';
-  } finally {
-    saving = false;
+      loadError = error.response?.data?.error || error.message || 'Could not add the source.';
+    } finally {
+      saving = false;
+    }
   }
-}
 </script>
 
 <svelte:window on:keydown={onKey} />
 
 <div class="review-page">
   <Nav
-  role="queue"
-  projectCtx={projectName}
-  {projectGuid}
-  {queueGuid}
-  {onNavigate}
-  variant={navVariant}
-/>
+    role="queue"
+    projectCtx={projectName}
+    {projectGuid}
+    {queueGuid}
+    {onNavigate}
+    variant={navVariant}
+  />
 
   <!-- ── ALL-DONE STATE ─────────────────────────────────────────────────── -->
   {#if loading}
-  <div class="done-wrap">
-    <div class="done-card">
-      Loading review queue...
+    <div class="done-wrap">
+      <div class="done-card">Loading review queue...</div>
     </div>
-  </div>
-
-{:else if loadError}
-  <div class="done-wrap">
-    <div class="done-card">
-      {loadError}
+  {:else if loadError}
+    <div class="done-wrap">
+      <div class="done-card">
+        {loadError}
+      </div>
     </div>
-  </div>
-
-{:else if items.length === 0}
-  <div class="done-wrap">
-    <div class="done-card">
-      This queue has no sources.
+  {:else if items.length === 0}
+    <div class="done-wrap">
+      <div class="done-card">This queue has no sources.</div>
     </div>
-  </div>
-
-{:else if allDone}
+  {:else if allDone}
     <div class="done-wrap">
       <div class="done-card">
         <div class="done-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5l9-11"/></svg>
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"><path d="M5 12.5 10 17.5l9-11" /></svg
+          >
         </div>
         <h2 class="done-h2">Queue complete</h2>
         <p class="done-sub">You've reviewed all {items.length} sources in this demo session.</p>
         <div class="done-tally">
-          {#each [
-            { l: 'Kept',    n: counts.totalKept,    c: '#E25C40' },
-            { l: 'Removed', n: counts.totalRemoved, c: '#1A1C1F' },
-            { l: 'Skipped', n: counts.totalSkipped, c: '#9CA0A8' },
-            { l: 'Added',   n: counts.totalAdded,   c: '#F5A48A' },
-          ] as t}
+          {#each [{ l: 'Kept', n: counts.totalKept, c: '#E25C40' }, { l: 'Removed', n: counts.totalRemoved, c: '#1A1C1F' }, { l: 'Skipped', n: counts.totalSkipped, c: '#9CA0A8' }, { l: 'Added', n: counts.totalAdded, c: '#F5A48A' }] as t}
             <div class="done-stat">
               <span class="done-dot" style:background={t.c}></span>
               <span class="done-n" style:color={t.c}>{t.n}</span>
@@ -495,24 +417,65 @@ async function skip() {
         </div>
         <!-- Fix 2: primary = Back to review at last source; secondary = decisions page -->
         <div class="done-actions">
-          <button class="btn btn-primary" on:click={() => { navigateToSource(items.length - 1);}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(180deg)"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          <button
+            class="btn btn-primary"
+            on:click={() => {
+              navigateToSource(items.length - 1);
+            }}
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              style="transform:rotate(180deg)"><path d="M5 12h14M13 6l6 6-6 6" /></svg
+            >
             Back to review
           </button>
-          <button class="btn" on:click={() => onNavigate(`/demo/review-projects/${projectGuid}/queues/${queueGuid}/decisions`)}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5z"/><path d="m2 14 10 5 10-5M2 11l10 5 10-5"/></svg>
+          <button
+            class="btn"
+            on:click={() =>
+              onNavigate(`/demo/review-projects/${projectGuid}/queues/${queueGuid}/decisions`)}
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><path d="M12 3 2 8l10 5 10-5z" /><path d="m2 14 10 5 10-5M2 11l10 5 10-5" /></svg
+            >
             Check all decisions
           </button>
         </div>
       </div>
     </div>
-
   {:else}
     <!-- ── ACTION BAR ──────────────────────────────────────────────────── -->
     <div class="action-bar-wrap">
       <div class="action-bar">
-        <button class="btn btn-sm" on:click={() => onNavigate(`/demo/review-projects/${projectGuid}/queues/${queueGuid}`)}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(180deg)"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        <button
+          class="btn btn-sm"
+          on:click={() => onNavigate(`/demo/review-projects/${projectGuid}/queues/${queueGuid}`)}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="transform:rotate(180deg)"><path d="M5 12h14M13 6l6 6-6 6" /></svg
+          >
           Back to queue
         </button>
         <div class="action-divider"></div>
@@ -521,19 +484,46 @@ async function skip() {
           <span class="progress-current">{sourceIdx + 1}</span>
           <span class="progress-sep">/ {items.length}</span>
           <div class="progress-mini-track">
-            <div class="progress-mini-fill" style:width="{Math.round((sourceIdx + 1) / items.length * 100)}%"></div>
+            <div
+              class="progress-mini-fill"
+              style:width="{Math.round(((sourceIdx + 1) / items.length) * 100)}%"
+            ></div>
           </div>
-          <span class="progress-pct-label">{Math.round((sourceIdx + 1) / items.length * 100)}%</span>
+          <span class="progress-pct-label"
+            >{Math.round(((sourceIdx + 1) / items.length) * 100)}%</span
+          >
         </div>
 
         <div class="action-spacer"></div>
 
-        <button class="btn btn-sm" on:click={() => onNavigate(`/demo/review-projects/${projectGuid}/queues/${queueGuid}/decisions`)}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5z"/><path d="m2 14 10 5 10-5M2 11l10 5 10-5"/></svg>
+        <button
+          class="btn btn-sm"
+          on:click={() =>
+            onNavigate(`/demo/review-projects/${projectGuid}/queues/${queueGuid}/decisions`)}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ><path d="M12 3 2 8l10 5 10-5z" /><path d="m2 14 10 5 10-5M2 11l10 5 10-5" /></svg
+          >
           All decisions · {counts.totalDecided}
         </button>
-        <button class="btn btn-primary btn-sm" on:click={() => showPropose = true}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <button class="btn btn-primary btn-sm" on:click={() => (showPropose = true)}>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg
+          >
           Propose new source
         </button>
       </div>
@@ -541,7 +531,6 @@ async function skip() {
 
     <!-- ── TWO-COLUMN LAYOUT ───────────────────────────────────────────── -->
     <div class="main-grid">
-
       <!-- Source card -->
       <div class="card">
         <!-- Source header -->
@@ -550,23 +539,59 @@ async function skip() {
             <div class="source-header-left">
               <h1 class="source-title">{src.title}</h1>
               {#if currentDecision}
-                {@const VCOLORS = { kept: '#E25C40', removed: '#1A1C1F', added: '#F5A48A', skipped: '#9CA0A8' }}
-                {@const VLABELS = { kept: 'Kept', removed: 'Removed', added: 'Added', skipped: 'Skipped' }}
+                {@const VCOLORS = {
+                  kept: '#E25C40',
+                  removed: '#1A1C1F',
+                  added: '#F5A48A',
+                  skipped: '#9CA0A8',
+                }}
+                {@const VLABELS = {
+                  kept: 'Kept',
+                  removed: 'Removed',
+                  added: 'Added',
+                  skipped: 'Skipped',
+                }}
                 <div class="chips-row">
-                  <span class="chip chip-decided" style:background="{VCOLORS[currentDecision.verdict]}1a" style:color={VCOLORS[currentDecision.verdict]}>
-                    <span class="chip-dot" style:background={VCOLORS[currentDecision.verdict]}></span>
+                  <span
+                    class="chip chip-decided"
+                    style:background="{VCOLORS[currentDecision.verdict]}1a"
+                    style:color={VCOLORS[currentDecision.verdict]}
+                  >
+                    <span class="chip-dot" style:background={VCOLORS[currentDecision.verdict]}
+                    ></span>
                     {VLABELS[currentDecision.verdict]}
                   </span>
                 </div>
               {/if}
               <div class="source-links">
                 <span class="source-link-static">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    ><circle cx="12" cy="12" r="9" /><path
+                      d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"
+                    /></svg
+                  >
                   {src.homepage}
                 </span>
                 <a class="source-link" href={sourceHref} target="_blank" rel="noreferrer">
                   Review in Media Cloud
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg
+                  >
                 </a>
               </div>
               {#if currentDecision?.reason}
@@ -580,7 +605,16 @@ async function skip() {
                 on:click={() => navigateToSource(sourceIdx - 1)}
                 aria-label="Previous source"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg
+                >
               </button>
 
               <button
@@ -589,7 +623,16 @@ async function skip() {
                 on:click={() => navigateToSource(sourceIdx + 1)}
                 aria-label="Next source"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"><path d="M9 18l6-6-6-6" /></svg
+                >
               </button>
             </div>
           </div>
@@ -609,7 +652,7 @@ async function skip() {
                 <input
                   class="meta-edit-input"
                   bind:value={editVal}
-                  on:keydown={e => e.key === 'Enter' && saveEdit()}
+                  on:keydown={(e) => e.key === 'Enter' && saveEdit()}
                 />
                 <div class="meta-edit-actions">
                   <button class="btn btn-sm btn-accent" on:click={saveEdit}>Save</button>
@@ -625,7 +668,16 @@ async function skip() {
                   >
                     <span class="checkbox" class:checked={isConfirmed(field.k)}>
                       {#if isConfirmed(field.k)}
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5l9-11"/></svg>
+                        <svg
+                          width="10"
+                          height="10"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#fff"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"><path d="M5 12.5 10 17.5l9-11" /></svg
+                        >
                       {/if}
                     </span>
                     Correct
@@ -637,8 +689,19 @@ async function skip() {
           {/each}
         </div>
         <div class="meta-local-note">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
-          "Correct" is a session-only toggle. "Edit" saves metadata changes to the backend when metadata editing is enabled.
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></svg
+          >
+          "Correct" is a session-only toggle. "Edit" saves metadata changes to the backend when metadata
+          editing is enabled.
         </div>
 
         <!-- Decision dock -->
@@ -673,35 +736,40 @@ async function skip() {
 
       <!-- Sidebar -->
       <div class="sidebar">
-
         <!-- Guidelines card -->
         <div class="card">
           <div class="sidebar-card-header">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="header-icon"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M8 13h8M8 17h6"/></svg>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="header-icon"
+              ><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path
+                d="M14 3v5h5M8 13h8M8 17h6"
+              /></svg
+            >
             <span class="sidebar-card-title">Guidelines</span>
           </div>
-         <div class="guidelines-list">
-  {#if guidelinesLoading}
-    <div class="guidelines-message">
-      Loading guidelines...
-    </div>
-
-  {:else if guidelinesError}
-    <div class="guidelines-message guidelines-error">
-      {guidelinesError}
-    </div>
-
-  {:else if guidelines}
-    <div class="guidelines-content">
-      {guidelines}
-    </div>
-
-  {:else}
-    <div class="guidelines-message">
-      No guidelines provided.
-    </div>
-  {/if}
-</div>
+          <div class="guidelines-list">
+            {#if guidelinesLoading}
+              <div class="guidelines-message">Loading guidelines...</div>
+            {:else if guidelinesError}
+              <div class="guidelines-message guidelines-error">
+                {guidelinesError}
+              </div>
+            {:else if guidelines}
+              <div class="guidelines-content">
+                {guidelines}
+              </div>
+            {:else}
+              <div class="guidelines-message">No guidelines provided.</div>
+            {/if}
+          </div>
         </div>
 
         <!-- Status card -->
@@ -710,12 +778,7 @@ async function skip() {
             <span class="sidebar-card-title">Status</span>
           </div>
           <div class="status-grid">
-            {#each [
-              { l: 'kept',    n: counts.totalKept,    color: '#E25C40' },
-              { l: 'removed', n: counts.totalRemoved, color: '#1A1C1F' },
-              { l: 'skipped', n: counts.totalSkipped, color: '#9CA0A8' },
-              { l: 'added',   n: counts.totalAdded,   color: '#F5A48A' },
-            ] as x}
+            {#each [{ l: 'kept', n: counts.totalKept, color: '#E25C40' }, { l: 'removed', n: counts.totalRemoved, color: '#1A1C1F' }, { l: 'skipped', n: counts.totalSkipped, color: '#9CA0A8' }, { l: 'added', n: counts.totalAdded, color: '#F5A48A' }] as x}
               <div class="status-cell">
                 <div class="status-label">
                   <span class="status-dot" style:background={x.color}></span>
@@ -731,7 +794,6 @@ async function skip() {
         <div class="position-note">
           Source {sourceIdx + 1} of {items.length} in this queue
         </div>
-
       </div>
     </div>
   {/if}
@@ -742,13 +804,27 @@ async function skip() {
       <div class="modal" on:click|stopPropagation>
         <div class="modal-header">
           <div>
-            <div class="modal-title" style:color={reasonModal.pendingVerdict === 'keep' ? '#E25C40' : '#1A1C1F'}>
+            <div
+              class="modal-title"
+              style:color={reasonModal.pendingVerdict === 'keep' ? '#E25C40' : '#1A1C1F'}
+            >
               {reasonVerbLabel}: {src?.title}
             </div>
-            <div class="modal-subtitle">Provide a reason before confirming — it will appear in the decisions list and audit CSV.</div>
+            <div class="modal-subtitle">
+              Provide a reason before confirming — it will appear in the decisions list and audit
+              CSV.
+            </div>
           </div>
           <button class="modal-close" on:click={cancelReason}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg
+            >
           </button>
         </div>
         <div class="modal-body">
@@ -760,7 +836,9 @@ async function skip() {
               id="reason-input"
               class="reason-textarea"
               bind:value={reasonText}
-              placeholder="Why are you {reasonModal.pendingVerdict === 'keep' ? 'keeping' : 'removing'} this source?"
+              placeholder="Why are you {reasonModal.pendingVerdict === 'keep'
+                ? 'keeping'
+                : 'removing'} this source?"
               rows="4"
               autofocus
             ></textarea>
@@ -783,34 +861,58 @@ async function skip() {
 
   <!-- ── PROPOSE NEW SOURCE MODAL ──────────────────────────────────────── -->
   {#if showPropose}
-    <div class="modal-overlay" on:click={() => showPropose = false} role="dialog" aria-modal="true">
+    <div
+      class="modal-overlay"
+      on:click={() => (showPropose = false)}
+      role="dialog"
+      aria-modal="true"
+    >
       <div class="modal" on:click|stopPropagation>
         <div class="modal-header">
           <div>
             <div class="modal-title">Propose a new source</div>
-            <div class="modal-subtitle">The source will be added to the project's Added list for review.</div>
+            <div class="modal-subtitle">
+              The source will be added to the project's Added list for review.
+            </div>
           </div>
-          <button class="modal-close" on:click={() => showPropose = false}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          <button class="modal-close" on:click={() => (showPropose = false)}>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg
+            >
           </button>
         </div>
         <div class="modal-body">
           <div class="field-group">
             <label class="field-label">Source name</label>
-            <input class="field-input" bind:value={proposeLabel} placeholder="e.g. Maryland Matters" />
+            <input
+              class="field-input"
+              bind:value={proposeLabel}
+              placeholder="e.g. Maryland Matters"
+            />
           </div>
           <div class="field-group">
             <label class="field-label">Website URL</label>
-            <input class="field-input" bind:value={proposeUrl} type="url" placeholder="e.g. marylandmatters.org" />
+            <input
+              class="field-input"
+              bind:value={proposeUrl}
+              type="url"
+              placeholder="e.g. marylandmatters.org"
+            />
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn" on:click={() => showPropose = false}>Cancel</button>
+          <button class="btn" on:click={() => (showPropose = false)}>Cancel</button>
           <button
             class="btn btn-primary"
             class:btn-dim={!proposeLabel.trim() || !proposeUrl.trim()}
-            on:click={submitPropose}
-          >Add source</button>
+            on:click={submitPropose}>Add source</button
+          >
         </div>
       </div>
     </div>
@@ -834,214 +936,726 @@ async function skip() {
 
   /* ── All-done state ── */
   .done-wrap {
-    display: flex; align-items: center; justify-content: center;
-    min-height: 70vh; padding: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 70vh;
+    padding: 40px;
   }
   .done-card {
     text-align: center;
-    background: var(--v2-card); border: 1px solid var(--v2-line); border-radius: 20px;
-    padding: 44px 52px; max-width: 480px;
+    background: var(--v2-card);
+    border: 1px solid var(--v2-line);
+    border-radius: 20px;
+    padding: 44px 52px;
+    max-width: 480px;
   }
   .done-icon {
-    width: 48px; height: 48px; border-radius: 50%;
-    background: var(--v2-accent); color: #fff;
-    display: grid; place-items: center; margin: 0 auto 20px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--v2-accent);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    margin: 0 auto 20px;
   }
-  .done-h2  { font-size: 28px; font-weight: 600; letter-spacing: -0.7px; margin: 0 0 8px; }
-  .done-sub { font-size: 15px; color: var(--v2-body); margin: 0 0 28px; line-height: 1.5; }
-  .done-tally { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 28px; }
-  .done-stat  { display: flex; align-items: center; gap: 6px; font-size: 15px; }
-  .done-dot   { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-  .done-n     { font-weight: 600; font-family: var(--v2-mono); }
-  .done-l     { color: var(--v2-body); }
-  .done-actions { display: flex; gap: 10px; justify-content: center; }
+  .done-h2 {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.7px;
+    margin: 0 0 8px;
+  }
+  .done-sub {
+    font-size: 15px;
+    color: var(--v2-body);
+    margin: 0 0 28px;
+    line-height: 1.5;
+  }
+  .done-tally {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+  .done-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 15px;
+  }
+  .done-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .done-n {
+    font-weight: 600;
+    font-family: var(--v2-mono);
+  }
+  .done-l {
+    color: var(--v2-body);
+  }
+  .done-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
 
   /* ── Action bar ── */
-  .action-bar-wrap { padding: 34px 120px 0; }
-  .action-bar {
-    padding: 10px 14px; display: flex; align-items: center; gap: 10px;
-    background: rgba(255,255,255,.84); backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid var(--v2-line); border-radius: 16px;
+  .action-bar-wrap {
+    padding: 34px 120px 0;
   }
-  .action-divider { height: 18px; width: 1px; background: var(--v2-line); flex-shrink: 0; }
-  .action-spacer  { flex: 1; }
+  .action-bar {
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.84);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--v2-line);
+    border-radius: 16px;
+  }
+  .action-divider {
+    height: 18px;
+    width: 1px;
+    background: var(--v2-line);
+    flex-shrink: 0;
+  }
+  .action-spacer {
+    flex: 1;
+  }
   .progress-pill {
-    display: flex; align-items: center; gap: 8px;
-    padding: 5px 12px; background: var(--v2-surface);
-    border: 1px solid var(--v2-line); border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    background: var(--v2-surface);
+    border: 1px solid var(--v2-line);
+    border-radius: 8px;
     font-size: 13.5px;
   }
-  .progress-current { font-weight: 600; font-family: var(--v2-mono); }
-  .progress-sep { color: var(--v2-mute); font-family: var(--v2-mono); }
-  .progress-mini-track { width: 52px; height: 4px; background: var(--v2-line); border-radius: 999px; overflow: hidden; flex-shrink: 0; }
-  .progress-mini-fill  { height: 100%; background: var(--v2-accent); border-radius: 999px; transition: width .2s; }
-  .progress-pct-label  { font-size: 12.5px; color: var(--v2-mute); font-family: var(--v2-mono); min-width: 28px; }
+  .progress-current {
+    font-weight: 600;
+    font-family: var(--v2-mono);
+  }
+  .progress-sep {
+    color: var(--v2-mute);
+    font-family: var(--v2-mono);
+  }
+  .progress-mini-track {
+    width: 52px;
+    height: 4px;
+    background: var(--v2-line);
+    border-radius: 999px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .progress-mini-fill {
+    height: 100%;
+    background: var(--v2-accent);
+    border-radius: 999px;
+    transition: width 0.2s;
+  }
+  .progress-pct-label {
+    font-size: 12.5px;
+    color: var(--v2-mute);
+    font-family: var(--v2-mono);
+    min-width: 28px;
+  }
 
   /* ── Main grid ── */
   .main-grid {
-    padding: 34px 120px 0; display: grid;
-    grid-template-columns: 1fr 340px; gap: 28px; align-items: flex-start;
+    padding: 34px 120px 0;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 28px;
+    align-items: flex-start;
   }
 
   /* ── Cards ── */
-  .card { background: var(--v2-card); border: 1px solid var(--v2-line); border-radius: 16px; overflow: hidden; }
+  .card {
+    background: var(--v2-card);
+    border: 1px solid var(--v2-line);
+    border-radius: 16px;
+    overflow: hidden;
+  }
 
   /* ── Buttons ── */
   .btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 10px 16px; border-radius: 999px;
-    background: var(--v2-card); color: var(--v2-ink);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: var(--v2-card);
+    color: var(--v2-ink);
     border: 1px solid var(--v2-line);
-    font-family: var(--v2-sans); font-size: 13.5px; font-weight: 500;
-    cursor: pointer; white-space: nowrap;
-    box-shadow: 0 1px 0 rgba(0,0,0,.02);
+    font-family: var(--v2-sans);
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
   }
-  .btn-primary { background: var(--v2-ink); color: #fff; border: none; box-shadow: 0 1px 0 rgba(0,0,0,.04), inset 0 1px 0 rgba(255,255,255,.18); }
-  .btn-accent  { background: var(--v2-accent); color: #fff; border: none; }
-  .btn-sm      { padding: 7px 12px; font-size: 12.5px; }
-  .btn-dim     { opacity: .5; pointer-events: none; }
+  .btn-primary {
+    background: var(--v2-ink);
+    color: #fff;
+    border: none;
+    box-shadow:
+      0 1px 0 rgba(0, 0, 0, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  }
+  .btn-accent {
+    background: var(--v2-accent);
+    color: #fff;
+    border: none;
+  }
+  .btn-sm {
+    padding: 7px 12px;
+    font-size: 12.5px;
+  }
+  .btn-dim {
+    opacity: 0.5;
+    pointer-events: none;
+  }
 
   /* ── Source header ── */
-  .source-header { padding: 24px 28px 8px; }
-  .source-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-  .source-header-left { flex: 1; min-width: 0; }
-  .source-nav { display: flex; gap: 8px; flex-shrink: 0; padding-top: 4px; }
+  .source-header {
+    padding: 24px 28px 8px;
+  }
+  .source-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .source-header-left {
+    flex: 1;
+    min-width: 0;
+  }
+  .source-nav {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    padding-top: 4px;
+  }
   .nav-circle {
-    width: 46px; height: 46px; border-radius: 50%;
-    border: 1px solid var(--v2-line); background: var(--v2-card);
-    color: var(--v2-body); cursor: pointer;
-    display: grid; place-items: center;
-    transition: border-color .15s, color .15s, background .15s;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: 1px solid var(--v2-line);
+    background: var(--v2-card);
+    color: var(--v2-body);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition:
+      border-color 0.15s,
+      color 0.15s,
+      background 0.15s;
     flex-shrink: 0;
   }
-  .nav-circle:hover:not(:disabled) { border-color: var(--v2-accent); color: var(--v2-accent); background: var(--v2-surface); }
-  .nav-circle:disabled { opacity: .35; cursor: not-allowed; }
-  .chips-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .chip {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 3px 9px; border-radius: 999px; font-size: 13.5px; font-weight: 500;
+  .nav-circle:hover:not(:disabled) {
+    border-color: var(--v2-accent);
+    color: var(--v2-accent);
+    background: var(--v2-surface);
   }
-  .chip-decided  { font-weight: 600; }
-  .chip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .nav-circle:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .chips-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 13.5px;
+    font-weight: 500;
+  }
+  .chip-decided {
+    font-weight: 600;
+  }
+  .chip-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
 
-  .source-title { font-size: 50px; font-weight: 600; letter-spacing: -1.2px; line-height: 1.02; margin: 0; color: var(--v2-ink); }
-  .source-links { display: flex; align-items: center; gap: 22px; margin-top: 12px; font-size: 13.5px; flex-wrap: wrap; }
-  .source-link-static { display: inline-flex; align-items: center; gap: 6px; color: var(--v2-body); }
-  .source-link { display: inline-flex; align-items: center; gap: 6px; color: var(--v2-accent); text-decoration: none; font-weight: 500; }
-  .source-link:hover { text-decoration: underline; }
-  .prev-reason { margin-top: 8px; font-size: 13px; color: var(--v2-mute); font-style: italic; }
+  .source-title {
+    font-size: 50px;
+    font-weight: 600;
+    letter-spacing: -1.2px;
+    line-height: 1.02;
+    margin: 0;
+    color: var(--v2-ink);
+  }
+  .source-links {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    margin-top: 12px;
+    font-size: 13.5px;
+    flex-wrap: wrap;
+  }
+  .source-link-static {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--v2-body);
+  }
+  .source-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--v2-accent);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .source-link:hover {
+    text-decoration: underline;
+  }
+  .prev-reason {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--v2-mute);
+    font-style: italic;
+  }
 
   /* ── Metadata ── */
-  .meta-heading-row { border-top: 1px solid var(--v2-line-soft); margin-top: 18px; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
-  .meta-heading { font-size: 18px; font-weight: 600; }
-  .meta-hint    { font-size: 13.5px; color: var(--v2-mute); }
-  .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--v2-line-soft); }
-  .meta-cell { padding: 18px 22px; }
-  .meta-cell.has-right-border { border-right: 1px solid var(--v2-line-soft); }
-  .meta-label { font-size: 15.5px; color: var(--v2-mute); letter-spacing: .5px; text-transform: uppercase; font-weight: 500; }
-  .meta-value { font-size: 16.5px; font-weight: 600; letter-spacing: -0.4px; margin-top: 6px; }
-  .meta-actions { margin-top: 14px; display: flex; align-items: center; justify-content: space-between; }
-  .meta-edit-input { width: 100%; margin-top: 6px; padding: 7px 10px; border: 1.5px solid var(--v2-accent); border-radius: 8px; font-size: 15px; font-weight: 500; font-family: var(--v2-sans); outline: none; background: #fff; color: var(--v2-ink); }
-  .meta-edit-actions { display: flex; gap: 6px; margin-top: 10px; }
-  .correct-label { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; color: var(--v2-body); cursor: pointer; background: none; border: none; padding: 0; font-family: var(--v2-sans); }
-  .correct-label.correct-yes { color: var(--v2-accent-ink); }
-  .checkbox { width: 15px; height: 15px; border-radius: 4px; background: #fff; border: 1.5px solid var(--v2-line); display: grid; place-items: center; flex-shrink: 0; }
-  .checkbox.checked { background: var(--v2-accent); border-color: var(--v2-accent); }
-  .meta-local-note { padding: 8px 28px 14px; font-size: 12.5px; color: var(--v2-mute); display: flex; align-items: flex-start; gap: 6px; border-top: 1px solid var(--v2-line-soft); line-height: 1.5; }
-  .meta-local-note svg { flex-shrink: 0; margin-top: 1px; }
+  .meta-heading-row {
+    border-top: 1px solid var(--v2-line-soft);
+    margin-top: 18px;
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .meta-heading {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .meta-hint {
+    font-size: 13.5px;
+    color: var(--v2-mute);
+  }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--v2-line-soft);
+  }
+  .meta-cell {
+    padding: 18px 22px;
+  }
+  .meta-cell.has-right-border {
+    border-right: 1px solid var(--v2-line-soft);
+  }
+  .meta-label {
+    font-size: 15.5px;
+    color: var(--v2-mute);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .meta-value {
+    font-size: 16.5px;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+    margin-top: 6px;
+  }
+  .meta-actions {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .meta-edit-input {
+    width: 100%;
+    margin-top: 6px;
+    padding: 7px 10px;
+    border: 1.5px solid var(--v2-accent);
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    font-family: var(--v2-sans);
+    outline: none;
+    background: #fff;
+    color: var(--v2-ink);
+  }
+  .meta-edit-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .correct-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 14px;
+    color: var(--v2-body);
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: var(--v2-sans);
+  }
+  .correct-label.correct-yes {
+    color: var(--v2-accent-ink);
+  }
+  .checkbox {
+    width: 15px;
+    height: 15px;
+    border-radius: 4px;
+    background: #fff;
+    border: 1.5px solid var(--v2-line);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+  .checkbox.checked {
+    background: var(--v2-accent);
+    border-color: var(--v2-accent);
+  }
+  .meta-local-note {
+    padding: 8px 28px 14px;
+    font-size: 12.5px;
+    color: var(--v2-mute);
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    border-top: 1px solid var(--v2-line-soft);
+    line-height: 1.5;
+  }
+  .meta-local-note svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
 
   /* ── Decision dock ── */
-  .decision-dock { padding: 16px 22px; display: flex; align-items: center; gap: 10px; }
-  .dock-label { font-size: 14px; color: var(--v2-mute); letter-spacing: .5px; text-transform: uppercase; font-weight: 500; margin-right: 6px; white-space: nowrap; flex-shrink: 0; }
-  .dock-btn {
-    flex: 1; display: flex; align-items: center; justify-content: center;
-    gap: 10px; padding: 13px 14px; border-radius: 12px;
-    font-family: var(--v2-sans); font-size: 15.5px; font-weight: 500; cursor: pointer;
-    transition: opacity .12s, box-shadow .15s;
+  .decision-dock {
+    padding: 16px 22px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
-  .dock-btn:hover  { opacity: .85; }
-  .dock-btn:active { opacity: .7; transform: scale(.98); }
-  .dock-remove { background: #fff; border: 1px solid var(--v2-removed-soft); color: var(--v2-removed); }
-  .dock-skip   { background: #fff; border: 1px solid var(--v2-skipped-soft); color: var(--v2-skipped); }
-  .dock-keep   { flex: 1.4; background: var(--v2-kept); border: none; color: #fff; font-weight: 600; box-shadow: 0 2px 0 rgba(0,0,0,.06), inset 0 1px 0 rgba(255,255,255,.18); }
+  .dock-label {
+    font-size: 14px;
+    color: var(--v2-mute);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin-right: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .dock-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 13px 14px;
+    border-radius: 12px;
+    font-family: var(--v2-sans);
+    font-size: 15.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      opacity 0.12s,
+      box-shadow 0.15s;
+  }
+  .dock-btn:hover {
+    opacity: 0.85;
+  }
+  .dock-btn:active {
+    opacity: 0.7;
+    transform: scale(0.98);
+  }
+  .dock-remove {
+    background: #fff;
+    border: 1px solid var(--v2-removed-soft);
+    color: var(--v2-removed);
+  }
+  .dock-skip {
+    background: #fff;
+    border: 1px solid var(--v2-skipped-soft);
+    color: var(--v2-skipped);
+  }
+  .dock-keep {
+    flex: 1.4;
+    background: var(--v2-kept);
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    box-shadow:
+      0 2px 0 rgba(0, 0, 0, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  }
   /* Active highlights for re-decide (Fix 3) */
-  .dock-active-keep   { box-shadow: 0 0 0 3px rgba(226,92,64,.35), inset 0 1px 0 rgba(255,255,255,.18) !important; }
-  .dock-active-remove { box-shadow: 0 0 0 3px rgba(26,28,31,.22) !important; background: #f4f4f4 !important; }
-  .dock-active-skip   { box-shadow: 0 0 0 3px rgba(156,160,168,.35) !important; background: #f7f7f8 !important; }
-  .kbd       { padding: 1.5px 6px; background: rgba(0,0,0,.07); border-radius: 4px; font-size: 12.5px; font-family: var(--v2-mono); font-weight: 500; color: inherit; }
-  .kbd-light { background: rgba(255,255,255,.22); color: #fff; }
+  .dock-active-keep {
+    box-shadow:
+      0 0 0 3px rgba(226, 92, 64, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+  }
+  .dock-active-remove {
+    box-shadow: 0 0 0 3px rgba(26, 28, 31, 0.22) !important;
+    background: #f4f4f4 !important;
+  }
+  .dock-active-skip {
+    box-shadow: 0 0 0 3px rgba(156, 160, 168, 0.35) !important;
+    background: #f7f7f8 !important;
+  }
+  .kbd {
+    padding: 1.5px 6px;
+    background: rgba(0, 0, 0, 0.07);
+    border-radius: 4px;
+    font-size: 12.5px;
+    font-family: var(--v2-mono);
+    font-weight: 500;
+    color: inherit;
+  }
+  .kbd-light {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+  }
 
   /* ── Sidebar ── */
-  .sidebar { display: flex; flex-direction: column; gap: 16px; }
-  .sidebar-card-header { padding: 12px 18px; border-bottom: 1px solid var(--v2-line-soft); display: flex; align-items: center; gap: 8px; }
-  .sidebar-card-header-plain { padding: 12px 18px; border-bottom: 1px solid var(--v2-line-soft); }
-  .sidebar-card-title { font-size: 15.5px; font-weight: 600; }
-  .header-icon { color: var(--v2-accent); }
-  .guidelines-list { padding: 10px 18px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .sidebar-card-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--v2-line-soft);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sidebar-card-header-plain {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--v2-line-soft);
+  }
+  .sidebar-card-title {
+    font-size: 15.5px;
+    font-weight: 600;
+  }
+  .header-icon {
+    color: var(--v2-accent);
+  }
+  .guidelines-list {
+    padding: 10px 18px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
   .guidelines-content {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  max-height: 320px;
-  overflow-y: auto;
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: var(--v2-body);
-}
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 320px;
+    overflow-y: auto;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--v2-body);
+  }
 
-.guidelines-message {
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: var(--v2-mute);
-}
+  .guidelines-message {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--v2-mute);
+  }
 
-.guidelines-error {
-  color: #b42318;
-}
-  .status-grid { padding: 14px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .status-cell { padding: 10px 12px; background: var(--v2-surface); border-radius: 10px; border: 1px solid var(--v2-line-soft); }
-  .status-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--v2-mute); text-transform: uppercase; letter-spacing: .6px; font-weight: 500; }
-  .status-dot { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
-  .status-val { font-size: 15px; font-weight: 600; letter-spacing: -0.5px; font-family: var(--v2-mono); margin-top: 4px; transition: color .2s; }
-  .position-note { font-size: 13px; color: var(--v2-mute); text-align: center; font-family: var(--v2-mono); padding: 0 4px; }
+  .guidelines-error {
+    color: #b42318;
+  }
+  .status-grid {
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .status-cell {
+    padding: 10px 12px;
+    background: var(--v2-surface);
+    border-radius: 10px;
+    border: 1px solid var(--v2-line-soft);
+  }
+  .status-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--v2-mute);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 500;
+  }
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .status-val {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    font-family: var(--v2-mono);
+    margin-top: 4px;
+    transition: color 0.2s;
+  }
+  .position-note {
+    font-size: 13px;
+    color: var(--v2-mute);
+    text-align: center;
+    font-family: var(--v2-mono);
+    padding: 0 4px;
+  }
 
   /* ── Reason modal (Fix 5) ── */
   .reason-textarea {
-    width: 100%; padding: 12px 14px; border-radius: 10px;
-    border: 1.5px solid var(--v2-line); font-size: 15px; font-family: var(--v2-sans);
-    color: var(--v2-ink); outline: none; resize: vertical; line-height: 1.5;
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1.5px solid var(--v2-line);
+    font-size: 15px;
+    font-family: var(--v2-sans);
+    color: var(--v2-ink);
+    outline: none;
+    resize: vertical;
+    line-height: 1.5;
     background: var(--v2-surface);
   }
-  .reason-textarea:focus { border-color: var(--v2-accent); }
-  .required-star { color: var(--v2-accent); font-weight: 700; }
+  .reason-textarea:focus {
+    border-color: var(--v2-accent);
+  }
+  .required-star {
+    color: var(--v2-accent);
+    font-weight: 700;
+  }
 
   /* ── Modals (shared) ── */
   .modal-overlay {
-    position: fixed; inset: 0; background: rgba(20,23,30,.38);
-    backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100;
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 23, 30, 0.38);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
   }
   .modal {
-    background: var(--v2-card); border: 1px solid var(--v2-line); border-radius: 20px;
-    width: 480px; max-width: 96vw; box-shadow: 0 24px 60px -20px rgba(0,0,0,.28); overflow: hidden;
+    background: var(--v2-card);
+    border: 1px solid var(--v2-line);
+    border-radius: 20px;
+    width: 480px;
+    max-width: 96vw;
+    box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
   }
-  .modal-header { padding: 20px 22px; border-bottom: 1px solid var(--v2-line-soft); display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
-  .modal-title    { font-size: 16px; font-weight: 600; }
-  .modal-subtitle { font-size: 13.5px; color: var(--v2-mute); margin-top: 4px; line-height: 1.4; }
-  .modal-close    { background: none; border: none; cursor: pointer; color: var(--v2-mute); padding: 4px; border-radius: 6px; flex-shrink: 0; }
-  .modal-body     { padding: 18px 22px; display: flex; flex-direction: column; gap: 16px; }
-  .modal-footer   { padding: 14px 22px; border-top: 1px solid var(--v2-line-soft); display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
-  .field-group { display: flex; flex-direction: column; gap: 6px; }
-  .field-label { font-size: 14px; font-weight: 500; color: var(--v2-body); }
-  .field-input { padding: 10px 14px; border-radius: 10px; border: 1.5px solid var(--v2-line); font-size: 15px; font-family: var(--v2-sans); color: var(--v2-ink); outline: none; background: var(--v2-surface); }
-  .field-input:focus { border-color: var(--v2-accent); }
+  .modal-header {
+    padding: 20px 22px;
+    border-bottom: 1px solid var(--v2-line-soft);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .modal-subtitle {
+    font-size: 13.5px;
+    color: var(--v2-mute);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--v2-mute);
+    padding: 4px;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+  .modal-body {
+    padding: 18px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .modal-footer {
+    padding: 14px 22px;
+    border-top: 1px solid var(--v2-line-soft);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .field-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--v2-body);
+  }
+  .field-input {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1.5px solid var(--v2-line);
+    font-size: 15px;
+    font-family: var(--v2-sans);
+    color: var(--v2-ink);
+    outline: none;
+    background: var(--v2-surface);
+  }
+  .field-input:focus {
+    border-color: var(--v2-accent);
+  }
 
   /* ── Toast ── */
   .toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    padding: 10px 20px; border-radius: 999px; background: var(--v2-ink); color: #fff;
-    font-size: 14px; font-weight: 500; font-family: var(--v2-sans);
-    box-shadow: 0 8px 24px -8px rgba(0,0,0,.28); z-index: 200;
-    animation: fadeIn .2s ease;
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 999px;
+    background: var(--v2-ink);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: var(--v2-sans);
+    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.28);
+    z-index: 200;
+    animation: fadeIn 0.2s ease;
   }
-  @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
 </style>

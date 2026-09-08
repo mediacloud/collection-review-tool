@@ -4,17 +4,17 @@ import axios from 'axios';
 // In production (served by Flask), use same-origin /api.
 // In local dev, fall back to the Flask dev server directly unless overridden.
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.DEV ? 'http://localhost:5000/api' : '/api');
+  import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5000/api' : '/api');
 
-export const MEDIACLOUD_SEARCH_BASE_URL =
-  (import.meta.env.VITE_MEDIACLOUD_SEARCH_BASE_URL || 'https://search.mediacloud.org').replace(/\/+$/, '');
+export const MEDIACLOUD_SEARCH_BASE_URL = (
+  import.meta.env.VITE_MEDIACLOUD_SEARCH_BASE_URL || 'https://search.mediacloud.org'
+).replace(/\/+$/, '');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+  },
 });
 
 /**
@@ -23,7 +23,11 @@ const api = axios.create({
  * @param {string} guidelinesTemplate - Guidelines template name (default: 'default')
  * @returns {Promise} Review object
  */
-export async function startReview(collectionId, guidelinesTemplate = 'default', editMetadata = false) {
+export async function startReview(
+  collectionId,
+  guidelinesTemplate = 'default',
+  editMetadata = false
+) {
   const response = await api.post('/reviews/start', {
     collection_id: collectionId,
     guidelines_template: guidelinesTemplate,
@@ -105,9 +109,12 @@ export async function setReviewProjectEditMetadata(projectGuid, editMetadata) {
  * @param {boolean} showLinks
  */
 export async function setReviewProjectReviewerLandingVirtualQueues(projectGuid, showLinks) {
-  const response = await api.patch(`/review-projects/${projectGuid}/reviewer-landing-virtual-queues`, {
-    show_virtual_queue_links_on_reviewer_landing: !!showLinks,
-  });
+  const response = await api.patch(
+    `/review-projects/${projectGuid}/reviewer-landing-virtual-queues`,
+    {
+      show_virtual_queue_links_on_reviewer_landing: !!showLinks,
+    }
+  );
   return response.data;
 }
 
@@ -209,7 +216,8 @@ export async function getSkippedItemsByProjectGuid(projectGuid, options = {}) {
   const params = new URLSearchParams();
   if (options.page) params.append('page', options.page);
   if (options.page_size) params.append('page_size', options.page_size);
-  if (options.dedupe_source_id !== undefined) params.append('dedupe_source_id', options.dedupe_source_id);
+  if (options.dedupe_source_id !== undefined)
+    params.append('dedupe_source_id', options.dedupe_source_id);
 
   const query = params.toString();
   const url = `/review-projects/${projectGuid}/skipped-items${query ? `?${query}` : ''}`;
@@ -228,7 +236,8 @@ export async function getAddedItemsByProjectGuid(projectGuid, options = {}) {
   const params = new URLSearchParams();
   if (options.page) params.append('page', options.page);
   if (options.page_size) params.append('page_size', options.page_size);
-  if (options.dedupe_source_id !== undefined) params.append('dedupe_source_id', options.dedupe_source_id);
+  if (options.dedupe_source_id !== undefined)
+    params.append('dedupe_source_id', options.dedupe_source_id);
 
   const query = params.toString();
   const url = `/review-projects/${projectGuid}/added-items${query ? `?${query}` : ''}`;
@@ -247,7 +256,8 @@ export async function getRemovedItemsByProjectGuid(projectGuid, options = {}) {
   const params = new URLSearchParams();
   if (options.page) params.append('page', options.page);
   if (options.page_size) params.append('page_size', options.page_size);
-  if (options.dedupe_source_id !== undefined) params.append('dedupe_source_id', options.dedupe_source_id);
+  if (options.dedupe_source_id !== undefined)
+    params.append('dedupe_source_id', options.dedupe_source_id);
 
   const query = params.toString();
   const url = `/review-projects/${projectGuid}/removed-items${query ? `?${query}` : ''}`;
@@ -266,7 +276,8 @@ export async function getKeptItemsByProjectGuid(projectGuid, options = {}) {
   const params = new URLSearchParams();
   if (options.page) params.append('page', options.page);
   if (options.page_size) params.append('page_size', options.page_size);
-  if (options.dedupe_source_id !== undefined) params.append('dedupe_source_id', options.dedupe_source_id);
+  if (options.dedupe_source_id !== undefined)
+    params.append('dedupe_source_id', options.dedupe_source_id);
 
   const query = params.toString();
   const url = `/review-projects/${projectGuid}/kept-items${query ? `?${query}` : ''}`;
@@ -332,10 +343,15 @@ export async function decideQueueItem(
   return response.data;
 }
 
-export async function proposeNewSourceByQueueGuid(queueGuid, sourceLabel, sourceHomepage, metadata = null) {
+export async function proposeNewSourceByQueueGuid(
+  queueGuid,
+  sourceLabel,
+  sourceHomepage,
+  metadata = null
+) {
   const body = {
     source_label: sourceLabel,
-    source_homepage: sourceHomepage
+    source_homepage: sourceHomepage,
   };
 
   if (metadata) {
@@ -392,7 +408,7 @@ export async function getReviewItems(reviewId, options = {}) {
   if (options.page) params.append('page', options.page);
   if (options.page_size) params.append('page_size', options.page_size);
   if (options.decision) params.append('decision', options.decision);
-  
+
   const response = await api.get(`/reviews/${reviewId}/items?${params.toString()}`);
   return response.data;
 }
@@ -405,7 +421,13 @@ export async function getReviewItems(reviewId, options = {}) {
  * @param {string} removalReason - Reason for removal (required when decision is 'remove')
  * @returns {Promise} Updated item object
  */
-export async function decideItem(reviewId, itemId, decision, removalReason = null, skipNote = null) {
+export async function decideItem(
+  reviewId,
+  itemId,
+  decision,
+  removalReason = null,
+  skipNote = null
+) {
   const body = { decision };
   if (decision === 'remove' && removalReason) {
     body.removal_reason = removalReason;
@@ -427,7 +449,7 @@ export async function decideItem(reviewId, itemId, decision, removalReason = nul
 export async function proposeNewSource(reviewId, sourceLabel, sourceHomepage, metadata = null) {
   const body = {
     source_label: sourceLabel,
-    source_homepage: sourceHomepage
+    source_homepage: sourceHomepage,
   };
 
   if (metadata) {

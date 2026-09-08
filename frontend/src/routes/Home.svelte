@@ -162,7 +162,7 @@
       showCompleted = !showCompleted;
       return;
     }
-    
+
     loadingCompleted = true;
     try {
       completedReviews = await getCompletedReviews();
@@ -194,7 +194,7 @@
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   }
 
@@ -315,20 +315,19 @@
         <h1>MediaCloud Collections Review</h1>
         <div class="landing-explainer">
           <p>
-            <a
-              href="https://search.mediacloud.org/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >Media Cloud</a>
-            is an open research platform for studying online media. In Media Cloud, <strong>collections</strong> group
-            sources so researchers and partners can analyze or curate them together.
+            <a href="https://search.mediacloud.org/" target="_blank" rel="noopener noreferrer"
+              >Media Cloud</a
+            >
+            is an open research platform for studying online media. In Media Cloud,
+            <strong>collections</strong> group sources so researchers and partners can analyze or curate
+            them together.
           </p>
           <p>
-            This application is for <strong>collections review</strong> workflows: coordinators create review projects
-            from those collections, split work into reviewer queues, and reviewers record decisions such as keep, skip,
-            or remove on individual sources. If you were invited to review, open your project in the table below and
-            follow the links to your queue from the project page. Starting a brand-new project is usually only for
-            coordinators setting up a review.
+            This application is for <strong>collections review</strong> workflows: coordinators create
+            review projects from those collections, split work into reviewer queues, and reviewers record
+            decisions such as keep, skip, or remove on individual sources. If you were invited to review,
+            open your project in the table below and follow the links to your queue from the project
+            page. Starting a brand-new project is usually only for coordinators setting up a review.
           </p>
         </div>
         <p class="landing-lead">Open a review project from the table below.</p>
@@ -402,7 +401,6 @@
       </section>
 
       <div class="start-project-footer">
-
         <button
           type="button"
           class="text-link-btn"
@@ -423,135 +421,142 @@
         <div class="project-divider" />
         <p class="start-project-caution">
           <strong>Are you sure you need to be here?</strong>
-          If you were asked to review sources, you almost always want an existing project from the list above—not
-          this next step. Starting a new review project is for people who are <em>seeding</em> collections into new
-          reviewer queues (typically coordinators). If that is not you, find your review project in the list above.
+          If you were asked to review sources, you almost always want an existing project from the list
+          above—not this next step. Starting a new review project is for people who are
+          <em>seeding</em> collections into new reviewer queues (typically coordinators). If that is
+          not you, find your review project in the list above.
         </p>
         <div class="project-section">
           <h2>Start review project</h2>
           <p class="subtitle">Seed a multi-collection project into reviewer queues.</p>
 
-        <form on:submit|preventDefault={handleProjectSubmit}>
-          {#if guidelineTemplates.length > 0}
-            <div class="form-group">
-              <label for="guideline-template">Annotation Guidelines Template</label>
-              <select
-                id="guideline-template"
-                bind:value={selectedTemplate}
-                disabled={projectLoading || loadingTemplates}
-              >
-                {#each guidelineTemplates as template}
-                  <option value={template}>{template}</option>
-                {/each}
-              </select>
-            </div>
-          {/if}
-
-          <div class="form-group">
-            <label for="project-name">Project Name</label>
-            <input
-              id="project-name"
-              type="text"
-              bind:value={projectName}
-              placeholder="e.g. UNDP 2026 Seed Project"
-              disabled={projectLoading}
-            />
-          </div>
-
-          <div class="form-group">
-            <span class="field-label">Collection source</span>
-            <div class="input-mode-row">
-              <label class="input-mode-option">
-                <input
-                  type="radio"
-                  name="project-input-mode"
-                  value="geographic"
-                  bind:group={projectInputMode}
-                  disabled={projectLoading}
-                />
-                Geographic (MediaCloud country list)
-              </label>
-              <label class="input-mode-option">
-                <input
-                  type="radio"
-                  name="project-input-mode"
-                  value="manual"
-                  bind:group={projectInputMode}
-                  disabled={projectLoading}
-                />
-                Manual collection IDs
-              </label>
-            </div>
-          </div>
-
-          {#if projectInputMode === 'geographic'}
-            <div class="form-group">
-              <label for="geo-country">Country</label>
-              {#if geoLoading}
-                <p class="geo-status">Loading countries…</p>
-              {:else if geoLoadError}
-                <p class="geo-status error-inline">{geoLoadError}</p>
-                <button type="button" class="secondary-btn" on:click={loadGeoCollections} disabled={projectLoading || geoLoading}>
-                  Retry
-                </button>
-              {:else}
+          <form on:submit|preventDefault={handleProjectSubmit}>
+            {#if guidelineTemplates.length > 0}
+              <div class="form-group">
+                <label for="guideline-template">Annotation Guidelines Template</label>
                 <select
-                  id="geo-country"
-                  bind:value={selectedCountryIndex}
-                  on:change={onGeoCountryChange}
-                  disabled={projectLoading || !geoData.length}
+                  id="guideline-template"
+                  bind:value={selectedTemplate}
+                  disabled={projectLoading || loadingTemplates}
                 >
-                  {#each geoData as entry, idx (entry.country?.alpha3 || idx)}
-                    <option value={idx}>{entry.country?.name || 'Unknown'}</option>
+                  {#each guidelineTemplates as template}
+                    <option value={template}>{template}</option>
                   {/each}
                 </select>
-                {#if currentGeoEntry}
-                  <p class="geo-hint">
-                    Choose one or more geographic collections (national, state &amp; local, etc.). List is vendored from
-                    MediaCloud web-search <code>country-collections.json</code> and served by this app&apos;s API.
-                  </p>
-                  <div class="geo-collections-list">
-                    {#each currentGeoEntry.collections || [] as col (col.tags_id + '-' + col.tag)}
-                      <label class="geo-check">
-                        <input
-                          type="checkbox"
-                          checked={selectedGeoIds.includes(col.tags_id)}
-                          on:change={() => toggleGeoCollection(col.tags_id)}
-                          disabled={projectLoading}
-                        />
-                        <span class="geo-check-label">{col.label}</span>
-                        <span class="geo-tag-id">{col.tags_id}</span>
-                      </label>
-                    {/each}
-                  </div>
-                {/if}
-              {/if}
-            </div>
-          {:else}
+              </div>
+            {/if}
+
             <div class="form-group">
-              <label for="project-collection-ids">MediaCloud Collection IDs</label>
+              <label for="project-name">Project Name</label>
               <input
-                id="project-collection-ids"
+                id="project-name"
                 type="text"
-                bind:value={projectCollectionIdsInput}
-                placeholder="e.g. 123, 456, 789"
+                bind:value={projectName}
+                placeholder="e.g. UNDP 2026 Seed Project"
                 disabled={projectLoading}
               />
             </div>
-          {/if}
 
-          {#if projectError}
-            <div class="error">{projectError}</div>
-          {/if}
+            <div class="form-group">
+              <span class="field-label">Collection source</span>
+              <div class="input-mode-row">
+                <label class="input-mode-option">
+                  <input
+                    type="radio"
+                    name="project-input-mode"
+                    value="geographic"
+                    bind:group={projectInputMode}
+                    disabled={projectLoading}
+                  />
+                  Geographic (MediaCloud country list)
+                </label>
+                <label class="input-mode-option">
+                  <input
+                    type="radio"
+                    name="project-input-mode"
+                    value="manual"
+                    bind:group={projectInputMode}
+                    disabled={projectLoading}
+                  />
+                  Manual collection IDs
+                </label>
+              </div>
+            </div>
 
-          <button type="submit" disabled={projectLoading}>
-            {projectLoading ? 'Starting...' : 'Start ReviewProject'}
-          </button>
-        </form>
+            {#if projectInputMode === 'geographic'}
+              <div class="form-group">
+                <label for="geo-country">Country</label>
+                {#if geoLoading}
+                  <p class="geo-status">Loading countries…</p>
+                {:else if geoLoadError}
+                  <p class="geo-status error-inline">{geoLoadError}</p>
+                  <button
+                    type="button"
+                    class="secondary-btn"
+                    on:click={loadGeoCollections}
+                    disabled={projectLoading || geoLoading}
+                  >
+                    Retry
+                  </button>
+                {:else}
+                  <select
+                    id="geo-country"
+                    bind:value={selectedCountryIndex}
+                    on:change={onGeoCountryChange}
+                    disabled={projectLoading || !geoData.length}
+                  >
+                    {#each geoData as entry, idx (entry.country?.alpha3 || idx)}
+                      <option value={idx}>{entry.country?.name || 'Unknown'}</option>
+                    {/each}
+                  </select>
+                  {#if currentGeoEntry}
+                    <p class="geo-hint">
+                      Choose one or more geographic collections (national, state &amp; local, etc.).
+                      List is vendored from MediaCloud web-search <code
+                        >country-collections.json</code
+                      > and served by this app&apos;s API.
+                    </p>
+                    <div class="geo-collections-list">
+                      {#each currentGeoEntry.collections || [] as col (col.tags_id + '-' + col.tag)}
+                        <label class="geo-check">
+                          <input
+                            type="checkbox"
+                            checked={selectedGeoIds.includes(col.tags_id)}
+                            on:change={() => toggleGeoCollection(col.tags_id)}
+                            disabled={projectLoading}
+                          />
+                          <span class="geo-check-label">{col.label}</span>
+                          <span class="geo-tag-id">{col.tags_id}</span>
+                        </label>
+                      {/each}
+                    </div>
+                  {/if}
+                {/if}
+              </div>
+            {:else}
+              <div class="form-group">
+                <label for="project-collection-ids">MediaCloud Collection IDs</label>
+                <input
+                  id="project-collection-ids"
+                  type="text"
+                  bind:value={projectCollectionIdsInput}
+                  placeholder="e.g. 123, 456, 789"
+                  disabled={projectLoading}
+                />
+              </div>
+            {/if}
+
+            {#if projectError}
+              <div class="error">{projectError}</div>
+            {/if}
+
+            <button type="submit" disabled={projectLoading}>
+              {projectLoading ? 'Starting...' : 'Start ReviewProject'}
+            </button>
+          </form>
         </div>
       {/if}
     </div>
-
   </div>
 </div>
 
@@ -697,7 +702,9 @@
     background-color: #f8f9fa;
     cursor: pointer;
     text-align: left;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
   }
 
   .context-toggle-button:hover:enabled {
@@ -844,7 +851,8 @@
     font-variant-numeric: tabular-nums;
   }
 
-  input, select {
+  input,
+  select {
     width: 100%;
     padding: 12px;
     border: 1px solid #ddd;
@@ -853,12 +861,14 @@
     transition: border-color 0.3s;
   }
 
-  input:focus, select:focus {
+  input:focus,
+  select:focus {
     outline: none;
     border-color: #3498db;
   }
 
-  input:disabled, select:disabled {
+  input:disabled,
+  select:disabled {
     background-color: #f5f5f5;
     cursor: not-allowed;
   }
