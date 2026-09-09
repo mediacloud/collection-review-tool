@@ -1,10 +1,10 @@
 <script>
   import { onMount } from 'svelte';
-  import { 
-    getReview, 
-    getReviewItems, 
-    decideItem, 
-    proposeNewSource, 
+  import {
+    getReview,
+    getReviewItems,
+    decideItem,
+    proposeNewSource,
     getReviewByQueueGuid,
     getReviewItemsByQueueGuid,
     getReviewItemByQueueGuid,
@@ -16,7 +16,7 @@
     getAddedSourcesExportUrl,
     getReviewGuidelines,
     getSourceDetails,
-    updateReview
+    updateReview,
   } from '../lib/api.js';
   import iso3166 from 'iso-3166-2';
   import * as rawIso3166 from 'iso-3166';
@@ -37,7 +37,6 @@
   let reviewId = null;
   let queueGuid = null;
   let isQueueMode = false;
-  let showAllItems = false;
   let currentPath = window.location.pathname;
   let showRemovalModal = false;
   let showSkipNoteModal = false;
@@ -71,7 +70,7 @@
     { value: 'tr', label: 'tr – Turkish' },
     { value: 'vi', label: 'vi – Vietnamese' },
     { value: 'sw', label: 'sw – Swahili' },
-    { value: 'fa', label: 'fa – Persian' }
+    { value: 'fa', label: 'fa – Persian' },
   ];
 
   const COUNTRY_OPTIONS = Object.keys(iso3166.data)
@@ -190,7 +189,7 @@
     try {
       const response = isQueueMode
         ? await getReviewItemsByQueueGuid(queueGuid, { page: 1, page_size: 1000 })
-        : await getReviewItems(reviewId, { page: 1, page_size: 1000 });  // Get all items
+        : await getReviewItems(reviewId, { page: 1, page_size: 1000 }); // Get all items
       allItems = response.items || [];
     } catch (err) {
       console.error('Error loading all items:', err);
@@ -214,7 +213,11 @@
 
     try {
       const response = isQueueMode
-        ? await getReviewItemsByQueueGuid(queueGuid, { decision: 'undecided', page: 1, page_size: 1 })
+        ? await getReviewItemsByQueueGuid(queueGuid, {
+            decision: 'undecided',
+            page: 1,
+            page_size: 1,
+          })
         : await getReviewItems(reviewId, { decision: 'undecided', page: 1, page_size: 1 });
 
       if (response.items && response.items.length > 0) {
@@ -243,27 +246,28 @@
       const liveSource = await getSourceDetails(currentItem.source_id);
       const mergedMetadata = {
         ...(currentItem.source_metadata || {}),
-        ...liveSource
+        ...liveSource,
       };
       currentItem = {
         ...currentItem,
-        source_metadata: mergedMetadata
+        source_metadata: mergedMetadata,
       };
     } catch (err) {
       console.error('Error refreshing source metadata:', err);
     }
   }
 
-  $: completionPercent = (review && review.stats)
-    ? (() => {
-        const total = review.stats.total || 0;
-        if (!total) return 0;
-        const undecided = review.stats.undecided || 0;
-        const skipped = review.stats.skip || 0;
-        const decided = total - undecided - skipped;
-        return Math.round((decided / total) * 1000) / 10; // one decimal place
-      })()
-    : null;
+  $: completionPercent =
+    review && review.stats
+      ? (() => {
+          const total = review.stats.total || 0;
+          if (!total) return 0;
+          const undecided = review.stats.undecided || 0;
+          const skipped = review.stats.skip || 0;
+          const decided = total - undecided - skipped;
+          return Math.round((decided / total) * 1000) / 10; // one decimal place
+        })()
+      : null;
 
   $: reviewedHistoryItems = [...(allItems || [])]
     .filter((item) => item && item.decision && item.decision !== 'undecided')
@@ -411,7 +415,11 @@
     currentItem = target;
 
     if (isQueueMode && queueGuid) {
-      window.history.replaceState({}, '', `/reviews/${queueGuid}?mode=reevaluate&item_id=${target.id}`);
+      window.history.replaceState(
+        {},
+        '',
+        `/reviews/${queueGuid}?mode=reevaluate&item_id=${target.id}`
+      );
     }
 
     await refreshCurrentItemMetadata();
@@ -437,7 +445,11 @@
     currentItem = target;
 
     if (isQueueMode && queueGuid) {
-      window.history.replaceState({}, '', `/reviews/${queueGuid}?mode=reevaluate&item_id=${target.id}`);
+      window.history.replaceState(
+        {},
+        '',
+        `/reviews/${queueGuid}?mode=reevaluate&item_id=${target.id}`
+      );
     }
 
     await refreshCurrentItemMetadata();
@@ -453,7 +465,11 @@
       reviewHistoryIndex = historyIdx >= 0 ? historyIdx : 0;
       currentItem = item;
       showAllItemsModal = false;
-      window.history.replaceState({}, '', `/reviews/${queueGuid}?mode=reevaluate&item_id=${item.id}`);
+      window.history.replaceState(
+        {},
+        '',
+        `/reviews/${queueGuid}?mode=reevaluate&item_id=${item.id}`
+      );
       await refreshCurrentItemMetadata();
       return;
     }
@@ -507,10 +523,10 @@
     const lines = text.split('\n');
     let html = '';
     let inList = false;
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      
+
       // Headers
       if (line.match(/^### /)) {
         if (inList) {
@@ -552,11 +568,11 @@
         }
       }
     }
-    
+
     if (inList) {
       html += '</ul>';
     }
-    
+
     return html;
   }
 
@@ -569,7 +585,8 @@
       review = updated;
     } catch (err) {
       console.error('Error updating edit_metadata:', err);
-      showEditMetadataError = err.response?.data?.error || err.message || 'Failed to update metadata editing setting';
+      showEditMetadataError =
+        err.response?.data?.error || err.message || 'Failed to update metadata editing setting';
     }
   }
 
@@ -620,13 +637,12 @@
         ...currentItem,
         source_metadata: {
           ...currentItem.source_metadata,
-          [editFieldKey]: newValue
-        }
+          [editFieldKey]: newValue,
+        },
       };
     }
     closeEditMetadata();
   }
-
 </script>
 
 <div class="container">
@@ -659,7 +675,9 @@
             class="sidebar-toggle review-decisions-button"
             on:click={openAllDecisionsModal}
             disabled={loading || !allItems || allItems.length === 0}
-            title={allItems && allItems.length > 0 ? 'Open review decisions' : 'No decisions loaded yet'}
+            title={allItems && allItems.length > 0
+              ? 'Open review decisions'
+              : 'No decisions loaded yet'}
           >
             Review Decisions
           </button>
@@ -684,7 +702,7 @@
         </div>
       </div>
     </div>
-    
+
     <BaseModal
       show={showContextPanel}
       onClose={() => (showContextPanel = false)}
@@ -702,10 +720,7 @@
                 type="button"
                 class="queue-modal-link"
                 on:click={() =>
-                  window.navigate(
-                    `/review-projects/${review.review_project_guid}/skipped`
-                  )
-                }
+                  window.navigate(`/review-projects/${review.review_project_guid}/skipped`)}
               >
                 Review skipped sources
               </button>
@@ -724,26 +739,22 @@
             <div class="export-section">
               <h3>Export Files</h3>
               <div class="export-links">
-                <a 
-                  href={getExportUrl(reviewId)} 
-                  download 
-                  class="btn-download"
-                >
+                <a href={getExportUrl(reviewId)} download class="btn-download">
                   Download Main Export (Keep & Add Sources)
                 </a>
                 {#if review.stats && review.stats.remove > 0}
-                  <a 
-                    href={getRemovedSourcesExportUrl(reviewId)} 
-                    download 
+                  <a
+                    href={getRemovedSourcesExportUrl(reviewId)}
+                    download
                     class="btn-download btn-download-secondary"
                   >
                     Download Removed Sources ({review.stats.remove})
                   </a>
                 {/if}
                 {#if review.stats && review.stats.add > 0}
-                  <a 
-                    href={getAddedSourcesExportUrl(reviewId)} 
-                    download 
+                  <a
+                    href={getAddedSourcesExportUrl(reviewId)}
+                    download
                     class="btn-download btn-download-secondary"
                   >
                     Download Added Sources ({review.stats.add})
@@ -756,11 +767,7 @@
 
         <div class="context-section">
           {#if !isQueueMode}
-            <button
-              type="button"
-              class="context-toggle-button"
-              on:click={toggleEditMetadata}
-            >
+            <button type="button" class="context-toggle-button" on:click={toggleEditMetadata}>
               <span class="toggle-label">
                 <span class="toggle-indicator {review.edit_metadata ? 'on' : 'off'}"></span>
                 Enable metadata editing for this review
@@ -793,16 +800,11 @@
         {#if review.status === 'completed' && reevaluatingItemId === null}
           {#if !isQueueMode}
             <div class="completed-message">
-              <p>
-                ✓ Review completed!
-                Download the CSV export below.
-              </p>
+              <p>✓ Review completed! Download the CSV export below.</p>
             </div>
           {:else}
             <div class="queue-exhausted-card">
-              <div class="queue-exhausted-header">
-                ✓ Queue complete.
-              </div>
+              <div class="queue-exhausted-header">✓ Queue complete.</div>
               <div class="queue-exhausted-subtitle">
                 You can review or edit prior decisions, then notify your project coordinator.
               </div>
@@ -813,7 +815,9 @@
                   class="queue-exhausted-link queue-exhausted-action-button"
                   on:click={handleStepBackReviewed}
                   disabled={!canStepBackReviewed}
-                  title={!canStepBackReviewed ? 'No reviewed sources available yet' : 'Flip back through reviewed sources'}
+                  title={!canStepBackReviewed
+                    ? 'No reviewed sources available yet'
+                    : 'Flip back through reviewed sources'}
                 >
                   ← Review recently decided sources
                 </button>
@@ -831,20 +835,13 @@
                   type="button"
                   class="queue-exhausted-link queue-exhausted-action-button"
                   on:click={() =>
-                    window.navigate(
-                      `/review-projects/${review.review_project_guid}/skipped`
-                    )
-                  }
-                  disabled={
-                    loading ||
+                    window.navigate(`/review-projects/${review.review_project_guid}/skipped`)}
+                  disabled={loading ||
                     !review?.review_project_guid ||
-                    (review?.stats?.skip !== undefined && review.stats.skip <= 0)
-                  }
-                  title={
-                    review?.stats?.skip !== undefined && review.stats.skip <= 0
-                      ? 'No skipped sources to review'
-                      : undefined
-                  }
+                    (review?.stats?.skip !== undefined && review.stats.skip <= 0)}
+                  title={review?.stats?.skip !== undefined && review.stats.skip <= 0
+                    ? 'No skipped sources to review'
+                    : undefined}
                 >
                   Review skipped sources
                   {#if review?.stats?.skip !== undefined && review?.stats?.skip > 0}
@@ -866,7 +863,7 @@
         {/if}
 
         {#if review.status !== 'completed' || reevaluatingItemId !== null}
-          <SourceViewer 
+          <SourceViewer
             item={currentItem}
             onKeep={handleKeep}
             onRemove={handleRemove}
@@ -877,10 +874,14 @@
             showForwardButton={canStepForwardReviewed}
             onForward={handleStepForwardReviewed}
             forwardButtonTitle="Forward toward current queue item"
-            reviewedDecisionLabel={reevaluatingItemId !== null && currentItem?.decision && currentItem.decision !== 'undecided'
+            reviewedDecisionLabel={reevaluatingItemId !== null &&
+            currentItem?.decision &&
+            currentItem.decision !== 'undecided'
               ? currentItem.decision
               : ''}
-            reviewedModeMessage={reevaluatingItemId !== null ? 'Reevaluating a previously reviewed source.' : ''}
+            reviewedModeMessage={reevaluatingItemId !== null
+              ? 'Reevaluating a previously reviewed source.'
+              : ''}
             showReturnToQueueButton={reevaluatingItemId !== null}
             onReturnToQueue={exitReevaluateMode}
             editMetadata={review?.edit_metadata}
@@ -888,10 +889,10 @@
               openEditMetadata(
                 'primary_language',
                 'Language (ISO 639-1)',
-                currentItem?.source_metadata?.primary_language || currentItem?.source_metadata?.language,
+                currentItem?.source_metadata?.primary_language ||
+                  currentItem?.source_metadata?.language,
                 LANGUAGE_OPTIONS
-              )
-            }
+              )}
             onEditPubCountry={() => {
               const options = [{ value: '', label: 'None / Not set' }, ...COUNTRY_OPTIONS];
               openEditMetadata(
@@ -939,7 +940,7 @@
             }}
             {loading}
           />
-          
+
           <RemovalReasonModal
             show={showRemovalModal}
             sourceLabel={currentItem?.source_label}
@@ -953,8 +954,6 @@
             on:confirm={(e) => handleSkipConfirm(e.detail)}
             on:close={handleSkipModalClose}
           />
-
-          
         {/if}
       </div>
     </div>
@@ -1025,7 +1024,7 @@
     flex-direction: column;
     gap: 20px;
   }
-  
+
   .review-header-bar {
     position: fixed;
     inset-inline: 0;
@@ -1068,7 +1067,6 @@
   .footer-right {
     justify-content: flex-end;
   }
-
   .completion-pill {
     padding: 6px 12px;
     border-radius: 999px;
@@ -1087,7 +1085,9 @@
     font-weight: 500;
     color: #f6f8fa;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
   }
 
   .sidebar-toggle:hover {
@@ -1122,7 +1122,10 @@
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s,
+      opacity 0.2s;
   }
 
   .propose-next-card {
@@ -1159,7 +1162,10 @@
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s,
+      opacity 0.2s;
   }
 
   .propose-next-button:hover:enabled {
@@ -1189,7 +1195,10 @@
     font-size: 13px;
     font-weight: 800;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s,
+      opacity 0.2s;
   }
 
   .queue-exhausted-link:hover:enabled {
@@ -1208,7 +1217,6 @@
     font-weight: 900;
     color: #7f8c8d;
   }
-
   .queue-exhausted-link-secondary {
     width: 100%;
     padding: 10px 12px;
@@ -1219,7 +1227,10 @@
     font-size: 13px;
     font-weight: 800;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s,
+      opacity 0.2s;
   }
 
   .queue-exhausted-link-secondary:hover:enabled {
@@ -1249,7 +1260,10 @@
     font-size: 13px;
     font-weight: 800;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s,
+      opacity 0.2s;
   }
 
   .queue-modal-link:hover:enabled {
@@ -1261,7 +1275,6 @@
     opacity: 0.6;
     cursor: not-allowed;
   }
-
   .queue-modal-link-secondary {
     width: 100%;
     padding: 10px 12px;
@@ -1272,7 +1285,10 @@
     font-size: 13px;
     font-weight: 800;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s,
+      opacity 0.2s;
   }
 
   .queue-modal-link-secondary:hover:enabled {
@@ -1334,7 +1350,10 @@
     font-size: 13px;
     font-weight: 900;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s,
+      opacity 0.2s;
   }
 
   .queue-exhausted-show-choices:hover:enabled {
@@ -1384,7 +1403,6 @@
     flex-direction: column;
     gap: 12px;
   }
-
   .context-header {
     display: flex;
     justify-content: space-between;
@@ -1407,7 +1425,9 @@
     font-weight: 500;
     color: #34495e;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
   }
 
   .context-close:hover {
@@ -1429,7 +1449,9 @@
     background-color: #f8f9fa;
     cursor: pointer;
     text-align: left;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
   }
 
   .context-toggle-button:hover {
@@ -1457,7 +1479,6 @@
     border-color: #27ae60;
     background-color: #27ae60;
   }
-
   .context-action {
     padding: 4px 10px;
     border-radius: 999px;
@@ -1467,7 +1488,9 @@
     font-weight: 500;
     color: #34495e;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
   }
 
   .context-action:hover:enabled {
@@ -1574,7 +1597,9 @@
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition: background-color 0.2s, transform 0.05s;
+    transition:
+      background-color 0.2s,
+      transform 0.05s;
   }
 
   .left-actions .btn-primary:hover:not(:disabled) {

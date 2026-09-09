@@ -1,9 +1,7 @@
 <div class="root-static-wrap">
   <section class="root-static-card" aria-label="Application landing page">
     <h1>MediaCloud Collections Review</h1>
-    <p>
-      This is the public landing page for the Collections Review application.
-    </p>
+    <p>This is the public landing page for the Collections Review application.</p>
     <p>
       You probably want to be here:
       <a href="https://search.mediacloud.org/" target="_blank" rel="noopener noreferrer">

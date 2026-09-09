@@ -4,9 +4,15 @@
   export let title = '';
 
   const dispatch = createEventDispatcher();
-  function close() { dispatch('close'); }
-  function onKey(e) { if (show && e.key === 'Escape') close(); }
-  function onOverlay(e) { if (e.target === e.currentTarget) close(); }
+  function close() {
+    dispatch('close');
+  }
+  function onKey(e) {
+    if (show && e.key === 'Escape') close();
+  }
+  function onOverlay(e) {
+    if (e.target === e.currentTarget) close();
+  }
 </script>
 
 <svelte:window on:keydown={onKey} />
@@ -17,7 +23,15 @@
       <div class="modal-header">
         <span class="modal-title">{title}</span>
         <button class="close-btn" on:click={close} aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg
+          >
         </button>
       </div>
       <slot />
@@ -29,30 +43,41 @@
   .overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,.42);
+    background: rgba(0, 0, 0, 0.42);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 9000;
     padding: 24px;
     backdrop-filter: blur(3px);
-    animation: fade-in .15s ease;
+    animation: fade-in 0.15s ease;
   }
-  @keyframes fade-in { from { opacity: 0; } }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
 
   .modal {
     background: #fff;
     border-radius: 18px;
-    box-shadow: 0 24px 80px rgba(0,0,0,.2), 0 4px 16px rgba(0,0,0,.08);
+    box-shadow:
+      0 24px 80px rgba(0, 0, 0, 0.2),
+      0 4px 16px rgba(0, 0, 0, 0.08);
     min-width: 480px;
     max-width: 640px;
     width: 100%;
     max-height: 82vh;
     overflow-y: auto;
-    animation: slide-up .18s ease;
+    animation: slide-up 0.18s ease;
     font-family: var(--v2-sans, 'DM Sans', sans-serif);
   }
-  @keyframes slide-up { from { transform: translateY(10px); opacity: 0; } }
+  @keyframes slide-up {
+    from {
+      transform: translateY(10px);
+      opacity: 0;
+    }
+  }
 
   .modal-header {
     padding: 20px 24px 18px;
@@ -69,7 +94,7 @@
   .modal-title {
     font-size: 16px;
     font-weight: 600;
-    color: var(--v2-ink, #1A1C1F);
+    color: var(--v2-ink, #1a1c1f);
   }
   .close-btn {
     width: 30px;
@@ -82,7 +107,12 @@
     cursor: pointer;
     color: #999;
     flex-shrink: 0;
-    transition: background .12s, color .12s;
+    transition:
+      background 0.12s,
+      color 0.12s;
   }
-  .close-btn:hover { background: #f5f5f5; color: #333; }
+  .close-btn:hover {
+    background: #f5f5f5;
+    color: #333;
+  }
 </style>

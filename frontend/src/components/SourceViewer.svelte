@@ -1,6 +1,6 @@
 <script>
-  import iso3166 from "iso-3166-2";
-  import * as rawIso3166 from "iso-3166";
+  import iso3166 from 'iso-3166-2';
+  import * as rawIso3166 from 'iso-3166';
 
   export let item;
   export let onKeep;
@@ -15,12 +15,12 @@
   export let showSkip = true;
   export let showBackButton = false;
   export let onBack = null;
-  export let backButtonTitle = "Back to recently reviewed source";
+  export let backButtonTitle = 'Back to recently reviewed source';
   export let showForwardButton = false;
   export let onForward = null;
-  export let forwardButtonTitle = "Forward toward current queue item";
-  export let decidedDecisionLabel = "";
-  export let decidedModeMessage = "";
+  export let forwardButtonTitle = 'Forward toward current queue item';
+  export let decidedDecisionLabel = '';
+  export let decidedModeMessage = '';
   export let showReturnToQueueButton = false;
   export let onReturnToQueue = null;
 
@@ -35,51 +35,19 @@
     if (value === null || value === undefined || isNaN(Number(value))) {
       return null;
     }
-    return Number(value).toLocaleString("en-US");
-  }
-
-  function formatDateTime(value) {
-    if (!value) return null;
-    const date = new Date(value);
-    if (isNaN(date.getTime())) return null;
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  }
-
-  /**
-   * MediaCloud directory list API uses SourcesViewSerializer: last_story is DateTimeField(format="%m/%Y")
-   * (e.g. "3/2024"), which `new Date()` cannot parse. Single-source responses may use ISO strings instead.
-   */
-  function formatLastStory(value) {
-    if (value === null || value === undefined || value === "") return null;
-    if (typeof value === "string") {
-      const trimmed = value.trim();
-      const m = trimmed.match(/^(\d{1,2})\/(\d{4})$/);
-      if (m) {
-        const monthIndex = parseInt(m[1], 10) - 1;
-        const year = parseInt(m[2], 10);
-        if (monthIndex >= 0 && monthIndex <= 11 && Number.isFinite(year) && year > 0) {
-          const date = new Date(year, monthIndex, 1);
-          return date.toLocaleDateString("en-US", { year: "numeric", month: "short" });
-        }
-      }
-    }
-    return formatDateTime(value);
+    return Number(value).toLocaleString('en-US');
   }
 
   /** MediaCloud Source Directory fields (web-search sources.models.Source): stories_total, last_story, stories_per_week */
   function pickNumericMeta(meta, snake, camel) {
     const raw = meta[snake] ?? meta[camel];
-    if (raw === null || raw === undefined || raw === "") return null;
+    if (raw === null || raw === undefined || raw === '') return null;
     const n = Number(raw);
     return Number.isFinite(n) ? n : null;
   }
 
   function formatPubState(pubState, pubCountry) {
-    if (!pubState) return "—";
+    if (!pubState) return '—';
 
     const normalizedState = String(pubState).trim().toUpperCase();
     const subdivision = iso3166.subdivision(normalizedState);
@@ -100,7 +68,7 @@
   }
 
   function formatPubCountry(pubCountry) {
-    if (!pubCountry) return "—";
+    if (!pubCountry) return '—';
     const normalizedCountry = String(pubCountry).trim().toUpperCase();
     const alpha2Country =
       normalizedCountry.length === 3
@@ -112,25 +80,20 @@
 
   $: metadata = item && item.source_metadata ? item.source_metadata : {};
 
-  $: storiesTotalApprox = pickNumericMeta(metadata, "stories_total", "storiesTotal");
-  $: storiesTotalLabel =
-    storiesTotalApprox !== null ? formatNumber(storiesTotalApprox) : null;
+  $: storiesTotalApprox = pickNumericMeta(metadata, 'stories_total', 'storiesTotal');
+  $: storiesTotalLabel = storiesTotalApprox !== null ? formatNumber(storiesTotalApprox) : null;
 
-  $: lastStoryRaw = metadata.last_story ?? metadata.lastStory;
-  $: lastStoryLabel = formatLastStory(lastStoryRaw);
-
-  $: storiesPerWeekVal = pickNumericMeta(metadata, "stories_per_week", "storiesPerWeek");
+  $: storiesPerWeekVal = pickNumericMeta(metadata, 'stories_per_week', 'storiesPerWeek');
   $: isActivelyIndexing = storiesPerWeekVal !== null && storiesPerWeekVal > 0;
   $: directoryStatLede = storiesTotalLabel
     ? `~${storiesTotalLabel} stories in Media Cloud, ${
-        isActivelyIndexing ? "actively indexing" : "not actively indexing"
+        isActivelyIndexing ? 'actively indexing' : 'not actively indexing'
       }`
-    : "Source directory stats unavailable";
+    : 'Source directory stats unavailable';
   $: pubStateLabel = formatPubState(metadata.pub_state, metadata.pub_country);
   $: pubCountryLabel = formatPubCountry(metadata.pub_country);
 
-  $: showDirectoryStats =
-    item && !item.is_new_source && item.source_id;
+  $: showDirectoryStats = item && !item.is_new_source && item.source_id;
 
   $: if (item && item.source_homepage) {
     try {
@@ -167,17 +130,18 @@
     if (onEditPubState) onEditPubState();
   }
 
-  $: canKeep = !loading && (!editMetadata || (correctLanguage && correctPubCountry && correctPubState));
+  $: canKeep =
+    !loading && (!editMetadata || (correctLanguage && correctPubCountry && correctPubState));
   $: decidedDecisionClass =
-    decidedDecisionLabel === "keep"
-      ? "decision-keep"
-      : decidedDecisionLabel === "remove"
-      ? "decision-remove"
-      : decidedDecisionLabel === "add"
-      ? "decision-add"
-      : decidedDecisionLabel === "skip"
-      ? "decision-skip"
-      : "";
+    decidedDecisionLabel === 'keep'
+      ? 'decision-keep'
+      : decidedDecisionLabel === 'remove'
+        ? 'decision-remove'
+        : decidedDecisionLabel === 'add'
+          ? 'decision-add'
+          : decidedDecisionLabel === 'skip'
+            ? 'decision-skip'
+            : '';
 </script>
 
 {#if item}
@@ -247,7 +211,7 @@
         </div>
         <div class="header-right">
           {#if !item.is_new_source && item.source_id}
-            <a 
+            <a
               href={`https://search.mediacloud.org/sources/${item.source_id}`}
               target="_blank"
               rel="noopener noreferrer"
@@ -272,13 +236,16 @@
 
       {#if showDirectoryStats}
         <div class="directory-stats" aria-label="Source Directory">
-          <p class="directory-stats-lede" title="Source Directory context: total stories, last seen date, and recent weekly volume">
+          <p
+            class="directory-stats-lede"
+            title="Source Directory context: total stories, last seen date, and recent weekly volume"
+          >
             {directoryStatLede}
           </p>
         </div>
       {/if}
 
-      {#if (item.source_id) || (item.is_new_source && (editMetadata || metadata.primary_language || metadata.language || metadata.pub_country || metadata.pub_state))}
+      {#if item.source_id || (item.is_new_source && (editMetadata || metadata.primary_language || metadata.language || metadata.pub_country || metadata.pub_state))}
         <div class="source-metadata">
           <div class="metadata-grid">
             <div class="meta-card">
@@ -348,31 +315,21 @@
         </div>
       {/if}
     </div>
-    
+
     {#if showActions}
       <div class="actions">
         <div class="actions-left">
-          <button 
-            class="btn btn-remove" 
-            on:click={onRemove} 
-            disabled={loading}
-          >
-            Remove
-          </button>
+          <button class="btn btn-remove" on:click={onRemove} disabled={loading}> Remove </button>
         </div>
         <div class="actions-right">
           {#if showSkip}
-            <button
-              class="btn btn-skip"
-              on:click={onSkip}
-              disabled={loading}
-            >
+            <button class="btn btn-skip" on:click={onSkip} disabled={loading}>
               Skip for now
             </button>
           {/if}
-          <button 
-            class="btn btn-keep" 
-            on:click={onKeep} 
+          <button
+            class="btn btn-keep"
+            on:click={onKeep}
             disabled={!canKeep}
             title={!canKeep && editMetadata
               ? 'To keep this source, first mark Language, Pub country, and Pub state as correct.'
@@ -420,7 +377,10 @@
     justify-content: center;
     cursor: pointer;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-    transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s,
+      transform 0.1s;
   }
 
   .review-back-button:hover {
@@ -451,7 +411,10 @@
     justify-content: center;
     cursor: pointer;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-    transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s,
+      transform 0.1s;
   }
 
   .review-forward-button:hover {
@@ -533,7 +496,9 @@
     background: #f5faff;
     color: #2c3e50;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
   }
 
   .return-to-queue-button:hover {
@@ -684,7 +649,9 @@
     border: 1px solid #d0d7de;
     background-color: #f8f9fa;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
   }
 
   .meta-correct-button:hover {
@@ -701,7 +668,9 @@
     font-weight: 500;
     color: #34495e;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
   }
 
   .meta-edit-button:hover {
@@ -710,7 +679,8 @@
   }
 
   .monospace {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+      'Courier New', monospace;
   }
 
   .homepage-inline {

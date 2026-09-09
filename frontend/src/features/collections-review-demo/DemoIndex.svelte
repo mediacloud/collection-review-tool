@@ -6,16 +6,32 @@
       label: 'Project Manager',
       desc: 'Creates projects, generates reviewer queues, monitors progress, exports results.',
       screens: [
-        { title: 'General Admin',  sub: 'Manage all projects + quick-start a single review', path: '/demo/manage' },
-        { title: 'Project Admin',  sub: 'Climate Reporting · US East Coast',                 path: '/demo/review-projects/proj_8fa221' },
+        {
+          title: 'General Admin',
+          sub: 'Manage all projects + quick-start a single review',
+          path: '/demo/manage',
+        },
+        {
+          title: 'Project Admin',
+          sub: 'Climate Reporting · US East Coast',
+          path: '/demo/review-projects/proj_8fa221',
+        },
       ],
     },
     {
       label: 'Reviewer',
       desc: 'Receives a queue link, decides Keep / Remove / Skip on each source, proposes new ones.',
       screens: [
-        { title: 'Queue Landing',  sub: 'Invitation + your queue overview',                  path: '/demo/review-projects/proj_8fa221/queues/q1' },
-        { title: 'Review screen',  sub: 'One source at a time — decide and advance',         path: '/demo/reviews/124' },
+        {
+          title: 'Queue Landing',
+          sub: 'Invitation + your queue overview',
+          path: '/demo/review-projects/proj_8fa221/queues/q1',
+        },
+        {
+          title: 'Review screen',
+          sub: 'One source at a time — decide and advance',
+          path: '/demo/reviews/124',
+        },
       ],
     },
   ];
@@ -27,8 +43,8 @@
       <div class="eyebrow">V2 redesign · demo</div>
       <h1 class="index-h1">Collections Review Portal</h1>
       <p class="index-sub">
-        Prototype running on mock data — no backend required.
-        Choose a role below to enter the interface.
+        Prototype running on mock data — no backend required. Choose a role below to enter the
+        interface.
       </p>
     </div>
 
@@ -46,8 +62,18 @@
                   <div class="screen-title">{s.title}</div>
                   <div class="screen-sub">{s.sub}</div>
                 </div>
-                <svg class="screen-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 12h14M13 6l6 6-6 6"/>
+                <svg
+                  class="screen-arrow"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12h14M13 6l6 6-6 6" />
                 </svg>
               </button>
             {/each}
@@ -100,7 +126,7 @@
     font-family: var(--v2-mono);
     color: var(--v2-mute);
     text-transform: uppercase;
-    letter-spacing: .8px;
+    letter-spacing: 0.8px;
     margin-bottom: 14px;
   }
   .index-h1 {
@@ -126,8 +152,12 @@
   }
 
   @media (max-width: 620px) {
-    .index-page { padding: 60px 24px; }
-    .roles-grid { grid-template-columns: 1fr; }
+    .index-page {
+      padding: 60px 24px;
+    }
+    .roles-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
   .role-block {
@@ -136,12 +166,14 @@
     gap: 14px;
   }
 
-  .role-header { padding: 0 4px; }
+  .role-header {
+    padding: 0 4px;
+  }
   .role-label {
     font-size: 11px;
     font-family: var(--v2-mono);
     text-transform: uppercase;
-    letter-spacing: .8px;
+    letter-spacing: 0.8px;
     color: var(--v2-accent);
     font-weight: 500;
     margin-bottom: 6px;
@@ -172,8 +204,10 @@
     font-family: var(--v2-sans);
     text-align: left;
     width: 100%;
-    transition: border-color .18s, box-shadow .18s;
-    box-shadow: 0 1px 0 rgba(0,0,0,.02);
+    transition:
+      border-color 0.18s,
+      box-shadow 0.18s;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
   }
   .screen-card:hover {
     border-color: var(--v2-accent);
@@ -190,8 +224,13 @@
     color: var(--v2-mute);
     margin-top: 3px;
   }
-  .screen-arrow { color: var(--v2-mute); flex-shrink: 0; }
-  .screen-card:hover .screen-arrow { color: var(--v2-accent); }
+  .screen-arrow {
+    color: var(--v2-mute);
+    flex-shrink: 0;
+  }
+  .screen-card:hover .screen-arrow {
+    color: var(--v2-accent);
+  }
 
   .index-footer {
     margin-top: 44px;

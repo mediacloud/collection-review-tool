@@ -75,7 +75,7 @@
   let currentPath = window.location.pathname;
 
   $: canDownloadMainCsv =
-    queues.length > 0 && stats != null && ((stats.keep || 0) + (stats.add || 0)) > 0;
+    queues.length > 0 && stats != null && (stats.keep || 0) + (stats.add || 0) > 0;
   $: canDownloadAuditCsv = queues.length > 0 && stats != null && (stats.total || 0) > 0;
 
   function getProjectGuidFromUrl() {
@@ -110,22 +110,9 @@
       : (project.collection_ids || []).map((id, i) => {
           const names = project.collection_names || [];
           const name = names[i];
-          const label =
-            name != null && String(name).trim() !== '' ? name : String(id);
+          const label = name != null && String(name).trim() !== '' ? name : String(id);
           return { id, label };
         });
-
-  function formatDate(dateString) {
-    if (!dateString) return 'Unknown';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  }
 
   onMount(async () => {
     const params = new URLSearchParams(window.location.search);
@@ -159,14 +146,16 @@
       project = data.project;
       publishEnabled = data.publish_enabled !== false;
       publishMetadataUpdatesEnabled = data.publish_metadata_updates_enabled !== false;
-      publishTargetApiBaseUrl = data.publish_target_api_base_url || 'https://search.mediacloud.org/api/';
+      publishTargetApiBaseUrl =
+        data.publish_target_api_base_url || 'https://search.mediacloud.org/api/';
       projectNameDraft = project?.name || '';
       showProjectNameEditor = false;
       projectNameError = null;
       localEditMetadata = !!project.edit_metadata;
       initialEditMetadata = !!project.edit_metadata;
       showReviewerLandingVirtualQueues = !!project.show_virtual_queue_links_on_reviewer_landing;
-      initialShowReviewerLandingVirtualQueues = !!project.show_virtual_queue_links_on_reviewer_landing;
+      initialShowReviewerLandingVirtualQueues =
+        !!project.show_virtual_queue_links_on_reviewer_landing;
       showEditMetadataEditor = false;
       showReviewerLandingVirtualQueuesEditor = false;
       derivedStatus = data.derived_status;
@@ -224,7 +213,8 @@
       await loadProject();
       showProjectNameEditor = false;
     } catch (err) {
-      projectNameError = err.response?.data?.error || err.message || 'Failed to update project name';
+      projectNameError =
+        err.response?.data?.error || err.message || 'Failed to update project name';
     } finally {
       projectNameSaving = false;
     }
@@ -423,27 +413,36 @@
 
     <div class="content">
       <div class="admin-workflow-card" role="note" aria-label="Admin workflow guidance">
-        <h3>Media Cloud Source Review Admin: <span class="project-name-static">{project.name || projectGuid}</span></h3>
-          <div class="landing-explainer">
-            <p>
-              <a
-                href="https://search.mediacloud.org/"
-                target="_blank"
-                rel="noopener noreferrer"
-              >Media Cloud</a>
-              is an open research platform for studying online media. In Media Cloud, <strong>collections</strong> group
-              sources so researchers and partners can analyze or curate them together.
-            </p>
-            <p>
-              This application is for <strong>collections review</strong> workflows: this page provides options for configuring and managing your review queues, and for exporting review project data.     </p>
-          
-            </div>
-          <div class="admin-workflow-steps">
-            <div><strong>1.</strong> Configure project settings (guidelines and metadata editing).</div>
-            <div><strong>2.</strong> Generate reviewer queues and share queue links.</div>
-            <div><strong>3.</strong> Monitor queue and project progress, then review virtual queues as needed.</div>
-            <div><strong>4.</strong> Export final project outputs when review is complete.</div>
+        <h3>
+          Media Cloud Source Review Admin: <span class="project-name-static"
+            >{project.name || projectGuid}</span
+          >
+        </h3>
+        <div class="landing-explainer">
+          <p>
+            <a href="https://search.mediacloud.org/" target="_blank" rel="noopener noreferrer"
+              >Media Cloud</a
+            >
+            is an open research platform for studying online media. In Media Cloud,
+            <strong>collections</strong> group sources so researchers and partners can analyze or curate
+            them together.
+          </p>
+          <p>
+            This application is for <strong>collections review</strong> workflows: this page provides
+            options for configuring and managing your review queues, and for exporting review project
+            data.
+          </p>
+        </div>
+        <div class="admin-workflow-steps">
+          <div>
+            <strong>1.</strong> Configure project settings (guidelines and metadata editing).
           </div>
+          <div><strong>2.</strong> Generate reviewer queues and share queue links.</div>
+          <div>
+            <strong>3.</strong> Monitor queue and project progress, then review virtual queues as needed.
+          </div>
+          <div><strong>4.</strong> Export final project outputs when review is complete.</div>
+        </div>
       </div>
 
       {#if derivedStatus === 'completed'}
@@ -454,7 +453,6 @@
       {/if}
 
       <div class="project-meta project-overview">
-
         <div class="meta-block-seed">
           <div class="meta-row meta-row-seed">
             <div class="meta-label">Seed collections</div>
@@ -475,8 +473,8 @@
             </div>
           </div>
           <p class="seed-collections-explainer">
-            These are the Media Cloud collections the project was created from. They were used to pull in the starting
-            set of sources for review.
+            These are the Media Cloud collections the project was created from. They were used to
+            pull in the starting set of sources for review.
           </p>
         </div>
 
@@ -591,16 +589,24 @@
 
       <div class="project-settings" class:is-collapsed={!projectSettingsExpanded}>
         <div class="project-settings-toolbar">
-          <h2 class="section-heading project-settings-title" id="project-settings-heading">Project settings</h2>
+          <h2 class="section-heading project-settings-title" id="project-settings-heading">
+            Project settings
+          </h2>
           <button
             type="button"
             class="settings-collapse-toggle"
             on:click={() => (projectSettingsExpanded = !projectSettingsExpanded)}
             aria-expanded={projectSettingsExpanded}
             aria-controls="project-settings-panel"
-            aria-label={projectSettingsExpanded ? 'Collapse project settings' : 'Expand project settings'}
+            aria-label={projectSettingsExpanded
+              ? 'Collapse project settings'
+              : 'Expand project settings'}
           >
-            <span class="settings-collapse-chevron" class:open={projectSettingsExpanded} aria-hidden="true"></span>
+            <span
+              class="settings-collapse-chevron"
+              class:open={projectSettingsExpanded}
+              aria-hidden="true"
+            ></span>
             <span class="settings-collapse-label">{projectSettingsExpanded ? 'Hide' : 'Show'}</span>
           </button>
         </div>
@@ -613,256 +619,265 @@
             aria-labelledby="project-settings-heading"
           >
             <p class="settings-intro">
-              Use these when you need to change what reviewers see or whether they can edit source metadata. Updates
-              apply to every queue in this project.
+              Use these when you need to change what reviewers see or whether they can edit source
+              metadata. Updates apply to every queue in this project.
             </p>
 
-        <section class="setting-card">
-          <div class="setting-card-header">
-            <h3 class="setting-card-title">Project name</h3>
-            {#if !showProjectNameEditor}
-              <button
-                type="button"
-                class="edit-name-button"
-                on:click={handleStartProjectNameEdit}
-                title="Edit project name"
-                aria-label="Edit project name"
-                disabled={projectNameSaving}
-              >
-                ✎
-              </button>
-            {/if}
-          </div>
-          <p class="setting-card-desc">
-            Display name used across admin and reviewer views for this review project.
-          </p>
-          {#if showProjectNameEditor}
-            <div class="guidelines-editor">
-              <input
-                type="text"
-                class="project-name-input"
-                bind:value={projectNameDraft}
-                maxlength="255"
-                disabled={projectNameSaving}
-              />
-              <div class="guidelines-editor-actions">
-                <button
-                  type="button"
-                  class="cancel-name-button"
-                  on:click={handleCancelProjectNameEdit}
-                  disabled={projectNameSaving}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  class="save-name-button"
-                  on:click={handleSaveProjectNameEdit}
-                  disabled={projectNameSaving}
-                >
-                  {projectNameSaving ? 'Saving...' : 'Save'}
-                </button>
+            <section class="setting-card">
+              <div class="setting-card-header">
+                <h3 class="setting-card-title">Project name</h3>
+                {#if !showProjectNameEditor}
+                  <button
+                    type="button"
+                    class="edit-name-button"
+                    on:click={handleStartProjectNameEdit}
+                    title="Edit project name"
+                    aria-label="Edit project name"
+                    disabled={projectNameSaving}
+                  >
+                    ✎
+                  </button>
+                {/if}
               </div>
-              {#if projectNameError}
-                <div class="inline-error">{projectNameError}</div>
+              <p class="setting-card-desc">
+                Display name used across admin and reviewer views for this review project.
+              </p>
+              {#if showProjectNameEditor}
+                <div class="guidelines-editor">
+                  <input
+                    type="text"
+                    class="project-name-input"
+                    bind:value={projectNameDraft}
+                    maxlength="255"
+                    disabled={projectNameSaving}
+                  />
+                  <div class="guidelines-editor-actions">
+                    <button
+                      type="button"
+                      class="cancel-name-button"
+                      on:click={handleCancelProjectNameEdit}
+                      disabled={projectNameSaving}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      class="save-name-button"
+                      on:click={handleSaveProjectNameEdit}
+                      disabled={projectNameSaving}
+                    >
+                      {projectNameSaving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                  {#if projectNameError}
+                    <div class="inline-error">{projectNameError}</div>
+                  {/if}
+                </div>
               {/if}
-            </div>
-          {/if}
-        </section>
+            </section>
 
-        <section class="setting-card">
-          <div class="setting-card-header">
-            <h3 class="setting-card-title">Annotation guidelines</h3>
-            {#if !showGuidelinesEditor}
-              <button
-                type="button"
-                class="edit-name-button"
-                on:click={handleStartGuidelinesEdit}
-                title="Edit guidelines"
-                aria-label="Edit guidelines"
-                disabled={loading || guidelinesLoading}
-              >
-                ✎
-              </button>
-            {/if}
-          </div>
-          <p class="setting-card-desc">
-            Markdown instructions shown to reviewers while they work through sources. Saving custom text replaces
-            the default template for all queues until you change it again.
-          </p>
-          {#if showGuidelinesEditor}
-            <div class="guidelines-editor">
-              <textarea
-                class="guidelines-textarea"
-                bind:value={guidelinesMarkdown}
-                rows="10"
-                disabled={guidelinesLoading || guidelinesSaving}
-              />
-
-              <div class="guidelines-editor-actions">
-                <button
-                  type="button"
-                  class="cancel-name-button"
-                  on:click={handleCancelGuidelinesEdit}
-                  disabled={guidelinesSaving || guidelinesLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  class="save-name-button"
-                  on:click={handleSaveGuidelinesEdit}
-                  disabled={guidelinesSaving || guidelinesLoading}
-                >
-                  {guidelinesSaving ? 'Saving...' : 'Save'}
-                </button>
+            <section class="setting-card">
+              <div class="setting-card-header">
+                <h3 class="setting-card-title">Annotation guidelines</h3>
+                {#if !showGuidelinesEditor}
+                  <button
+                    type="button"
+                    class="edit-name-button"
+                    on:click={handleStartGuidelinesEdit}
+                    title="Edit guidelines"
+                    aria-label="Edit guidelines"
+                    disabled={loading || guidelinesLoading}
+                  >
+                    ✎
+                  </button>
+                {/if}
               </div>
+              <p class="setting-card-desc">
+                Markdown instructions shown to reviewers while they work through sources. Saving
+                custom text replaces the default template for all queues until you change it again.
+              </p>
+              {#if showGuidelinesEditor}
+                <div class="guidelines-editor">
+                  <textarea
+                    class="guidelines-textarea"
+                    bind:value={guidelinesMarkdown}
+                    rows="10"
+                    disabled={guidelinesLoading || guidelinesSaving}
+                  />
 
-              {#if guidelinesLoadError}
-                <div class="inline-error">{guidelinesLoadError}</div>
+                  <div class="guidelines-editor-actions">
+                    <button
+                      type="button"
+                      class="cancel-name-button"
+                      on:click={handleCancelGuidelinesEdit}
+                      disabled={guidelinesSaving || guidelinesLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      class="save-name-button"
+                      on:click={handleSaveGuidelinesEdit}
+                      disabled={guidelinesSaving || guidelinesLoading}
+                    >
+                      {guidelinesSaving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+
+                  {#if guidelinesLoadError}
+                    <div class="inline-error">{guidelinesLoadError}</div>
+                  {/if}
+                  {#if guidelinesError}
+                    <div class="inline-error">{guidelinesError}</div>
+                  {/if}
+                </div>
               {/if}
-              {#if guidelinesError}
-                <div class="inline-error">{guidelinesError}</div>
-              {/if}
-            </div>
-          {/if}
-        </section>
+            </section>
 
-        <section class="setting-card">
-          <div class="setting-card-header">
-            <h3 class="setting-card-title">Reviewer landing: project virtual queues</h3>
-            {#if !showReviewerLandingVirtualQueuesEditor}
-              <div class="setting-card-header-actions">
-                <span
-                  class="setting-status-pill"
-                  class:is-on={initialShowReviewerLandingVirtualQueues}
-                  class:is-off={!initialShowReviewerLandingVirtualQueues}
-                >
-                  {initialShowReviewerLandingVirtualQueues ? 'Shown' : 'Hidden'}
-                </span>
-                <button
-                  type="button"
-                  class="edit-name-button"
-                  on:click={handleStartReviewerLandingVirtualQueuesEdit}
-                  title="Change reviewer landing virtual queue links"
-                  aria-label="Change reviewer landing virtual queue links"
-                >
-                  ✎
-                </button>
+            <section class="setting-card">
+              <div class="setting-card-header">
+                <h3 class="setting-card-title">Reviewer landing: project virtual queues</h3>
+                {#if !showReviewerLandingVirtualQueuesEditor}
+                  <div class="setting-card-header-actions">
+                    <span
+                      class="setting-status-pill"
+                      class:is-on={initialShowReviewerLandingVirtualQueues}
+                      class:is-off={!initialShowReviewerLandingVirtualQueues}
+                    >
+                      {initialShowReviewerLandingVirtualQueues ? 'Shown' : 'Hidden'}
+                    </span>
+                    <button
+                      type="button"
+                      class="edit-name-button"
+                      on:click={handleStartReviewerLandingVirtualQueuesEdit}
+                      title="Change reviewer landing virtual queue links"
+                      aria-label="Change reviewer landing virtual queue links"
+                    >
+                      ✎
+                    </button>
+                  </div>
+                {/if}
               </div>
-            {/if}
-          </div>
-          <p class="setting-card-desc">
-            Controls whether reviewer queue landing pages show links to the project-wide virtual queues
-            (skipped, added, removed, kept).
-          </p>
-          {#if showReviewerLandingVirtualQueuesEditor}
-            <div class="metadata-editor-panel">
-              <label class="metadata-edit-toggle" title="Applies to all reviewer queue landing pages in this project">
-                <input
-                  type="checkbox"
-                  bind:checked={showReviewerLandingVirtualQueues}
-                  disabled={reviewerLandingVirtualQueuesSaving || generatingQueues}
-                />
-                <span class="toggle-slider"></span>
-                <span class="metadata-toggle-label">Show project virtual queue links on reviewer landing pages</span>
-              </label>
-              <div class="metadata-editor-actions">
-                <button
-                  type="button"
-                  class="cancel-name-button"
-                  on:click={handleCancelReviewerLandingVirtualQueuesEdit}
-                  disabled={reviewerLandingVirtualQueuesSaving || generatingQueues}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  class="save-name-button"
-                  on:click={handleSaveReviewerLandingVirtualQueues}
-                  disabled={reviewerLandingVirtualQueuesSaving || generatingQueues}
-                >
-                  {reviewerLandingVirtualQueuesSaving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-              {#if reviewerLandingVirtualQueuesError}
-                <div class="inline-error">{reviewerLandingVirtualQueuesError}</div>
+              <p class="setting-card-desc">
+                Controls whether reviewer queue landing pages show links to the project-wide virtual
+                queues (skipped, added, removed, kept).
+              </p>
+              {#if showReviewerLandingVirtualQueuesEditor}
+                <div class="metadata-editor-panel">
+                  <label
+                    class="metadata-edit-toggle"
+                    title="Applies to all reviewer queue landing pages in this project"
+                  >
+                    <input
+                      type="checkbox"
+                      bind:checked={showReviewerLandingVirtualQueues}
+                      disabled={reviewerLandingVirtualQueuesSaving || generatingQueues}
+                    />
+                    <span class="toggle-slider"></span>
+                    <span class="metadata-toggle-label"
+                      >Show project virtual queue links on reviewer landing pages</span
+                    >
+                  </label>
+                  <div class="metadata-editor-actions">
+                    <button
+                      type="button"
+                      class="cancel-name-button"
+                      on:click={handleCancelReviewerLandingVirtualQueuesEdit}
+                      disabled={reviewerLandingVirtualQueuesSaving || generatingQueues}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      class="save-name-button"
+                      on:click={handleSaveReviewerLandingVirtualQueues}
+                      disabled={reviewerLandingVirtualQueuesSaving || generatingQueues}
+                    >
+                      {reviewerLandingVirtualQueuesSaving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                  {#if reviewerLandingVirtualQueuesError}
+                    <div class="inline-error">{reviewerLandingVirtualQueuesError}</div>
+                  {/if}
+                </div>
               {/if}
-            </div>
-          {/if}
-        </section>
+            </section>
 
-        <section class="setting-card">
-          <div class="setting-card-header">
-            <h3 class="setting-card-title">Source metadata editing</h3>
-            {#if !showEditMetadataEditor}
-              <div class="setting-card-header-actions">
-                <span
-                  class="setting-status-pill"
-                  class:is-on={initialEditMetadata}
-                  class:is-off={!initialEditMetadata}
-                >
-                  {initialEditMetadata ? 'On' : 'Off'}
-                </span>
-                <button
-                  type="button"
-                  class="edit-name-button"
-                  on:click={handleStartEditMetadataEdit}
-                  title="Change metadata editing"
-                  aria-label="Change metadata editing"
-                >
-                  ✎
-                </button>
+            <section class="setting-card">
+              <div class="setting-card-header">
+                <h3 class="setting-card-title">Source metadata editing</h3>
+                {#if !showEditMetadataEditor}
+                  <div class="setting-card-header-actions">
+                    <span
+                      class="setting-status-pill"
+                      class:is-on={initialEditMetadata}
+                      class:is-off={!initialEditMetadata}
+                    >
+                      {initialEditMetadata ? 'On' : 'Off'}
+                    </span>
+                    <button
+                      type="button"
+                      class="edit-name-button"
+                      on:click={handleStartEditMetadataEdit}
+                      title="Change metadata editing"
+                      aria-label="Change metadata editing"
+                    >
+                      ✎
+                    </button>
+                  </div>
+                {/if}
               </div>
-            {/if}
-          </div>
-          <p class="setting-card-desc">
-            When enabled, reviewers must confirm language and publication country/state (or edit them) before they can
-            mark a source as Keep. The same setting is applied to every reviewer queue in this project.
-          </p>
-          {#if showEditMetadataEditor}
-            <div class="metadata-editor-panel">
-              <label class="metadata-edit-toggle" title="Applies to all reviewer queues in this project">
-                <input
-                  type="checkbox"
-                  bind:checked={localEditMetadata}
-                  disabled={editMetadataSaving || generatingQueues}
-                />
-                <span class="toggle-slider"></span>
-                <span class="metadata-toggle-label">Require metadata editing in review</span>
-              </label>
-              <div class="metadata-editor-actions">
-                <button
-                  type="button"
-                  class="cancel-name-button"
-                  on:click={handleCancelEditMetadataEdit}
-                  disabled={editMetadataSaving || generatingQueues}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  class="save-name-button"
-                  on:click={handleSaveProjectEditMetadata}
-                  disabled={editMetadataSaving || generatingQueues}
-                >
-                  {editMetadataSaving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-              {#if editMetadataError}
-                <div class="inline-error">{editMetadataError}</div>
+              <p class="setting-card-desc">
+                When enabled, reviewers must confirm language and publication country/state (or edit
+                them) before they can mark a source as Keep. The same setting is applied to every
+                reviewer queue in this project.
+              </p>
+              {#if showEditMetadataEditor}
+                <div class="metadata-editor-panel">
+                  <label
+                    class="metadata-edit-toggle"
+                    title="Applies to all reviewer queues in this project"
+                  >
+                    <input
+                      type="checkbox"
+                      bind:checked={localEditMetadata}
+                      disabled={editMetadataSaving || generatingQueues}
+                    />
+                    <span class="toggle-slider"></span>
+                    <span class="metadata-toggle-label">Require metadata editing in review</span>
+                  </label>
+                  <div class="metadata-editor-actions">
+                    <button
+                      type="button"
+                      class="cancel-name-button"
+                      on:click={handleCancelEditMetadataEdit}
+                      disabled={editMetadataSaving || generatingQueues}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      class="save-name-button"
+                      on:click={handleSaveProjectEditMetadata}
+                      disabled={editMetadataSaving || generatingQueues}
+                    >
+                      {editMetadataSaving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                  {#if editMetadataError}
+                    <div class="inline-error">{editMetadataError}</div>
+                  {/if}
+                </div>
               {/if}
-            </div>
-          {/if}
-        </section>
+            </section>
           </div>
         {/if}
       </div>
 
       <ProjectExportPanel
         {projectGuid}
-        canDownloadMainCsv={canDownloadMainCsv}
-        canDownloadAuditCsv={canDownloadAuditCsv}
+        {canDownloadMainCsv}
+        {canDownloadAuditCsv}
         onDecisionsPreview={openProjectDecisionsPreview}
         onPublish={handlePublishProject}
         onPreviewPublish={handlePreviewPublishProject}
@@ -870,9 +885,9 @@
         existingPublishCollection={project?.publish_to_collection || null}
         {mediacloudCollectionUrl}
         {mediacloudSourceUrl}
-        publishEnabled={publishEnabled}
-        publishMetadataUpdatesEnabled={publishMetadataUpdatesEnabled}
-        publishTargetApiBaseUrl={publishTargetApiBaseUrl}
+        {publishEnabled}
+        {publishMetadataUpdatesEnabled}
+        {publishTargetApiBaseUrl}
       />
 
       <div class="queues">
@@ -881,13 +896,14 @@
         {#if queues.length === 0}
           <p class="reviewer-queues-explainer">
             {#if stats != null && (stats.total ?? 0) > 0}
-              This project's {stats.total} {stats.total === 1 ? 'source is' : 'sources are'} not yet split into reviewer
-              queues. Use the form below to divide them into separate queues—each queue gets its own link so multiple
+              This project's {stats.total}
+              {stats.total === 1 ? 'source is' : 'sources are'} not yet split into reviewer queues. Use
+              the form below to divide them into separate queues—each queue gets its own link so multiple
               reviewers can work in parallel without overlapping assignments.
             {:else}
-              Reviewer queues have not been generated yet. Use the form below to split the project's sources into
-              separate queues—each queue gets its own link so multiple reviewers can work in parallel without
-              overlapping assignments.
+              Reviewer queues have not been generated yet. Use the form below to split the project's
+              sources into separate queues—each queue gets its own link so multiple reviewers can
+              work in parallel without overlapping assignments.
             {/if}
           </p>
           <div class="queue-gen-card">
@@ -921,12 +937,16 @@
         {:else}
           <p class="reviewer-queues-explainer">
             {#if stats != null && (stats.total ?? 0) > 0}
-              This project's {stats.total} {stats.total === 1 ? 'source is' : 'sources are'} split across
-              {queues.length} reviewer {queues.length === 1 ? 'queue' : 'queues'}. Each queue has its own link so
-              multiple reviewers can work in parallel without overlapping assignments.
+              This project's {stats.total}
+              {stats.total === 1 ? 'source is' : 'sources are'} split across
+              {queues.length} reviewer {queues.length === 1 ? 'queue' : 'queues'}. Each queue has
+              its own link so multiple reviewers can work in parallel without overlapping
+              assignments.
             {:else}
-              This project is split into {queues.length} reviewer {queues.length === 1 ? 'queue' : 'queues'}. Each queue
-              has its own link so multiple reviewers can work in parallel without overlapping assignments.
+              This project is split into {queues.length} reviewer {queues.length === 1
+                ? 'queue'
+                : 'queues'}. Each queue has its own link so multiple reviewers can work in parallel
+              without overlapping assignments.
             {/if}
           </p>
           <div class="queues-grid">
@@ -986,18 +1006,17 @@
                   <button
                     type="button"
                     class="queue-open"
-                    on:click={() => window.navigate(`/review-projects/${projectGuid}/queues/${q.queue_guid}`)}
+                    on:click={() =>
+                      window.navigate(`/review-projects/${projectGuid}/queues/${q.queue_guid}`)}
                   >
                     Open Queue Landing
                   </button>
-
                 </div>
               </div>
             {/each}
           </div>
         {/if}
       </div>
-
     </div>
 
     <AllDecisionsModal
@@ -1504,7 +1523,8 @@
     border-radius: 8px;
     font-size: 13px;
     color: #2c3e50;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+      'Courier New', monospace;
     background: white;
     resize: vertical;
   }
@@ -1549,7 +1569,9 @@
     background: #ecf0f1;
     border: 1px solid #d0d7de;
     position: relative;
-    transition: background 0.15s ease, border-color 0.15s ease;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease;
   }
 
   .toggle-slider::before {
@@ -1616,7 +1638,7 @@
     margin-bottom: 12px;
   }
 
-  input[type="number"] {
+  input[type='number'] {
     width: 100%;
     padding: 10px 12px;
     border: 1px solid #ddd;
@@ -1633,7 +1655,7 @@
     margin-bottom: 12px;
   }
 
-  button[type="submit"] {
+  button[type='submit'] {
     width: 100%;
     padding: 12px 14px;
     background-color: #3498db;
@@ -1644,7 +1666,7 @@
     cursor: pointer;
   }
 
-  button[type="submit"]:disabled {
+  button[type='submit']:disabled {
     opacity: 0.7;
     cursor: not-allowed;
   }
@@ -1759,7 +1781,11 @@
     cursor: pointer;
     font-size: 14px;
     line-height: 1;
-    transition: color 180ms ease, border-color 180ms ease, background-color 180ms ease, opacity 220ms ease;
+    transition:
+      color 180ms ease,
+      border-color 180ms ease,
+      background-color 180ms ease,
+      opacity 220ms ease;
   }
 
   .queue-copy-icon:hover {
@@ -1809,12 +1835,6 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-  }
-
-  .skipped-sources h2 {
-    margin: 0;
-    color: #2c3e50;
-    font-size: 20px;
   }
 
   .skipped-subtitle {
@@ -1915,4 +1935,3 @@
     border-left: 2px solid #d0d7de;
   }
 </style>
-

@@ -1,7 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import BaseModal from './BaseModal.svelte';
-  
+
   export let show = false;
   export let sourceLabel = '';
   let removalReason = '';
@@ -48,13 +48,19 @@
   }
 </script>
 
-<BaseModal show={show} onClose={handleCancel}>
-  <div class="modal-content" role="dialog" aria-labelledby="modal-title" aria-modal="true" on:keydown={handleKeydown}>
+<BaseModal {show} onClose={handleCancel}>
+  <div
+    class="modal-content"
+    role="dialog"
+    aria-labelledby="modal-title"
+    aria-modal="true"
+    on:keydown={handleKeydown}
+  >
     <h2 id="modal-title">Removal Reason Required</h2>
     <p class="modal-description">
       Please provide a reason for removing <strong>{sourceLabel || 'this source'}</strong>:
     </p>
-    
+
     <div class="form-group">
       <label for="removal-reason">Removal Reason *</label>
       <textarea
@@ -62,7 +68,7 @@
         bind:value={removalReason}
         placeholder="Enter the reason for removing this source..."
         rows="4"
-        class:error={error}
+        class:error
         autofocus
       ></textarea>
       {#if error}
@@ -71,9 +77,7 @@
     </div>
 
     <div class="modal-actions">
-      <button class="btn btn-cancel" on:click={handleCancel} type="button">
-        Cancel
-      </button>
+      <button class="btn btn-cancel" on:click={handleCancel} type="button"> Cancel </button>
       <button class="btn btn-confirm" on:click={handleSubmit} type="button">
         Confirm Removal
       </button>

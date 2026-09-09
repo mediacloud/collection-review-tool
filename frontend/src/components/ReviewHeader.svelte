@@ -8,7 +8,7 @@
       <h2>{review.collection_name || `Collection #${review.collection_id}`}</h2>
       <span class="status status-{review.status}">{review.status}</span>
     </div>
-    <a 
+    <a
       href={`https://search.mediacloud.org/collections/${review.collection_id}`}
       target="_blank"
       rel="noopener noreferrer"
@@ -19,7 +19,7 @@
       ↗
     </a>
   </div>
-  
+
   {#if review.stats}
     <div class="stats">
       <div class="stat">
@@ -87,7 +87,10 @@
     border: 1px solid rgba(52, 152, 219, 0.2);
     background-color: #f5fbff;
     text-decoration: none;
-    transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s,
+      color 0.2s;
   }
 
   .mediacloud-icon-link:hover {

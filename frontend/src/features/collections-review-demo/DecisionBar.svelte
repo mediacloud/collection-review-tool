@@ -6,20 +6,20 @@
   export let highlight = null;
 
   const SEGS = [
-    { k: 'kept',    label: 'Kept',      varColor: 'var(--v2-kept)'    },
-    { k: 'removed', label: 'Removed',   varColor: 'var(--v2-removed)' },
-    { k: 'added',   label: 'Added',     varColor: 'var(--v2-added)'   },
-    { k: 'skipped', label: 'Skipped',   varColor: 'var(--v2-skipped)' },
+    { k: 'kept', label: 'Kept', varColor: 'var(--v2-kept)' },
+    { k: 'removed', label: 'Removed', varColor: 'var(--v2-removed)' },
+    { k: 'added', label: 'Added', varColor: 'var(--v2-added)' },
+    { k: 'skipped', label: 'Skipped', varColor: 'var(--v2-skipped)' },
   ];
   const LEGEND = [
-    { k: 'kept',      label: 'Kept',      varColor: 'var(--v2-kept)'     },
-    { k: 'removed',   label: 'Removed',   varColor: 'var(--v2-removed)'  },
-    { k: 'added',     label: 'Added',     varColor: 'var(--v2-added)'    },
-    { k: 'skipped',   label: 'Skipped',   varColor: 'var(--v2-skipped)'  },
+    { k: 'kept', label: 'Kept', varColor: 'var(--v2-kept)' },
+    { k: 'removed', label: 'Removed', varColor: 'var(--v2-removed)' },
+    { k: 'added', label: 'Added', varColor: 'var(--v2-added)' },
+    { k: 'skipped', label: 'Skipped', varColor: 'var(--v2-skipped)' },
     { k: 'undecided', label: 'Undecided', varColor: 'var(--v2-undecided)', mute: true },
   ];
 
-  $: total = ((totals.decided ?? 0) + (totals.undecided ?? 0)) || 1;
+  $: total = (totals.decided ?? 0) + (totals.undecided ?? 0) || 1;
 </script>
 
 <div class="decision-bar">
@@ -40,7 +40,8 @@
     <div class="legend">
       {#each LEGEND as s}
         <span class="legend-item" class:muted={s.mute}>
-          <span class="legend-swatch" class:swatch-outline={s.mute} style:background={s.varColor}></span>
+          <span class="legend-swatch" class:swatch-outline={s.mute} style:background={s.varColor}
+          ></span>
           {s.label}
           <b class="legend-val" class:muted={s.mute}>{(totals[s.k] ?? 0).toLocaleString()}</b>
         </span>
@@ -50,7 +51,9 @@
 </div>
 
 <style>
-  .decision-bar { width: 100%; }
+  .decision-bar {
+    width: 100%;
+  }
 
   .bar-track {
     border-radius: 999px;
@@ -61,7 +64,7 @@
 
   .bar-seg {
     height: 100%;
-    transition: opacity .28s ease;
+    transition: opacity 0.28s ease;
     flex-shrink: 0;
   }
 
@@ -79,7 +82,9 @@
     align-items: center;
     gap: 7px;
   }
-  .legend-item.muted { color: var(--v2-mute); }
+  .legend-item.muted {
+    color: var(--v2-mute);
+  }
 
   .legend-swatch {
     width: 9px;
@@ -97,5 +102,7 @@
     margin-left: 1px;
     color: var(--v2-ink);
   }
-  .legend-val.muted { color: var(--v2-mute); }
+  .legend-val.muted {
+    color: var(--v2-mute);
+  }
 </style>

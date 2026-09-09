@@ -1,13 +1,13 @@
 <script>
   import { onMount } from 'svelte';
-import Nav from './Nav.svelte';
+  import Nav from './Nav.svelte';
 
-import {
-  getReviewProject,
-  getReviewProjectAllQueueItems,
-  getReviewItemsByQueueGuid,
-  decideQueueItem,
-} from '../../lib/api.js';
+  import {
+    getReviewProject,
+    getReviewProjectAllQueueItems,
+    getReviewItemsByQueueGuid,
+    decideQueueItem,
+  } from '../../lib/api.js';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';
@@ -20,127 +20,93 @@ import {
   const queueGuid = isQueueLevel ? parts[5] : null;
 
   let p = null;
-let q = null;
-let allDecisions = [];
-let loading = true;
-let loadError = ''; 
+  let q = null;
+  let allDecisions = [];
 
-const navRole = isQueueLevel
-  ? 'queue-decisions'
-  : 'all-decisions';
+  const navRole = isQueueLevel ? 'queue-decisions' : 'all-decisions';
 
-$: heroTitle = isQueueLevel
-  ? `${q?.id ?? 'Queue'} · Decisions`
-  : 'All Decisions';
+  $: heroTitle = isQueueLevel ? `${q?.id ?? 'Queue'} · Decisions` : 'All Decisions';
 
-const VERDICT_COLORS = {
-  kept: '#E25C40',
-  removed: '#1A1C1F',
-  added: '#F5A48A',
-  skipped: '#9CA0A8',
-};
-
-const VERDICT_LABELS = {
-  kept: 'Kept',
-  removed: 'Removed',
-  added: 'Added',
-  skipped: 'Skipped',
-};
-
-const cols = isQueueLevel
-  ? '1.6fr 1.4fr 0.8fr 1fr 52px'
-  : '1.4fr 1.2fr 1fr 0.7fr 1fr 52px';
-
-const VERDICT_FROM_API = {
-  keep: 'kept',
-  remove: 'removed',
-  add: 'added',
-  skip: 'skipped',
-};
-
-function adaptDecision(item, fallbackQueue = null) {
-  const metadata = item.source_metadata ?? {};
-
-  const queueIndex =
-    item.queue_index ??
-    fallbackQueue?.queue_index ??
-    0;
-
-  return {
-    id: item.id,
-    source:
-      item.source_label ||
-      `Source ${item.source_id ?? item.id}`,
-    homepage: item.source_homepage || '',
-    country: metadata.pub_country || '—',
-    verdict: VERDICT_FROM_API[item.decision],
-    reason:
-      item.removal_reason ||
-      item.skip_note ||
-      '',
-    queueGuid:
-      item.queue_guid ||
-      fallbackQueue?.queue_guid ||
-      queueGuid,
-    queue: `Queue #${queueIndex + 1}`,
+  const VERDICT_COLORS = {
+    kept: '#E25C40',
+    removed: '#1A1C1F',
+    added: '#F5A48A',
+    skipped: '#9CA0A8',
   };
-}
 
-onMount(async () => {
-  try {
-    const [projectData, itemData] = await Promise.all([
-      getReviewProject(projectGuid),
+  const VERDICT_LABELS = {
+    kept: 'Kept',
+    removed: 'Removed',
+    added: 'Added',
+    skipped: 'Skipped',
+  };
 
-      isQueueLevel
-        ? getReviewItemsByQueueGuid(queueGuid, {
-            page: 1,
-            page_size: 1000,
-          })
-        : getReviewProjectAllQueueItems(projectGuid, {
-            page: 1,
-            page_size: 8000,
-          }),
-    ]);
+  const cols = isQueueLevel ? '1.6fr 1.4fr 0.8fr 1fr 52px' : '1.4fr 1.2fr 1fr 0.7fr 1fr 52px';
 
-    p = projectData.project;
+  const VERDICT_FROM_API = {
+    keep: 'kept',
+    remove: 'removed',
+    add: 'added',
+    skip: 'skipped',
+  };
 
-    const queues = projectData.queues ?? [];
+  function adaptDecision(item, fallbackQueue = null) {
+    const metadata = item.source_metadata ?? {};
 
-    if (isQueueLevel) {
-      const queueIndex = queues.findIndex(
-        (queue) => queue.queue_guid === queueGuid
-      );
+    const queueIndex = item.queue_index ?? fallbackQueue?.queue_index ?? 0;
 
-      if (queueIndex < 0) {
-        throw new Error(
-          'Queue not found for this project.'
-        );
+    return {
+      id: item.id,
+      source: item.source_label || `Source ${item.source_id ?? item.id}`,
+      homepage: item.source_homepage || '',
+      country: metadata.pub_country || '—',
+      verdict: VERDICT_FROM_API[item.decision],
+      reason: item.removal_reason || item.skip_note || '',
+      queueGuid: item.queue_guid || fallbackQueue?.queue_guid || queueGuid,
+      queue: `Queue #${queueIndex + 1}`,
+    };
+  }
+
+  onMount(async () => {
+    try {
+      const [projectData, itemData] = await Promise.all([
+        getReviewProject(projectGuid),
+
+        isQueueLevel
+          ? getReviewItemsByQueueGuid(queueGuid, {
+              page: 1,
+              page_size: 1000,
+            })
+          : getReviewProjectAllQueueItems(projectGuid, {
+              page: 1,
+              page_size: 8000,
+            }),
+      ]);
+
+      p = projectData.project;
+
+      const queues = projectData.queues ?? [];
+
+      if (isQueueLevel) {
+        const queueIndex = queues.findIndex((queue) => queue.queue_guid === queueGuid);
+
+        if (queueIndex < 0) {
+          throw new Error('Queue not found for this project.');
+        }
+
+        q = {
+          ...queues[queueIndex],
+          id: `Queue #${(queues[queueIndex].queue_index ?? queueIndex) + 1}`,
+        };
       }
 
-      q = {
-        ...queues[queueIndex],
-        id: `Queue #${
-          (queues[queueIndex].queue_index ?? queueIndex) + 1
-        }`,
-      };
+      allDecisions = (itemData.items ?? [])
+        .filter((item) => item.decision !== 'undecided')
+        .map((item) => adaptDecision(item, q));
+    } catch (error) {
+      console.error(error);
     }
-
-    allDecisions = (itemData.items ?? [])
-      .filter(
-        (item) => item.decision !== 'undecided'
-      )
-      .map((item) => adaptDecision(item, q));
-  } catch (error) {
-    console.error(error);
-
-    loadError =
-      error.response?.data?.error ||
-      error.message ||
-      'Could not load decisions.';
-  } finally {
-    loading = false;
-  }
-});
+  });
 
   $: counts = allDecisions.reduce((acc, d) => {
     acc[d.verdict] = (acc[d.verdict] || 0) + 1;
@@ -148,7 +114,7 @@ onMount(async () => {
   }, {});
 
   let filter = 'all';
-  $: shown = filter === 'all' ? allDecisions : allDecisions.filter(d => d.verdict === filter);
+  $: shown = filter === 'all' ? allDecisions : allDecisions.filter((d) => d.verdict === filter);
 
   // ── Change-decision inline form (Fix 3) ──────────────────────────────
   let changing = null; // { source, queueId, currentVerdict, reason }
@@ -158,17 +124,17 @@ onMount(async () => {
   $: canConfirm = newVerdict && (!reasonRequired || newReason.trim());
 
   function openChange(decision) {
-  changing = {
-    id: decision.id,
-    source: decision.source,
-    queueGuid: decision.queueGuid,
-    currentVerdict: decision.verdict,
-    reason: decision.reason,
-  };
+    changing = {
+      id: decision.id,
+      source: decision.source,
+      queueGuid: decision.queueGuid,
+      currentVerdict: decision.verdict,
+      reason: decision.reason,
+    };
 
-  newVerdict = decision.verdict;
-  newReason = decision.reason || '';
-}
+    newVerdict = decision.verdict;
+    newReason = decision.reason || '';
+  }
 
   function cancelChange() {
     changing = null;
@@ -176,53 +142,43 @@ onMount(async () => {
   }
 
   async function confirmChange() {
-  if (!canConfirm || !changing) return;
+    if (!canConfirm || !changing) return;
 
-  const DECISION_TO_API = {
-    kept: 'keep',
-    removed: 'remove',
-    added: 'add',
-    skipped: 'skip',
-  };
+    const DECISION_TO_API = {
+      kept: 'keep',
+      removed: 'remove',
+      added: 'add',
+      skipped: 'skip',
+    };
 
-  const apiDecision = DECISION_TO_API[newVerdict];
-  const reason = newReason.trim();
+    const apiDecision = DECISION_TO_API[newVerdict];
+    const reason = newReason.trim();
 
-  try {
-    await decideQueueItem(
-      changing.queueGuid,
-      changing.id,
-      apiDecision,
-      apiDecision === 'remove' ? reason : null,
-      apiDecision === 'skip' ? reason : null
-    );
+    try {
+      await decideQueueItem(
+        changing.queueGuid,
+        changing.id,
+        apiDecision,
+        apiDecision === 'remove' ? reason : null,
+        apiDecision === 'skip' ? reason : null
+      );
 
-    allDecisions = allDecisions.map((decision) =>
-      decision.id === changing.id &&
-      decision.queueGuid === changing.queueGuid
-        ? {
-            ...decision,
-            verdict: newVerdict,
-            reason:
-              apiDecision === 'remove' ||
-              apiDecision === 'skip'
-                ? reason
-                : '',
-          }
-        : decision
-    );
+      allDecisions = allDecisions.map((decision) =>
+        decision.id === changing.id && decision.queueGuid === changing.queueGuid
+          ? {
+              ...decision,
+              verdict: newVerdict,
+              reason: apiDecision === 'remove' || apiDecision === 'skip' ? reason : '',
+            }
+          : decision
+      );
 
-    changing = null;
-    newReason = '';
-  } catch (error) {
-    console.error(error);
-
-    loadError =
-      error.response?.data?.error ||
-      error.message ||
-      'Could not update the decision.';
+      changing = null;
+      newReason = '';
+    } catch (error) {
+      console.error(error);
+    }
   }
-}
 </script>
 
 <div class="page">
@@ -237,12 +193,18 @@ onMount(async () => {
 
   <div class="hero">
     <div class="breadcrumb">
-      <button class="breadcrumb-link" on:click={() => onNavigate(`/demo/review-projects/${projectGuid}`)}>
+      <button
+        class="breadcrumb-link"
+        on:click={() => onNavigate(`/demo/review-projects/${projectGuid}`)}
+      >
         {p?.name ?? ''}
       </button>
       {#if isQueueLevel}
         <span class="breadcrumb-sep">›</span>
-        <button class="breadcrumb-link" on:click={() => onNavigate(`/demo/review-projects/${projectGuid}/queues/${queueGuid}`)}>
+        <button
+          class="breadcrumb-link"
+          on:click={() => onNavigate(`/demo/review-projects/${projectGuid}/queues/${queueGuid}`)}
+        >
           {q?.id ?? 'Queue'}
         </button>
       {/if}
@@ -250,10 +212,22 @@ onMount(async () => {
     <h1 class="hero-h1">{heroTitle}</h1>
     <div class="chips-row">
       <span class="chip chip-neutral">{allDecisions.length} total decisions</span>
-      {#if counts.kept}<span class="chip" style:background="rgba(226,92,64,.1)" style:color="#E25C40">{counts.kept} kept</span>{/if}
-      {#if counts.removed}<span class="chip" style:background="#f0f0f0" style:color="#1A1C1F">{counts.removed} removed</span>{/if}
-      {#if counts.added}<span class="chip" style:background="rgba(245,164,138,.18)" style:color="#c04a2a">{counts.added} added</span>{/if}
-      {#if counts.skipped}<span class="chip" style:background="#f3f3f4" style:color="#9CA0A8">{counts.skipped} skipped</span>{/if}
+      {#if counts.kept}<span
+          class="chip"
+          style:background="rgba(226,92,64,.1)"
+          style:color="#E25C40">{counts.kept} kept</span
+        >{/if}
+      {#if counts.removed}<span class="chip" style:background="#f0f0f0" style:color="#1A1C1F"
+          >{counts.removed} removed</span
+        >{/if}
+      {#if counts.added}<span
+          class="chip"
+          style:background="rgba(245,164,138,.18)"
+          style:color="#c04a2a">{counts.added} added</span
+        >{/if}
+      {#if counts.skipped}<span class="chip" style:background="#f3f3f4" style:color="#9CA0A8"
+          >{counts.skipped} skipped</span
+        >{/if}
     </div>
   </div>
 
@@ -265,7 +239,7 @@ onMount(async () => {
           class="filter-btn"
           class:active={filter === v}
           style:--accent={v !== 'all' ? VERDICT_COLORS[v] : 'var(--v2-ink)'}
-          on:click={() => filter = v}
+          on:click={() => (filter = v)}
         >
           {#if v !== 'all'}
             <span class="filter-dot" style:background={VERDICT_COLORS[v]}></span>
@@ -294,11 +268,9 @@ onMount(async () => {
           <div></div>
         </div>
         {#each shown as d, i}
-        {@const isChanging =
-          changing?.id === d.id &&
-          changing?.queueGuid === d.queueGuid}
-            
-        {#if isChanging}
+          {@const isChanging = changing?.id === d.id && changing?.queueGuid === d.queueGuid}
+
+          {#if isChanging}
             <!-- Inline change form -->
             <div class="change-form" class:first={i === 0}>
               <div class="change-source">
@@ -307,13 +279,13 @@ onMount(async () => {
               </div>
               <div class="change-controls">
                 <div class="verdict-chips">
-                  {#each ['kept','removed','added','skipped'] as v}
+                  {#each ['kept', 'removed', 'added', 'skipped'] as v}
                     <button
                       class="verdict-chip-btn"
                       class:verdict-chip-active={newVerdict === v}
                       style:--c={VERDICT_COLORS[v]}
-                      on:click={() => newVerdict = v}
-                    >{VERDICT_LABELS[v]}</button>
+                      on:click={() => (newVerdict = v)}>{VERDICT_LABELS[v]}</button
+                    >
                   {/each}
                 </div>
                 {#if reasonRequired || newReason}
@@ -326,18 +298,31 @@ onMount(async () => {
                 {/if}
                 <div class="change-actions">
                   <button class="btn btn-sm" on:click={cancelChange}>Cancel</button>
-                  <button class="btn btn-sm btn-primary" class:btn-dim={!canConfirm} on:click={confirmChange}>Save</button>
+                  <button
+                    class="btn btn-sm btn-primary"
+                    class:btn-dim={!canConfirm}
+                    on:click={confirmChange}>Save</button
+                  >
                 </div>
               </div>
             </div>
           {:else}
-            <div class="table-row" class:first={i === 0} class:stripe={i % 2 === 1} style:grid-template-columns={cols}>
+            <div
+              class="table-row"
+              class:first={i === 0}
+              class:stripe={i % 2 === 1}
+              style:grid-template-columns={cols}
+            >
               <div class="source-name">{d.source}</div>
               <div class="source-url">{d.homepage}</div>
               {#if !isQueueLevel}<div class="source-queue">{d.queue}</div>{/if}
               <div class="source-country">{d.country ?? '—'}</div>
               <div>
-                <span class="verdict-chip" style:background="{VERDICT_COLORS[d.verdict]}18" style:color={VERDICT_COLORS[d.verdict]}>
+                <span
+                  class="verdict-chip"
+                  style:background="{VERDICT_COLORS[d.verdict]}18"
+                  style:color={VERDICT_COLORS[d.verdict]}
+                >
                   <span class="verdict-dot" style:background={VERDICT_COLORS[d.verdict]}></span>
                   {VERDICT_LABELS[d.verdict]}
                 </span>
@@ -347,7 +332,19 @@ onMount(async () => {
               </div>
               <div>
                 <button class="btn-icon" title="Change decision" on:click={() => openChange(d)}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    ><path d="M12 20h9" /><path
+                      d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"
+                    /></svg
+                  >
                 </button>
               </div>
             </div>
@@ -360,104 +357,319 @@ onMount(async () => {
 
 <style>
   .page {
-    width: 100%; min-height: 820px;
-    background: var(--v2-bg); color: var(--v2-ink);
-    font-family: var(--v2-sans); padding-bottom: 36px;
+    width: 100%;
+    min-height: 820px;
+    background: var(--v2-bg);
+    color: var(--v2-ink);
+    font-family: var(--v2-sans);
+    padding-bottom: 36px;
   }
 
   /* ── Hero ── */
-  .hero { padding: 32px 96px 0; }
-  .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-family: var(--v2-mono); color: var(--v2-mute); margin-bottom: 10px; }
-  .breadcrumb-link { background: none; border: none; padding: 0; cursor: pointer; color: var(--v2-ink); font-size: 13.5px; font-family: var(--v2-mono); }
-  .breadcrumb-link:hover { text-decoration: underline; }
-  .breadcrumb-sep { color: var(--v2-mute); }
-  .hero-h1 { font-size: 48px; font-weight: 600; letter-spacing: -1.4px; margin: 0; line-height: 1.04; color: var(--v2-ink); }
-  .chips-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: 13.5px; font-weight: 500; font-family: var(--v2-sans); }
-  .chip-neutral { background: var(--v2-neutral); color: var(--v2-body); }
+  .hero {
+    padding: 32px 96px 0;
+  }
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13.5px;
+    font-family: var(--v2-mono);
+    color: var(--v2-mute);
+    margin-bottom: 10px;
+  }
+  .breadcrumb-link {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: var(--v2-ink);
+    font-size: 13.5px;
+    font-family: var(--v2-mono);
+  }
+  .breadcrumb-link:hover {
+    text-decoration: underline;
+  }
+  .breadcrumb-sep {
+    color: var(--v2-mute);
+  }
+  .hero-h1 {
+    font-size: 48px;
+    font-weight: 600;
+    letter-spacing: -1.4px;
+    margin: 0;
+    line-height: 1.04;
+    color: var(--v2-ink);
+  }
+  .chips-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 13.5px;
+    font-weight: 500;
+    font-family: var(--v2-sans);
+  }
+  .chip-neutral {
+    background: var(--v2-neutral);
+    color: var(--v2-body);
+  }
 
   /* ── Filter bar ── */
-  .filter-bar { padding: 20px 96px 0; display: flex; gap: 6px; flex-wrap: wrap; }
-  .filter-btn {
-    display: inline-flex; align-items: center; gap: 7px;
-    padding: 7px 14px; border-radius: 999px;
-    background: var(--v2-card); color: var(--v2-body);
-    border: 1px solid var(--v2-line);
-    font-family: var(--v2-sans); font-size: 13.5px; font-weight: 500;
-    cursor: pointer; white-space: nowrap;
-    transition: border-color .15s, background .15s;
+  .filter-bar {
+    padding: 20px 96px 0;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
   }
-  .filter-btn:hover { border-color: var(--accent); }
-  .filter-btn.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, white); color: var(--accent); font-weight: 600; }
-  .filter-dot { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
-  .filter-count { font-size: 12.5px; font-family: var(--v2-mono); font-weight: 600; color: var(--v2-mute); padding-left: 2px; }
-  .filter-btn.active .filter-count { color: inherit; opacity: 0.7; }
+  .filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    background: var(--v2-card);
+    color: var(--v2-body);
+    border: 1px solid var(--v2-line);
+    font-family: var(--v2-sans);
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
+  }
+  .filter-btn:hover {
+    border-color: var(--accent);
+  }
+  .filter-btn.active {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, white);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .filter-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .filter-count {
+    font-size: 12.5px;
+    font-family: var(--v2-mono);
+    font-weight: 600;
+    color: var(--v2-mute);
+    padding-left: 2px;
+  }
+  .filter-btn.active .filter-count {
+    color: inherit;
+    opacity: 0.7;
+  }
 
   /* ── Table ── */
-  .table-wrap { padding: 16px 96px 0; }
-  .card { background: var(--v2-card); border: 1px solid var(--v2-line); border-radius: 16px; overflow: hidden; }
-  .table-head { display: grid; padding: 12px 22px 8px; font-size: 13px; color: var(--v2-mute); font-weight: 600; letter-spacing: .6px; text-transform: uppercase; gap: 14px; }
-  .table-row { display: grid; padding: 13px 22px; border-top: 1px solid var(--v2-line-soft); gap: 14px; align-items: start; }
-  .table-row.first { border-top: none; }
-  .stripe { background: #FAFAF9; }
+  .table-wrap {
+    padding: 16px 96px 0;
+  }
+  .card {
+    background: var(--v2-card);
+    border: 1px solid var(--v2-line);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .table-head {
+    display: grid;
+    padding: 12px 22px 8px;
+    font-size: 13px;
+    color: var(--v2-mute);
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    gap: 14px;
+  }
+  .table-row {
+    display: grid;
+    padding: 13px 22px;
+    border-top: 1px solid var(--v2-line-soft);
+    gap: 14px;
+    align-items: start;
+  }
+  .table-row.first {
+    border-top: none;
+  }
+  .stripe {
+    background: #fafaf9;
+  }
 
-  .source-name { font-size: 15.5px; font-weight: 500; color: var(--v2-ink); }
-  .source-url { font-size: 14px; color: var(--v2-mute); font-family: var(--v2-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .source-queue { font-size: 14px; color: var(--v2-body); font-family: var(--v2-mono); }
-  .source-country { font-size: 14px; color: var(--v2-body); }
-  .row-reason { font-size: 12px; color: var(--v2-mute); font-style: italic; margin-top: 3px; }
+  .source-name {
+    font-size: 15.5px;
+    font-weight: 500;
+    color: var(--v2-ink);
+  }
+  .source-url {
+    font-size: 14px;
+    color: var(--v2-mute);
+    font-family: var(--v2-mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .source-queue {
+    font-size: 14px;
+    color: var(--v2-body);
+    font-family: var(--v2-mono);
+  }
+  .source-country {
+    font-size: 14px;
+    color: var(--v2-body);
+  }
+  .row-reason {
+    font-size: 12px;
+    color: var(--v2-mute);
+    font-style: italic;
+    margin-top: 3px;
+  }
 
-  .verdict-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 13px; font-weight: 600; }
-  .verdict-dot { width: 6px; height: 6px; border-radius: 2px; flex-shrink: 0; }
+  .verdict-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .verdict-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
 
   /* ── Change button ── */
   .btn-icon {
-    width: 28px; height: 28px; border-radius: 7px;
-    border: 1px solid var(--v2-line); background: var(--v2-card);
-    color: var(--v2-mute); cursor: pointer;
-    display: grid; place-items: center;
-    transition: border-color .15s, color .15s;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    border: 1px solid var(--v2-line);
+    background: var(--v2-card);
+    color: var(--v2-mute);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition:
+      border-color 0.15s,
+      color 0.15s;
   }
-  .btn-icon:hover { border-color: var(--v2-ink); color: var(--v2-ink); }
+  .btn-icon:hover {
+    border-color: var(--v2-ink);
+    color: var(--v2-ink);
+  }
 
   /* ── Inline change form ── */
   .change-form {
     padding: 16px 22px;
     border-top: 1px solid var(--v2-line-soft);
     background: var(--v2-line-soft);
-    display: flex; gap: 24px; align-items: flex-start;
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
   }
-  .change-form.first { border-top: none; }
-  .change-source { flex: 0 0 200px; }
-  .change-controls { flex: 1; }
-  .verdict-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .change-form.first {
+    border-top: none;
+  }
+  .change-source {
+    flex: 0 0 200px;
+  }
+  .change-controls {
+    flex: 1;
+  }
+  .verdict-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
   .verdict-chip-btn {
-    padding: 6px 12px; border-radius: 999px; border: 1px solid var(--v2-line);
-    background: var(--v2-card); color: var(--v2-body);
-    font-size: 13px; font-family: var(--v2-sans); cursor: pointer;
-    transition: border-color .15s, background .15s;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--v2-line);
+    background: var(--v2-card);
+    color: var(--v2-body);
+    font-size: 13px;
+    font-family: var(--v2-sans);
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
   }
-  .verdict-chip-btn:hover { border-color: var(--c); }
-  .verdict-chip-active { border-color: var(--c) !important; background: color-mix(in srgb, var(--c) 10%, white); color: var(--c); font-weight: 600; }
+  .verdict-chip-btn:hover {
+    border-color: var(--c);
+  }
+  .verdict-chip-active {
+    border-color: var(--c) !important;
+    background: color-mix(in srgb, var(--c) 10%, white);
+    color: var(--c);
+    font-weight: 600;
+  }
   .reason-input {
-    width: 100%; border: 1px solid var(--v2-line); border-radius: 8px;
-    padding: 8px 10px; font-size: 13.5px; font-family: var(--v2-sans);
-    color: var(--v2-ink); resize: none; outline: none; margin-bottom: 8px;
+    width: 100%;
+    border: 1px solid var(--v2-line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13.5px;
+    font-family: var(--v2-sans);
+    color: var(--v2-ink);
+    resize: none;
+    outline: none;
+    margin-bottom: 8px;
   }
-  .change-actions { display: flex; gap: 8px; }
+  .change-actions {
+    display: flex;
+    gap: 8px;
+  }
 
   /* ── Buttons ── */
   .btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 10px 16px; border-radius: 999px;
-    background: var(--v2-card); color: var(--v2-ink);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: var(--v2-card);
+    color: var(--v2-ink);
     border: 1px solid var(--v2-line);
-    font-family: var(--v2-sans); font-size: 13.5px; font-weight: 500;
-    cursor: pointer; white-space: nowrap;
+    font-family: var(--v2-sans);
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
   }
-  .btn-primary { background: var(--v2-ink); color: #fff; border: none; }
-  .btn-sm { padding: 7px 12px; font-size: 12.5px; }
-  .btn-dim { opacity: .45; pointer-events: none; }
+  .btn-primary {
+    background: var(--v2-ink);
+    color: #fff;
+    border: none;
+  }
+  .btn-sm {
+    padding: 7px 12px;
+    font-size: 12.5px;
+  }
+  .btn-dim {
+    opacity: 0.45;
+    pointer-events: none;
+  }
 
-  .empty { padding: 48px 22px; text-align: center; color: var(--v2-mute); font-size: 14.5px; }
+  .empty {
+    padding: 48px 22px;
+    text-align: center;
+    color: var(--v2-mute);
+    font-size: 14.5px;
+  }
 </style>

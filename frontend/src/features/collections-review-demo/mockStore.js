@@ -1,5 +1,6 @@
-import { writable, derived, get } from "svelte/store";
-import { PROJECTS } from "./mockData.js";
+import { derived, get, writable } from 'svelte/store';
+
+import { PROJECTS } from './mockData.js';
 
 // ── Queue sources for the live demo session (proj_8fa221 / q1) ───────────
 // These 6 sources are distinct from the 7 background sources already in Q1's
@@ -8,64 +9,64 @@ import { PROJECTS } from "./mockData.js";
 //TODO: remove mock data after all V2 screens use the backend API
 export const QUEUE_SOURCES = [
   {
-    id: "src_001",
-    title: "The Capital Gazette",
-    homepage: "capitalgazette.com",
+    id: 'src_001',
+    title: 'The Capital Gazette',
+    homepage: 'capitalgazette.com',
     isNew: false,
-    language: "English",
-    country: "United States",
-    state: "Maryland",
-    mediaType: "Local · Daily",
+    language: 'English',
+    country: 'United States',
+    state: 'Maryland',
+    mediaType: 'Local · Daily',
   },
   {
-    id: "src_002",
-    title: "Baltimore Banner",
-    homepage: "thebaltimorebanner.com",
+    id: 'src_002',
+    title: 'Baltimore Banner',
+    homepage: 'thebaltimorebanner.com',
     isNew: false,
-    language: "English",
-    country: "United States",
-    state: "Maryland",
-    mediaType: "Non-profit · Online",
+    language: 'English',
+    country: 'United States',
+    state: 'Maryland',
+    mediaType: 'Non-profit · Online',
   },
   {
-    id: "src_003",
-    title: "Delaware Online",
-    homepage: "delawareonline.com",
+    id: 'src_003',
+    title: 'Delaware Online',
+    homepage: 'delawareonline.com',
     isNew: false,
-    language: "English",
-    country: "United States",
-    state: "Delaware",
-    mediaType: "Local · Daily",
+    language: 'English',
+    country: 'United States',
+    state: 'Delaware',
+    mediaType: 'Local · Daily',
   },
   {
-    id: "src_004",
-    title: "WTOP News",
-    homepage: "wtop.com",
+    id: 'src_004',
+    title: 'WTOP News',
+    homepage: 'wtop.com',
     isNew: false,
-    language: "English",
-    country: "United States",
-    state: "Washington DC",
-    mediaType: "Radio · Online",
+    language: 'English',
+    country: 'United States',
+    state: 'Washington DC',
+    mediaType: 'Radio · Online',
   },
   {
-    id: "src_005",
-    title: "Virginia Mercury",
-    homepage: "virginiamercury.com",
+    id: 'src_005',
+    title: 'Virginia Mercury',
+    homepage: 'virginiamercury.com',
     isNew: false,
-    language: "English",
-    country: "United States",
-    state: "Virginia",
-    mediaType: "Non-profit · Online",
+    language: 'English',
+    country: 'United States',
+    state: 'Virginia',
+    mediaType: 'Non-profit · Online',
   },
   {
-    id: "src_006",
-    title: "Washington City Paper",
-    homepage: "washingtoncitypaper.com",
+    id: 'src_006',
+    title: 'Washington City Paper',
+    homepage: 'washingtoncitypaper.com',
     isNew: true,
-    language: "English",
-    country: "United States",
-    state: "Washington DC",
-    mediaType: "Alt-Weekly",
+    language: 'English',
+    country: 'United States',
+    state: 'Washington DC',
+    mediaType: 'Alt-Weekly',
   },
 ];
 
@@ -90,9 +91,7 @@ function initDecisions() {
   for (const [guid, proj] of Object.entries(PROJECTS)) {
     all[guid] = {};
     for (const q of proj.queues) {
-      all[guid][q.id] = proj.decisions
-        .filter((d) => d.queue === q.id)
-        .map((d) => ({ ...d }));
+      all[guid][q.id] = proj.decisions.filter((d) => d.queue === q.id).map((d) => ({ ...d }));
     }
   }
   return all;
@@ -109,16 +108,14 @@ const INITIAL_REVIEWER = {
 export const reviewState = writable(INITIAL_REVIEWER);
 
 // ── sessionCounts: Q1 stats for proj_8fa221 derived from decisionsStore ──
-const Q1_TOTAL = PROJECTS["proj_8fa221"].queues.find(
-  (q) => q.guid === "q1",
-).total;
+const Q1_TOTAL = PROJECTS['proj_8fa221'].queues.find((q) => q.guid === 'q1').total;
 
 export const sessionCounts = derived(decisionsStore, ($d) => {
-  const q1 = $d["proj_8fa221"]?.["Queue #1"] ?? [];
-  const kept = q1.filter((d) => d.verdict === "kept").length;
-  const removed = q1.filter((d) => d.verdict === "removed").length;
-  const added = q1.filter((d) => d.verdict === "added").length;
-  const skipped = q1.filter((d) => d.verdict === "skipped").length;
+  const q1 = $d['proj_8fa221']?.['Queue #1'] ?? [];
+  const kept = q1.filter((d) => d.verdict === 'kept').length;
+  const removed = q1.filter((d) => d.verdict === 'removed').length;
+  const added = q1.filter((d) => d.verdict === 'added').length;
+  const skipped = q1.filter((d) => d.verdict === 'skipped').length;
   const decided = kept + removed + added + skipped;
   return {
     kept,
@@ -138,21 +135,13 @@ export const sessionCounts = derived(decisionsStore, ($d) => {
 
 // ── Internal write helper ─────────────────────────────────────────────────
 function _normalizeVerdict(v) {
-  if (v === "keep") return "kept";
-  if (v === "remove") return "removed";
-  if (v === "skip") return "skipped";
+  if (v === 'keep') return 'kept';
+  if (v === 'remove') return 'removed';
+  if (v === 'skip') return 'skipped';
   return v; // already normalized
 }
 
-function _writeDecision(
-  projectGuid,
-  queueId,
-  source,
-  homepage,
-  rawVerdict,
-  country,
-  reason,
-) {
+function _writeDecision(projectGuid, queueId, source, homepage, rawVerdict, country, reason) {
   const verdict = _normalizeVerdict(rawVerdict);
   decisionsStore.update((all) => {
     const list = [...(all[projectGuid]?.[queueId] ?? [])];
@@ -182,13 +171,13 @@ export function decideSource(verdict, reason = null) {
     const src = QUEUE_SOURCES[s.sourceIdx];
     if (!src) return s;
     _writeDecision(
-      "proj_8fa221",
-      "Queue #1",
+      'proj_8fa221',
+      'Queue #1',
       src.title,
       src.homepage,
       verdict,
       src.country,
-      reason,
+      reason
     );
     return { ...s, sourceIdx: s.sourceIdx + 1 };
   });
@@ -200,13 +189,13 @@ export function redecideCurrentSource(verdict, reason = null) {
     const src = QUEUE_SOURCES[s.sourceIdx];
     if (!src) return s;
     _writeDecision(
-      "proj_8fa221",
-      "Queue #1",
+      'proj_8fa221',
+      'Queue #1',
       src.title,
       src.homepage,
       verdict,
       src.country,
-      reason,
+      reason
     );
     return s;
   });
@@ -214,25 +203,11 @@ export function redecideCurrentSource(verdict, reason = null) {
 
 // Propose a brand-new source (adds as 'added' to Q1).
 export function proposeSource(label, homepage) {
-  _writeDecision(
-    "proj_8fa221",
-    "Queue #1",
-    label,
-    homepage,
-    "added",
-    "US",
-    null,
-  );
+  _writeDecision('proj_8fa221', 'Queue #1', label, homepage, 'added', 'US', null);
 }
 
 // Change any decision in any queue (used by Decisions page and bucket modals).
-export function changeDecision(
-  projectGuid,
-  queueId,
-  sourceName,
-  newVerdict,
-  reason,
-) {
+export function changeDecision(projectGuid, queueId, sourceName, newVerdict, reason) {
   decisionsStore.update((all) => {
     const list = [...(all[projectGuid]?.[queueId] ?? [])];
     const idx = list.findIndex((d) => d.source === sourceName);
@@ -270,10 +245,10 @@ export function saveSourceMeta(srcId, patch) {
 
 // ── Projects store (for Manage / All-projects lists) ─────────────────────
 export const KNOWN_COLLECTIONS = {
-  34412803: { name: "US · Top Online Local · 2024", sources: 318 },
-  29571100: { name: "Brazil · Top Online · 2025", sources: 412 },
-  18204455: { name: "EU · Public Broadcasters", sources: 198 },
-  42119007: { name: "Africa · Radio · 2025", sources: 247 },
+  34412803: { name: 'US · Top Online Local · 2024', sources: 318 },
+  29571100: { name: 'Brazil · Top Online · 2025', sources: 412 },
+  18204455: { name: 'EU · Public Broadcasters', sources: 198 },
+  42119007: { name: 'Africa · Radio · 2025', sources: 247 },
 };
 
 export const projectsStore = writable([]);
@@ -287,8 +262,7 @@ function adaptProject(project) {
     guid: project.guid,
     name: project.name,
 
-    status:
-      project.derived_status === "completed" ? "completed" : "in_progress",
+    status: project.derived_status === 'completed' ? 'completed' : 'in_progress',
 
     seeds: project.collections_count ?? project.collection_ids?.length ?? 0,
 
@@ -299,7 +273,7 @@ function adaptProject(project) {
 }
 
 export async function loadProjects() {
-  const response = await fetch("/api/review-projects");
+  const response = await fetch('/api/review-projects');
 
   if (!response.ok) {
     throw new Error(`Failed to load projects: ${response.status}`);
@@ -374,10 +348,10 @@ export async function loadProject(projectGuid) {
 }
 
 export const inProgressProjects = derived(projectsStore, ($p) =>
-  $p.filter((p) => p.status === "in_progress"),
+  $p.filter((p) => p.status === 'in_progress')
 );
 export const completedProjects = derived(projectsStore, ($p) =>
-  $p.filter((p) => p.status === "completed"),
+  $p.filter((p) => p.status === 'completed')
 );
 
 export function addProject(name, seeds) {
@@ -385,7 +359,7 @@ export function addProject(name, seeds) {
     {
       guid: `proj_${Date.now().toString(36)}`,
       name,
-      status: "in_progress",
+      status: 'in_progress',
       seeds: Math.max(seeds.length, 1),
       queueCount: 1,
       progress: 0,
@@ -398,34 +372,25 @@ export function addProject(name, seeds) {
 // ── CSV export ────────────────────────────────────────────────────────────
 export function downloadCSV(type) {
   const allDecisions = get(decisionsStore);
-  const q1 = allDecisions["proj_8fa221"]?.["Queue #1"] ?? [];
+  const q1 = allDecisions['proj_8fa221']?.['Queue #1'] ?? [];
 
   let headers, rows, filename;
-  if (type === "project") {
-    headers = ["media_id", "name", "url", "decision"];
+  if (type === 'project') {
+    headers = ['media_id', 'name', 'url', 'decision'];
     rows = q1
-      .filter((d) => d.verdict === "kept" || d.verdict === "added")
-      .map((d) => ["", d.source, d.homepage, d.verdict]);
-    filename = "climate-east-coast-project.csv";
+      .filter((d) => d.verdict === 'kept' || d.verdict === 'added')
+      .map((d) => ['', d.source, d.homepage, d.verdict]);
+    filename = 'climate-east-coast-project.csv';
   } else {
-    headers = ["media_id", "name", "url", "decision", "reason", "queue"];
-    rows = q1.map((d) => [
-      "",
-      d.source,
-      d.homepage,
-      d.verdict,
-      d.reason || "",
-      "Queue #1",
-    ]);
-    filename = "climate-east-coast-audit.csv";
+    headers = ['media_id', 'name', 'url', 'decision', 'reason', 'queue'];
+    rows = q1.map((d) => ['', d.source, d.homepage, d.verdict, d.reason || '', 'Queue #1']);
+    filename = 'climate-east-coast-audit.csv';
   }
 
-  const csv = [headers, ...rows]
-    .map((r) => r.map((v) => `"${v}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
+  const csv = [headers, ...rows].map((r) => r.map((v) => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   a.click();

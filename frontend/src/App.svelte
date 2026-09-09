@@ -14,11 +14,11 @@
   const DEMO_ON = import.meta.env.VITE_DEMO_MODE === 'true';
   import Review from './routes/Review.svelte';
   import ReviewProject from './routes/ReviewProject.svelte';
-import ReviewSkippedQueue from './routes/ReviewSkippedQueue.svelte';
-import ReviewAddedQueue from './routes/ReviewAddedQueue.svelte';
-import ReviewRemovedQueue from './routes/ReviewRemovedQueue.svelte';
-import ReviewKeptQueue from './routes/ReviewKeptQueue.svelte';
-import ReviewProjectQueueLanding from './routes/ReviewProjectQueueLanding.svelte';
+  import ReviewSkippedQueue from './routes/ReviewSkippedQueue.svelte';
+  import ReviewAddedQueue from './routes/ReviewAddedQueue.svelte';
+  import ReviewRemovedQueue from './routes/ReviewRemovedQueue.svelte';
+  import ReviewKeptQueue from './routes/ReviewKeptQueue.svelte';
+  import ReviewProjectQueueLanding from './routes/ReviewProjectQueueLanding.svelte';
 
   let currentPath = window.location.pathname;
 
@@ -84,13 +84,6 @@ import ReviewProjectQueueLanding from './routes/ReviewProjectQueueLanding.svelte
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-  }
-
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    line-height: 1.6;
-    color: #333;
-    background-color: #f5f5f5;
   }
 
   main {

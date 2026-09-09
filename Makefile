@@ -26,6 +26,9 @@ local-deploy: $(BACKEND_VENV_DONE)
 	npm --prefix $(FRONTEND_DIR) run build
 	cd $(BACKEND_DIR) && . venv/bin/activate && FLASK_APP=app:create_app flask run --port 5000
 
+lint:
+	npm --prefix $(FRONTEND_DIR) run validate
+
 push:	$(PUSH_VENV_DONE)
 	$(PUSH_VENV_PYTHON) dokku-scripts/deploy.py -dn deploy
 

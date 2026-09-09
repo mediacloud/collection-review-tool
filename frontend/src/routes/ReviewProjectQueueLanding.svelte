@@ -19,7 +19,9 @@
     const match = window.location.pathname.match(
       /^\/review-projects\/([0-9a-fA-F-]+)\/queues\/([0-9a-fA-F-]+)$/
     );
-    return match ? { projectGuid: match[1], queueGuid: match[2] } : { projectGuid: null, queueGuid: null };
+    return match
+      ? { projectGuid: match[1], queueGuid: match[2] }
+      : { projectGuid: null, queueGuid: null };
   }
 
   async function loadQueueLanding() {
@@ -97,20 +99,23 @@
         <h1>Your Media Cloud Source Review Queue</h1>
         <div class="landing-explainer">
           <p>
-            <a
-              href="https://search.mediacloud.org/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >Media Cloud</a>
-            is an open research platform for studying online media. In Media Cloud, <strong>collections</strong> group
-            sources so researchers and partners can analyze or curate them together.
+            <a href="https://search.mediacloud.org/" target="_blank" rel="noopener noreferrer"
+              >Media Cloud</a
+            >
+            is an open research platform for studying online media. In Media Cloud,
+            <strong>collections</strong> group sources so researchers and partners can analyze or curate
+            them together.
           </p>
           <p>
-            This application is for <strong>collections review</strong> workflows: you have been assigned a queue of sources, and your task is to decide whether to keep, skip, or remove on individual sources. Find your queue below to get started, and use the 'review decisions' button to validate your work.
+            This application is for <strong>collections review</strong> workflows: you have been assigned
+            a queue of sources, and your task is to decide whether to keep, skip, or remove on individual
+            sources. Find your queue below to get started, and use the 'review decisions' button to validate
+            your work.
           </p>
           <p>
-            When you've exhausted your queue, inform your review project coordinator for next steps.   
-          </div>
+            When you've exhausted your queue, inform your review project coordinator for next steps.
+          </p>
+        </div>
       </div>
 
       <div class="card">
@@ -173,12 +178,24 @@
         <div class="card">
           <h2>Project-wide status</h2>
           <div class="status-count-row">
-            <div class="status-count"><span class="label">Total</span><span class="value">{stats.total || 0}</span></div>
-            <div class="status-count"><span class="label">Undecided</span><span class="value">{stats.undecided || 0}</span></div>
-            <div class="status-count"><span class="label">Keep</span><span class="value">{stats.keep || 0}</span></div>
-            <div class="status-count"><span class="label">Skip</span><span class="value">{stats.skip || 0}</span></div>
-            <div class="status-count"><span class="label">Remove</span><span class="value">{stats.remove || 0}</span></div>
-            <div class="status-count"><span class="label">Added</span><span class="value">{stats.add || 0}</span></div>
+            <div class="status-count">
+              <span class="label">Total</span><span class="value">{stats.total || 0}</span>
+            </div>
+            <div class="status-count">
+              <span class="label">Undecided</span><span class="value">{stats.undecided || 0}</span>
+            </div>
+            <div class="status-count">
+              <span class="label">Keep</span><span class="value">{stats.keep || 0}</span>
+            </div>
+            <div class="status-count">
+              <span class="label">Skip</span><span class="value">{stats.skip || 0}</span>
+            </div>
+            <div class="status-count">
+              <span class="label">Remove</span><span class="value">{stats.remove || 0}</span>
+            </div>
+            <div class="status-count">
+              <span class="label">Added</span><span class="value">{stats.add || 0}</span>
+            </div>
           </div>
 
           {#if (stats.total || 0) > 0}
@@ -213,16 +230,32 @@
             <div class="progress-block">
               <div class="progress-label">Project virtual queues</div>
               <div class="virtual-queue-nav-actions">
-                <button type="button" class="secondary-button" on:click={() => window.navigate(`/review-projects/${projectGuid}/skipped`)}>
+                <button
+                  type="button"
+                  class="secondary-button"
+                  on:click={() => window.navigate(`/review-projects/${projectGuid}/skipped`)}
+                >
                   Review skipped sources
                 </button>
-                <button type="button" class="secondary-button" on:click={() => window.navigate(`/review-projects/${projectGuid}/added`)}>
+                <button
+                  type="button"
+                  class="secondary-button"
+                  on:click={() => window.navigate(`/review-projects/${projectGuid}/added`)}
+                >
                   Review added sources
                 </button>
-                <button type="button" class="secondary-button" on:click={() => window.navigate(`/review-projects/${projectGuid}/removed`)}>
+                <button
+                  type="button"
+                  class="secondary-button"
+                  on:click={() => window.navigate(`/review-projects/${projectGuid}/removed`)}
+                >
                   Review removed sources
                 </button>
-                <button type="button" class="secondary-button" on:click={() => window.navigate(`/review-projects/${projectGuid}/kept`)}>
+                <button
+                  type="button"
+                  class="secondary-button"
+                  on:click={() => window.navigate(`/review-projects/${projectGuid}/kept`)}
+                >
                   Review kept sources
                 </button>
               </div>
@@ -310,11 +343,6 @@
     color: #2c3e50;
   }
 
-  .subtitle {
-    margin: 0;
-    color: #5a6c7d;
-  }
-
   .status-count-row {
     display: flex;
     flex-wrap: wrap;
@@ -334,13 +362,12 @@
     font-weight: 900;
   }
 
-.landing-explainer {
+  .landing-explainer {
     margin: 0 0 14px 0;
     font-size: 14px;
     line-height: 1.55;
     color: #5a6c7d;
   }
-
 
   .queue-summary {
     display: grid;

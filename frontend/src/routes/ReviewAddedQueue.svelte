@@ -76,9 +76,7 @@
     });
 
   function parseProjectGuidFromUrl() {
-    const match = window.location.pathname.match(
-      /^\/review-projects\/([0-9a-fA-F-]+)\/added$/
-    );
+    const match = window.location.pathname.match(/^\/review-projects\/([0-9a-fA-F-]+)\/added$/);
     return match ? match[1] : null;
   }
 
@@ -110,6 +108,7 @@
 
       items = addedResp.items || [];
       total = addedResp.total || 0;
+
       currentItem = items.length > 0 ? items[0] : null;
     } catch (err) {
       error = err.response?.data?.error || err.message || 'Failed to load added sources';
@@ -156,7 +155,12 @@
     addingNewSource = true;
     newSourceModalError = null;
     try {
-      await proposeNewSourceByQueueGuid(targetQueueGuidForNewSource, sourceLabel, sourceHomepage, metadata);
+      await proposeNewSourceByQueueGuid(
+        targetQueueGuidForNewSource,
+        sourceLabel,
+        sourceHomepage,
+        metadata
+      );
       await loadAdded();
       return true;
     } catch (err) {
@@ -169,13 +173,7 @@
     }
   }
 
-  function openEditMetadata(
-    fieldKey,
-    label,
-    currentValue,
-    options = [],
-    readonlyMsg = ''
-  ) {
+  function openEditMetadata(fieldKey, label, currentValue, options = [], readonlyMsg = '') {
     // Ensure the modal edits the selected row.
     // (caller typically sets `currentItem` just before calling this)
     editFieldKey = fieldKey;
@@ -237,7 +235,9 @@
         queue_index: currentItem.queue_index,
       };
 
-      items = items.map((i) => (i.id === merged.id && i.queue_guid === merged.queue_guid ? merged : i));
+      items = items.map((i) =>
+        i.id === merged.id && i.queue_guid === merged.queue_guid ? merged : i
+      );
       currentItem = merged;
 
       closeEditMetadata();
@@ -353,7 +353,9 @@
         class="propose-button"
         on:click={handleOpenNewSourceModal}
         disabled={loading || addingNewSource || !(queues && queues.length > 0)}
-        title={queues && queues.length > 0 ? 'Propose a new source' : 'Generate reviewer queues first'}
+        title={queues && queues.length > 0
+          ? 'Propose a new source'
+          : 'Generate reviewer queues first'}
       >
         + Propose new source
       </button>
@@ -371,7 +373,9 @@
   {:else if items.length === 0}
     <div class="empty-card">
       <div class="empty-title">No added sources</div>
-      <div class="empty-subtitle">There are no sources marked as <strong>add</strong> in this project.</div>
+      <div class="empty-subtitle">
+        There are no sources marked as <strong>add</strong> in this project.
+      </div>
     </div>
   {:else}
     <div class="table-wrapper">
@@ -402,7 +406,11 @@
                   —
                 {/if}
               </td>
-              <td>{item.source_metadata?.primary_language || item.source_metadata?.language || '—'}</td>
+              <td
+                >{item.source_metadata?.primary_language ||
+                  item.source_metadata?.language ||
+                  '—'}</td
+              >
               <td>{item.source_metadata?.pub_country || '—'}</td>
               <td>{item.source_metadata?.pub_state || '—'}</td>
               <td class="td-actions">
@@ -438,7 +446,10 @@
                       class="btn-inline"
                       on:click={() => {
                         currentItem = item;
-                        const options = [{ value: '', label: 'None / Not set' }, ...COUNTRY_OPTIONS];
+                        const options = [
+                          { value: '', label: 'None / Not set' },
+                          ...COUNTRY_OPTIONS,
+                        ];
                         openEditMetadata(
                           'pub_country',
                           'Pub country (ISO 3166-1 alpha-3)',
@@ -630,7 +641,6 @@
     gap: 16px;
     margin-bottom: 14px;
   }
-
   .back-home {
     padding: 4px 8px;
     border: none;
@@ -843,4 +853,3 @@
     cursor: not-allowed;
   }
 </style>
-

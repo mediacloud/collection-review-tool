@@ -27,12 +27,7 @@
 
 {#if show}
   <div class="base-modal-overlay {variant}" on:click={handleOverlayClick}>
-    <div
-      class="base-modal-content"
-      on:click|stopPropagation
-      role="dialog"
-      aria-modal="true"
-    >
+    <div class="base-modal-content" on:click|stopPropagation role="dialog" aria-modal="true">
       <slot />
     </div>
   </div>
@@ -64,5 +59,3 @@
     max-width: 1320px;
   }
 </style>
-
-
