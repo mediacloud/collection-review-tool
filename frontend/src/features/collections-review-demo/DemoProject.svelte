@@ -1,17 +1,26 @@
 <script>
-  import Nav from './Nav.svelte';
-  import DecisionBar from './DecisionBar.svelte';
-  import { decisionsStore, changeDecision, downloadCSV, loadProject } from './mockStore.js';
-  import {
-    generateReviewProjectQueues,
-    setReviewProjectName,
-    getReviewProjectGuidelines,
-    setReviewProjectGuidelines,
-    setReviewProjectReviewerLandingVirtualQueues,
-    setReviewProjectEditMetadata,
-  } from '../../lib/api.js';
-  import { get } from 'svelte/store';
   import { onMount } from 'svelte';
+
+  import {
+    decideQueueItem,
+    generateReviewProjectQueues,
+    getAddedItemsByProjectGuid,
+    getKeptItemsByProjectGuid,
+    getRemovedItemsByProjectGuid,
+    getReviewProjectAuditExportUrl,
+    getReviewProjectExportUrl,
+    getReviewProjectGuidelines,
+    getSkippedItemsByProjectGuid,
+    previewPublishReviewProject,
+    publishReviewProject,
+    setReviewProjectEditMetadata,
+    setReviewProjectGuidelines,
+    setReviewProjectName,
+    setReviewProjectReviewerLandingVirtualQueues,
+  } from '../../lib/api.js';
+  import DecisionBar from './DecisionBar.svelte';
+  import { loadProject } from './projectStore.js';
+  import Nav from './Nav.svelte';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';
@@ -83,9 +92,6 @@
     { k: 'skipped', label: 'Skipped', color: '#9CA0A8' },
   ];
 
-  // ── Compute all stats from decisionsStore ─────────────────────────────
-  $: projectDecisions = $decisionsStore[projectGuid] ?? {};
-
   $: projectStats = p?.stats ?? {
     kept: 0,
     removed: 0,
@@ -105,51 +111,110 @@
   let queueGenerateError = '';
   let queueGenerateWarning = '';
 
-  // Decision bucket modal — still backed by mock decision data
-  let bucketModal = null;
+  const BUCKET_LOADERS = {
+    kept: getKeptItemsByProjectGuid,
+    removed: getRemovedItemsByProjectGuid,
+    added: getAddedItemsByProjectGuid,
+    skipped: getSkippedItemsByProjectGuid,
+  };
 
-  function openBucket(verdict) {
-    const sources = p.queues.flatMap((queue) =>
-      (projectDecisions[queue.id] ?? []).filter((decision) => decision.verdict === verdict)
-    );
-    bucketModal = { verdict, sources };
+  const DECISION_TO_API = {
+    kept: 'keep',
+    removed: 'remove',
+    added: 'add',
+    skipped: 'skip',
+  };
+
+  function adaptBucketItem(item, verdict) {
+    const queueIndex = item.queue_index ?? 0;
+
+    return {
+      id: item.id,
+      source: item.source_label || `Source ${item.source_id ?? item.id}`,
+      homepage: item.source_homepage || '',
+      verdict,
+      queueGuid: item.queue_guid,
+      queue: `Queue #${queueIndex + 1}`,
+      reason: item.removal_reason || item.skip_note || '',
+    };
+  }
+
+  let bucketModal = null;
+  let bucketLoading = false;
+  let bucketError = '';
+  let bucketSaving = false;
+
+  async function loadBucketSources(verdict) {
+    const data = await BUCKET_LOADERS[verdict](projectGuid, {
+      page: 1,
+      page_size: 8000,
+      dedupe_source_id: true,
+    });
+    return (data.items ?? []).map((item) => adaptBucketItem(item, verdict));
+  }
+
+  async function openBucket(verdict) {
+    bucketModal = { verdict, sources: [] };
+    bucketChangeTarget = null;
+    bucketReason = '';
+    bucketLoading = true;
+    bucketError = '';
+
+    try {
+      bucketModal = { verdict, sources: await loadBucketSources(verdict) };
+    } catch (error) {
+      console.error(error);
+      bucketError = error.response?.data?.error || error.message || 'Could not load this bucket.';
+    } finally {
+      bucketLoading = false;
+    }
   }
   // Change decision from inside bucket modal
-  let bucketChangeTarget = null; // { source, queueId }
+  let bucketChangeTarget = null; // { id, source, queueGuid }
   let bucketNewVerdict = '';
   let bucketReason = '';
 
-  $: bucketReasonRequired = bucketNewVerdict === 'kept' || bucketNewVerdict === 'removed';
-  $: bucketCanConfirm = bucketNewVerdict && (!bucketReasonRequired || bucketReason.trim());
+  $: bucketReasonRequired = bucketNewVerdict === 'removed';
+  $: bucketCanConfirm =
+    bucketNewVerdict && !bucketSaving && (!bucketReasonRequired || bucketReason.trim());
 
   function openBucketChange(d) {
-    // find which queue this source belongs to
-    const queueId = d.queue;
-    bucketChangeTarget = { source: d.source, queueId };
+    bucketChangeTarget = { id: d.id, source: d.source, queueGuid: d.queueGuid };
     bucketNewVerdict = d.verdict;
     bucketReason = d.reason || '';
   }
 
-  function confirmBucketChange() {
+  async function confirmBucketChange() {
     if (!bucketCanConfirm) return;
-    changeDecision(
-      projectGuid,
-      bucketChangeTarget.queueId,
-      bucketChangeTarget.source,
-      bucketNewVerdict,
-      bucketReason.trim() || null
-    );
-    // refresh modal sources
-    bucketModal = {
-      ...bucketModal,
-      sources: p.queues.flatMap((q) =>
-        (get(decisionsStore)[projectGuid]?.[q.id] ?? []).filter(
-          (d) => d.verdict === bucketModal.verdict
-        )
-      ),
-    };
-    bucketChangeTarget = null;
-    bucketReason = '';
+
+    const apiDecision = DECISION_TO_API[bucketNewVerdict];
+    const reason = bucketReason.trim();
+
+    try {
+      bucketSaving = true;
+      bucketError = '';
+
+      await decideQueueItem(
+        bucketChangeTarget.queueGuid,
+        bucketChangeTarget.id,
+        apiDecision,
+        apiDecision === 'remove' ? reason : null,
+        apiDecision === 'skip' ? reason : null
+      );
+
+      p = await loadProject(projectGuid);
+      bucketModal = {
+        ...bucketModal,
+        sources: await loadBucketSources(bucketModal.verdict),
+      };
+      bucketChangeTarget = null;
+      bucketReason = '';
+    } catch (error) {
+      console.error(error);
+      bucketError = error.response?.data?.error || error.message || 'Could not update decision.';
+    } finally {
+      bucketSaving = false;
+    }
   }
 
   // ── Copy reviewer link ─────────────────────────────────────────────────
@@ -163,9 +228,114 @@
   // ── Export CSV ─────────────────────────────────────────────────────────
   let csvToast = '';
   function exportCSV(type) {
-    downloadCSV(type);
+    const href =
+      type === 'audit'
+        ? getReviewProjectAuditExportUrl(projectGuid)
+        : getReviewProjectExportUrl(projectGuid);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = '';
+    link.click();
+
     csvToast = type === 'audit' ? 'Audit CSV downloaded' : 'Project CSV downloaded';
     setTimeout(() => (csvToast = ''), 2000);
+  }
+
+  // ── Publish preview ───────────────────────────────────────────────────
+  let showPublishPreview = false;
+  let publishPreviewToken = '';
+  let publishPreviewCollectionName = '';
+  let publishPreviewLoading = false;
+  let publishPreviewError = '';
+  let publishPreviewResult = null;
+  let publishMode = false;
+  let publishResult = null;
+
+  $: publishPreviewRows = publishPreviewResult?.preview?.rows ?? [];
+  $: publishPreviewSummary = publishPreviewResult?.preview?.summary ?? null;
+  $: publishPreviewTarget = publishPreviewResult?.target ?? null;
+
+  function openPublishPreview() {
+    publishMode = false;
+    publishPreviewError = '';
+    publishPreviewResult = null;
+    publishPreviewCollectionName =
+      publishPreviewCollectionName || `${(p?.name || 'Review Project').trim()} | Collection-Review`;
+    showPublishPreview = true;
+  }
+
+  function openPublish() {
+    if (publishPreviewLoading) return;
+    openPublishPreview();
+    publishMode = true;
+    publishResult = null;
+  }
+
+  async function handlePublish() {
+    if (publishPreviewLoading || publishResult) return;
+    const apiToken = publishPreviewToken.trim();
+    if (!apiToken) {
+      publishPreviewError = 'API token is required.';
+      return;
+    }
+
+    publishPreviewLoading = true;
+    publishPreviewError = '';
+    try {
+      const payload = { api_token: apiToken };
+      const collectionName = publishPreviewCollectionName.trim();
+      if (collectionName) {
+        payload.collection_name = collectionName;
+      }
+      publishResult = await publishReviewProject(projectGuid, payload);
+    } catch (error) {
+      const message = error.response?.data?.error || 'Could not confirm publishing. The operation may have partially completed. Check the target collection before retrying.';
+      publishPreviewError = String(message).split(apiToken).join('[redacted]');
+    } finally {
+      publishPreviewLoading = false;
+    }
+  }
+
+  function publishMessage(message) {
+    const token = publishPreviewToken.trim();
+    return token ? String(message).split(token).join('[redacted]') : String(message);
+  }
+
+  async function handlePublishPreview() {
+    const apiToken = publishPreviewToken.trim();
+
+    if (!apiToken) {
+      publishPreviewError = 'API token is required.';
+      return;
+    }
+
+    try {
+      publishPreviewLoading = true;
+      publishPreviewError = '';
+      publishPreviewResult = null;
+
+      const payload = { api_token: apiToken };
+      const collectionName = publishPreviewCollectionName.trim();
+
+      if (collectionName) {
+        payload.collection_name = collectionName;
+      }
+
+      publishPreviewResult = await previewPublishReviewProject(projectGuid, payload);
+    } catch (error) {
+      console.error(error);
+      publishPreviewError =
+        error.response?.data?.error || error.message || 'Could not preview publish.';
+    } finally {
+      publishPreviewLoading = false;
+    }
+  }
+
+  function operationLabel(operation) {
+    if (operation === 'ensure_association') return 'Ensure in collection';
+    if (operation === 'create_source_and_associate') return 'Create source';
+    if (operation === 'remove_association') return 'Remove from collection';
+    return operation || '—';
   }
 
   // ── Guidelines modal ───────────────────────────────────────────────────
@@ -330,7 +500,7 @@
             >
             Audit CSV
           </button>
-          <button class="btn">
+          <button class="btn" on:click={openPublishPreview}>
             <svg
               width="13"
               height="13"
@@ -348,7 +518,7 @@
             >
             Preview publish
           </button>
-          <button class="btn btn-primary">
+          <button class="btn btn-primary" on:click={openPublish} disabled={publishPreviewLoading}>
             <svg
               width="13"
               height="13"
@@ -624,7 +794,7 @@
         <div>
           <div class="modal-title" style:color={VERDICT_COLORS[bucketModal.verdict]}>
             {VERDICT_LABELS[bucketModal.verdict]}
-            <span class="modal-count">{bucketModal.sources.length}</span>
+            <span class="modal-count">{projectStats[bucketModal.verdict]}</span>
           </div>
           <div class="modal-subtitle">{p.name}</div>
         </div>
@@ -647,7 +817,11 @@
         </button>
       </div>
 
-      {#if bucketModal.sources.length === 0}
+      {#if bucketError}
+        <div class="bucket-empty">{bucketError}</div>
+      {:else if bucketLoading}
+        <div class="bucket-empty">Loading sources...</div>
+      {:else if bucketModal.sources.length === 0}
         <div class="bucket-empty">No sources in this bucket yet.</div>
       {:else}
         <div class="bucket-list">
@@ -690,7 +864,8 @@
                     <button
                       class="btn btn-sm btn-primary"
                       class:btn-dim={!bucketCanConfirm}
-                      on:click={confirmBucketChange}>Save</button
+                      disabled={!bucketCanConfirm}
+                      on:click={confirmBucketChange}>{bucketSaving ? 'Saving...' : 'Save'}</button
                     >
                   </div>
                 </div>
@@ -814,6 +989,208 @@
 
         <button class="btn btn-primary" disabled={queueGenerating} on:click={handleGenerateQueues}>
           {queueGenerating ? 'Generating...' : 'Generate queues'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showPublishPreview && p}
+  <div
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">{publishMode ? 'Publish' : 'Preview publish'}</div>
+          <div class="modal-subtitle">
+            {#if publishMode}
+              Publish decisions for {p.name} to Media Cloud. A new collection is created if no publish target exists.
+            {:else}
+              Build a read-only Media Cloud publish plan for {p.name}.
+            {/if}
+          </div>
+        </div>
+        <button
+          class="modal-close"
+          disabled={publishPreviewLoading}
+          on:click={() => {
+            if (!publishPreviewLoading) {
+              showPublishPreview = false;
+            }
+          }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg
+          >
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-title">Media Cloud API token</div>
+            <div class="setting-desc">{publishMode ? 'Used to publish to Media Cloud.' : 'Used only for preview preflight. This does not publish.'}</div>
+          </div>
+          <div class="setting-control">
+            <input
+              class="setting-input"
+              type="password"
+              bind:value={publishPreviewToken}
+              disabled={publishPreviewLoading || (publishMode && !!publishResult)}
+              autocomplete="off"
+            />
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-title">Collection name</div>
+            <div class="setting-desc">Optional name for a first-time publish target.</div>
+          </div>
+          <div class="setting-control">
+            <input
+              class="setting-input"
+              type="text"
+              bind:value={publishPreviewCollectionName}
+              disabled={publishPreviewLoading || (publishMode && !!publishResult)}
+            />
+          </div>
+        </div>
+
+        {#if publishPreviewError}
+          <div class="preview-error">{publishPreviewError}</div>
+        {/if}
+
+        {#if publishMode && publishResult}
+          <div role="status" class="setting-title">
+            {publishResult.summary.errors.length ? 'Publish completed with errors' : publishResult.summary.warnings.length ? 'Publish completed with warnings' : 'Publish completed'}
+          </div>
+          <div class="preview-summary">
+            <div class="preview-summary-item">
+              <span class="preview-summary-label">{publishResult.created_collection ? 'Created collection' : 'Existing collection'}</span>
+              <span class="preview-summary-value">{publishResult.collection_id}</span>
+              <span>{publishMessage(publishResult.collection_name)}</span>
+            </div>
+            {#each [
+              ['Processed items', 'processed_items'],
+              ['Ensured associations', 'ensured_associations'],
+              ['Removed associations', 'removed_associations'],
+              ['Created sources', 'created_sources'],
+              ['No-op items', 'noop_items'],
+              ['Metadata updates attempted', 'metadata_updates_attempted'],
+              ['Metadata updates succeeded', 'metadata_updates_succeeded'],
+              ['Metadata updates failed', 'metadata_updates_failed'],
+            ] as [label, key]}
+              <div class="preview-summary-item">
+                <span class="preview-summary-label">{label}</span>
+                <span class="preview-summary-value">{publishResult.summary[key]}</span>
+              </div>
+            {/each}
+          </div>
+          {#if publishResult.summary.errors.length}
+            <div class="preview-error" role="alert">
+              <strong>Errors</strong>
+              <ul>{#each publishResult.summary.errors as message}<li>{publishMessage(message)}</li>{/each}</ul>
+            </div>
+          {/if}
+          {#if publishResult.summary.warnings.length}
+            <div class="setting-desc">
+              <strong>Warnings</strong>
+              <ul>{#each publishResult.summary.warnings as message}<li>{publishMessage(message)}</li>{/each}</ul>
+            </div>
+          {/if}
+        {/if}
+
+        {#if !publishMode && publishPreviewSummary}
+          <div class="preview-summary">
+            <div class="preview-summary-item">
+              <span class="preview-summary-label">Target</span>
+              <span class="preview-summary-value">
+                {publishPreviewTarget?.collection_id
+                  ? `Collection ${publishPreviewTarget.collection_id}`
+                  : publishPreviewTarget?.collection_name || 'New collection'}
+              </span>
+            </div>
+            <div class="preview-summary-item">
+              <span class="preview-summary-label">Actions</span>
+              <span class="preview-summary-value">{publishPreviewRows.length}</span>
+            </div>
+            <div class="preview-summary-item">
+              <span class="preview-summary-label">Keep/add</span>
+              <span class="preview-summary-value"
+                >{(publishPreviewSummary.ensure_association || 0) +
+                  (publishPreviewSummary.create_source_and_associate || 0)}</span
+              >
+            </div>
+            <div class="preview-summary-item">
+              <span class="preview-summary-label">Remove</span>
+              <span class="preview-summary-value"
+                >{publishPreviewSummary.remove_association || 0}</span
+              >
+            </div>
+          </div>
+
+          {#if publishPreviewRows.length === 0}
+            <div class="bucket-empty">No publish actions in this preview.</div>
+          {:else}
+            <div class="preview-table-wrap">
+              <table class="preview-table">
+                <thead>
+                  <tr>
+                    <th>Action</th>
+                    <th>Source</th>
+                    <th>Decision</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each publishPreviewRows.slice(0, 12) as row}
+                    <tr>
+                      <td>{operationLabel(row.operation)}</td>
+                      <td>
+                        <div class="preview-source">{row.source_label || row.source_homepage}</div>
+                        <div class="preview-source-sub">{row.source_homepage || row.source_id}</div>
+                      </td>
+                      <td>{row.decision}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+              {#if publishPreviewRows.length > 12}
+                <div class="setting-desc" style="margin-top: 8px;">
+                  Showing first 12 of {publishPreviewRows.length} publish actions.
+                </div>
+              {/if}
+            </div>
+          {/if}
+        {/if}
+      </div>
+
+      <div class="modal-footer">
+        <button
+          class="btn"
+          disabled={publishPreviewLoading}
+          on:click={() => {
+            if (!publishPreviewLoading) {
+              showPublishPreview = false;
+            }
+          }}
+        >
+          Close
+        </button>
+        <button
+          class="btn btn-primary"
+          disabled={publishPreviewLoading || !publishPreviewToken.trim() || (publishMode && !!publishResult)}
+          on:click={publishMode ? handlePublish : handlePublishPreview}
+        >
+          {publishMode ? (publishPreviewLoading ? 'Publishing...' : 'Publish') : (publishPreviewLoading ? 'Previewing...' : 'Preview publish')}
         </button>
       </div>
     </div>
@@ -1464,6 +1841,9 @@
     overflow: hidden;
     flex-shrink: 0;
   }
+  .modal-wide {
+    max-width: 920px;
+  }
   .modal-header {
     padding: 18px 24px;
     border-bottom: 1px solid var(--v2-line-soft);
@@ -1514,6 +1894,82 @@
     align-items: center;
     justify-content: flex-end;
     gap: 10px;
+  }
+  .preview-error {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #fff1f0;
+    color: #b42318;
+    font-size: 13.5px;
+  }
+  .preview-summary {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: 1px solid var(--v2-line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .preview-summary-item {
+    padding: 12px;
+    border-right: 1px solid var(--v2-line-soft);
+    min-width: 0;
+  }
+  .preview-summary-item:last-child {
+    border-right: none;
+  }
+  .preview-summary-label {
+    display: block;
+    font-size: 12px;
+    color: var(--v2-mute);
+    margin-bottom: 4px;
+  }
+  .preview-summary-value {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--v2-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .preview-table-wrap {
+    margin-top: 14px;
+    border: 1px solid var(--v2-line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  .preview-table th,
+  .preview-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--v2-line-soft);
+    vertical-align: top;
+  }
+  .preview-table th {
+    font-size: 12px;
+    color: var(--v2-mute);
+    font-weight: 600;
+    background: var(--v2-neutral);
+  }
+  .preview-table tr:last-child td {
+    border-bottom: none;
+  }
+  .preview-source {
+    font-weight: 600;
+    color: var(--v2-ink);
+  }
+  .preview-source-sub {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--v2-mute);
+    word-break: break-all;
   }
   .saved-note {
     margin-right: auto;

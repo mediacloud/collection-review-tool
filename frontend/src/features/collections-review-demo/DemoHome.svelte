@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import Nav from './Nav.svelte';
   import Modal from './Modal.svelte';
   import HelpModal from './HelpModal.svelte';
@@ -7,76 +7,79 @@
     projectsStore,
     inProgressProjects,
     completedProjects,
-    KNOWN_COLLECTIONS,
     loadProjects,
-  } from './mockStore.js';
-  import { startReviewProject } from '../../lib/api.js';
+  } from './projectStore.js';
+  import { startReviewProject, generateReviewProjectQueues, getCountryCollections } from '../../lib/api.js';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';
 
   /* ── QuickReviewCard state ── */
-  const SAMPLES = ['34412803', '29571100', '18204455', '42119007'];
 
   let qrId = '';
-  let qrFocused = false;
-  let qrAuto = '';
-  let qrIdx = 0;
-  let qrTimer = null;
   let qrStarted = false; // shows "not found" feedback after pressing Start
+  let qrStarting = false;
+  let qrError = '';
 
-  $: qrInfo = KNOWN_COLLECTIONS[qrId] || null;
-  $: qrResolved = !!qrInfo;
-  $: qrNotFound = qrId.length === 8 && !qrInfo;
-  $: qrShowAuto = !qrFocused && qrId === '';
-  $: qrDisplay = qrShowAuto ? qrAuto : qrId;
-  $: qrBorderColor = qrResolved
-    ? 'var(--v2-kept)'
-    : qrNotFound || (qrStarted && !qrResolved)
+  $: qrCollectionId = Number(qrId);
+  $: qrHasValidId = Number.isInteger(qrCollectionId) && qrCollectionId > 0;
+  $: qrBorderColor = qrError || (qrStarted && !qrHasValidId)
       ? 'var(--v2-red)'
       : 'var(--v2-line)';
 
-  function stepAuto() {
-    if (qrFocused || qrId !== '') return;
-    const sample = SAMPLES[qrIdx];
-    if (qrAuto.length < sample.length) {
-      qrAuto = sample.slice(0, qrAuto.length + 1);
-      qrTimer = setTimeout(stepAuto, 160);
-    } else {
-      qrTimer = setTimeout(() => {
-        qrAuto = '';
-        qrIdx = (qrIdx + 1) % SAMPLES.length;
-        stepAuto();
-      }, 1700);
+  function onQrType(e) {
+    qrId = e.target.value.replace(/[^0-9]/g, '');
+    qrStarted = false;
+    qrError = '';
+  }
+
+  async function startReview() {
+    if (qrStarting) return;
+    qrStarted = true;
+    qrError = '';
+
+    if (!qrHasValidId) {
+      qrError = 'Enter a valid collection ID.';
+      return;
+    }
+
+    try {
+      qrStarting = true;
+
+      const projectName = `Quick Review · Collection ${qrCollectionId}`;
+
+      const projectResult = await startReviewProject(
+        [qrCollectionId],
+        'default',
+        metadataEditing,
+        projectName
+      );
+      const queueResult = await generateReviewProjectQueues(projectResult.project.guid, 1);
+      const queueGuid = queueResult.queues?.[0]?.queue_guid || queueResult.queues?.[0]?.guid;
+
+      if (!queueGuid) {
+        throw new Error('The reviewer queue was created without a queue GUID.');
+      }
+
+      await loadProjects();
+
+      onNavigate(`/demo/reviews/${queueGuid}`);
+    } catch (error) {
+      console.error(error);
+
+      qrError =
+        error.response?.data?.error || error.message || 'Could not start the quick review.';
+    } finally {
+      qrStarting = false;
     }
   }
 
-  function onQrFocus() {
-    qrFocused = true;
-    clearTimeout(qrTimer);
-  }
-  function onQrBlur() {
-    qrFocused = false;
-    qrTimer = setTimeout(stepAuto, 300);
-  }
-  function onQrType(e) {
-    qrId = e.target.value.replace(/[^0-9]/g, '').slice(0, 8);
-    qrStarted = false;
-  }
-
-  function startReview() {
-    qrStarted = true;
-    if (qrResolved) onNavigate('/demo/reviews/124');
-  }
-
   onMount(() => {
-    qrTimer = setTimeout(stepAuto, 500);
 
     loadProjects().catch((error) => {
       console.error('Failed to load projects'), error;
     });
   });
-  onDestroy(() => clearTimeout(qrTimer));
 
   /* ── Metadata toggle ── */
   let metadataEditing = false;
@@ -91,6 +94,10 @@
   let newCollectionSource = 'manual'; // 'manual' | 'geographic'
   let newCollectionIds = '';
   let newCountry = '';
+  let countryCollections = [];
+  let countryCollectionsLoading = false;
+  let countryCollectionsError = '';
+  let selectedCountryCollectionIds = [];
   let newProjectCreating = false;
   let newProjectError = '';
 
@@ -100,18 +107,91 @@
     { value: 'local', label: 'Local news' },
     { value: 'ai-sweep', label: 'AI content review' },
   ];
-  const COUNTRIES = [
-    'United States',
-    'Brazil',
-    'United Kingdom',
-    'Germany',
-    'France',
-    'India',
-    'Mexico',
-    'Nigeria',
-    'Kenya',
-    'South Africa',
-  ];
+  $: selectedCountryEntry =
+    countryCollections.find((entry) => countryOptionValue(entry) === newCountry) || null;
+  $: canSubmitNewProject =
+    newProjectName.trim() &&
+    (newCollectionSource === 'manual'
+      ? newCollectionIds.trim()
+      : selectedCountryCollectionIds.length > 0 &&
+        !countryCollectionsLoading &&
+        !countryCollectionsError);
+
+  function countryOptionValue(entry) {
+    return entry?.country?.alpha3 || entry?.country?.alpha2 || entry?.country?.name || '';
+  }
+
+  async function loadCountryCollectionOptions() {
+    if (countryCollectionsLoading) return;
+
+    if (countryCollections.length > 0) {
+      if (!newCountry) {
+        newCountry = countryOptionValue(countryCollections[0]);
+        applyDefaultCountryCollectionSelection();
+      }
+      return;
+    }
+
+    countryCollectionsLoading = true;
+    countryCollectionsError = '';
+
+    try {
+      const data = await getCountryCollections();
+
+      if (!Array.isArray(data)) {
+        throw new Error('Invalid geographic collections data.');
+      }
+
+      countryCollections = [...data].sort((a, b) =>
+        String(a?.country?.name || '').localeCompare(String(b?.country?.name || ''), undefined, {
+          sensitivity: 'base',
+        })
+      );
+
+      if (!newCountry && countryCollections.length > 0) {
+        newCountry = countryOptionValue(countryCollections[0]);
+        applyDefaultCountryCollectionSelection();
+      }
+    } catch (error) {
+      console.error(error);
+      countryCollections = [];
+      countryCollectionsError =
+        error.response?.data?.error || error.message || 'Could not load geographic collections.';
+    } finally {
+      countryCollectionsLoading = false;
+    }
+  }
+
+  function applyDefaultCountryCollectionSelection() {
+    const entry =
+      countryCollections.find((countryEntry) => countryOptionValue(countryEntry) === newCountry) ||
+      null;
+
+    if (!entry?.collections?.length) {
+      selectedCountryCollectionIds = [];
+      return;
+    }
+
+    const collectionIds = entry.collections.map((collection) => collection.tags_id);
+    const nationalCollectionId = entry.country?.national_tags_id;
+
+    selectedCountryCollectionIds =
+      nationalCollectionId != null && collectionIds.includes(nationalCollectionId)
+        ? [nationalCollectionId]
+        : [collectionIds[0]];
+  }
+
+  function onCountryChange() {
+    applyDefaultCountryCollectionSelection();
+  }
+
+  function toggleCountryCollection(collectionId) {
+    if (selectedCountryCollectionIds.includes(collectionId)) {
+      selectedCountryCollectionIds = selectedCountryCollectionIds.filter((id) => id !== collectionId);
+    } else {
+      selectedCountryCollectionIds = [...selectedCountryCollectionIds, collectionId];
+    }
+  }
 
   function openNewProjectModal() {
     newProjectName = '';
@@ -119,10 +199,12 @@
     newCollectionSource = 'manual';
     newCollectionIds = '';
     newCountry = '';
+    selectedCountryCollectionIds = [];
     newProjectError = '';
     newProjectCreating = false;
 
     showNewProject = true;
+    loadCountryCollectionOptions();
   }
 
   async function submitNewProject() {
@@ -135,31 +217,47 @@
       return;
     }
 
-    if (newCollectionSource !== 'manual') {
-      newProjectError = 'Geographic collection selection is not connected yet.';
-      return;
+    let uniqueCollectionIds = [];
+
+    if (newCollectionSource === 'manual') {
+      const rawCollectionIds = newCollectionIds
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+
+      if (rawCollectionIds.length === 0) {
+        newProjectError = 'Enter at least one collection ID.';
+        return;
+      }
+
+      const collectionIds = rawCollectionIds.map((value) => Number(value));
+
+      const hasInvalidCollectionId = collectionIds.some((id) => !Number.isInteger(id) || id <= 0);
+
+      if (hasInvalidCollectionId) {
+        newProjectError = 'Collection IDs must be positive integers.';
+        return;
+      }
+
+      uniqueCollectionIds = [...new Set(collectionIds)];
+    } else {
+      if (countryCollectionsLoading) {
+        newProjectError = 'Geographic collections are still loading.';
+        return;
+      }
+
+      if (countryCollectionsError || countryCollections.length === 0) {
+        newProjectError = 'Geographic collections could not be loaded.';
+        return;
+      }
+
+      if (!newCountry || selectedCountryCollectionIds.length === 0) {
+        newProjectError = 'Select at least one geographic collection.';
+        return;
+      }
+
+      uniqueCollectionIds = [...new Set(selectedCountryCollectionIds)];
     }
-
-    const rawCollectionIds = newCollectionIds
-      .split(',')
-      .map((value) => value.trim())
-      .filter(Boolean);
-
-    if (rawCollectionIds.length === 0) {
-      newProjectError = 'Enter at least one collection ID.';
-      return;
-    }
-
-    const collectionIds = rawCollectionIds.map((value) => Number(value));
-
-    const hasInvalidCollectionId = collectionIds.some((id) => !Number.isInteger(id) || id <= 0);
-
-    if (hasInvalidCollectionId) {
-      newProjectError = 'Collection IDs must be positive integers.';
-      return;
-    }
-
-    const uniqueCollectionIds = [...new Set(collectionIds)];
 
     try {
       newProjectCreating = true;
@@ -178,6 +276,7 @@
       newProjectName = '';
       newCollectionIds = '';
       newCountry = '';
+      selectedCountryCollectionIds = [];
       newCollectionSource = 'manual';
       newGuidelineTemplate = 'default';
 
@@ -258,56 +357,18 @@
             <div class="qrc-input-inner">
               <input
                 class="qrc-input"
-                class:auto={qrShowAuto}
-                value={qrDisplay}
+                value={qrId}
                 inputmode="numeric"
                 placeholder="paste a collection ID…"
-                on:focus={onQrFocus}
-                on:blur={onQrBlur}
                 on:input={onQrType}
               />
-              {#if qrShowAuto}
-                <span class="qrc-caret" style:left="calc({qrDisplay.length}ch + 2px)"></span>
-              {/if}
             </div>
 
-            {#if qrResolved}
-              <span class="qrc-found">
-                <span class="qrc-found-dot">
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"><path d="M5 12.5 10 17.5l9-11" /></svg
-                  >
-                </span>
-                Found
-              </span>
-            {/if}
-            {#if qrNotFound || (qrStarted && !qrResolved && qrId.length > 0)}
-              <span class="qrc-not-found">Not found</span>
+            {#if qrError}
+              <span class="qrc-not-found">Error</span>
             {/if}
           </div>
 
-          <!-- Resolved confirmation panel -->
-          <div class="qrc-confirm" class:visible={qrResolved}>
-            {#if qrInfo}
-              <div class="qrc-confirm-inner">
-                <div>
-                  <div class="qrc-confirm-name">{qrInfo.name}</div>
-                  <div class="qrc-confirm-sub">Collection found · ready to queue</div>
-                </div>
-                <div class="qrc-confirm-count">
-                  <div class="qrc-confirm-num">~{qrInfo.sources}</div>
-                  <div class="qrc-confirm-unit">sources</div>
-                </div>
-              </div>
-            {/if}
-          </div>
         </div>
 
         <!-- Options row -->
@@ -333,11 +394,12 @@
         <!-- Card footer -->
         <div class="qrc-footer">
           <span class="qrc-footer-hint">
-            {#if qrResolved}Queue starts with ~{qrInfo.sources} sources{:else if qrStarted && !qrResolved && qrId.length > 0}<span
-                class="hint-err">Collection not found — try a different ID</span
+            {#if qrError}<span class="hint-err">{qrError}</span
+              >{:else if qrStarting}Creating review queue...{:else if qrStarted && !qrHasValidId}<span
+                class="hint-err">Enter a valid collection ID</span
               >{:else}&nbsp;{/if}
           </span>
-          <button class="btn btn-primary" on:click={startReview}>
+          <button class="btn btn-primary" disabled={qrStarting} on:click={startReview}>
             <svg
               width="13"
               height="13"
@@ -348,7 +410,7 @@
               stroke-linecap="round"
               stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg
             >
-            Start review
+            {qrStarting ? 'Starting...' : 'Start review'}
           </button>
         </div>
       </div>
@@ -470,7 +532,7 @@
         <button
           class="review-row"
           class:first={i === 0}
-          on:click={() => onNavigate('/demo/reviews/124')}
+          on:click={() => onNavigate(`/demo/review-projects/${r.guid}`)}
         >
           <div class="review-info">
             <div class="review-name">{r.name}</div>
@@ -488,7 +550,7 @@
           <div class="review-action">
             <button
               class="btn btn-sm"
-              on:click|stopPropagation={() => onNavigate('/demo/reviews/124')}
+              on:click|stopPropagation={() => onNavigate(`/demo/review-projects/${r.guid}`)}
             >
               <svg
                 width="11"
@@ -590,9 +652,14 @@
           </div>
         </label>
         <label class="radio-option" class:radio-selected={newCollectionSource === 'geographic'}>
-          <input type="radio" bind:group={newCollectionSource} value="geographic" disabled />
+          <input
+            type="radio"
+            bind:group={newCollectionSource}
+            value="geographic"
+            on:change={loadCountryCollectionOptions}
+          />
           <div class="radio-text">
-            <span class="radio-label">Geographic collection section will be connected later</span>
+            <span class="radio-label">Geographic collections</span>
             <span class="radio-hint">Select a country to seed from its top-online list</span>
           </div>
         </label>
@@ -614,12 +681,44 @@
     {:else}
       <div class="form-field">
         <label class="form-label" for="proj-country">Country</label>
-        <select id="proj-country" class="form-select" bind:value={newCountry}>
-          <option value="">Select a country…</option>
-          {#each COUNTRIES as c}
-            <option value={c}>{c}</option>
-          {/each}
-        </select>
+        {#if countryCollectionsLoading}
+          <div class="form-hint">Loading geographic collections…</div>
+        {:else if countryCollectionsError}
+          <div class="form-hint" style="color: #b42318;">{countryCollectionsError}</div>
+          <button class="btn btn-sm" type="button" on:click={loadCountryCollectionOptions}>
+            Retry
+          </button>
+        {:else}
+          <select
+            id="proj-country"
+            class="form-select"
+            bind:value={newCountry}
+            on:change={onCountryChange}
+          >
+            <option value="">Select a country…</option>
+            {#each countryCollections as entry}
+              <option value={countryOptionValue(entry)}>{entry.country?.name || 'Unknown'}</option>
+            {/each}
+          </select>
+          {#if selectedCountryEntry}
+            <div class="form-hint">
+              Choose one or more geographic collections for {selectedCountryEntry.country?.name}.
+            </div>
+            <div class="geo-collections-list">
+              {#each selectedCountryEntry.collections || [] as collection}
+                <label class="geo-check">
+                  <input
+                    type="checkbox"
+                    checked={selectedCountryCollectionIds.includes(collection.tags_id)}
+                    on:change={() => toggleCountryCollection(collection.tags_id)}
+                  />
+                  <span class="geo-check-label">{collection.label}</span>
+                  <span class="geo-tag-id">{collection.tags_id}</span>
+                </label>
+              {/each}
+            </div>
+          {/if}
+        {/if}
       </div>
     {/if}
 
@@ -632,10 +731,7 @@
     <button
       class="btn btn-primary btn-full"
       type="submit"
-      disabled={newProjectCreating ||
-        !newProjectName.trim() ||
-        !newCollectionIds.trim() ||
-        newCollectionSource !== 'manual'}
+      disabled={newProjectCreating || !canSubmitNewProject}
     >
       <svg
         width="13"
@@ -667,7 +763,7 @@
         class:first={i === 0}
         on:click={() => {
           showAllInProgress = false;
-          onNavigate('/demo/reviews/124');
+          onNavigate(`/demo/review-projects/${r.guid}`);
         }}
       >
         <div class="review-info">
@@ -881,42 +977,7 @@
     color: var(--v2-ink);
     letter-spacing: -0.3px;
   }
-  .qrc-input.auto {
-    color: var(--v2-mute);
-  }
-  .qrc-caret {
-    position: absolute;
-    top: 0.18em;
-    width: 2px;
-    height: 1.2em;
-    background: var(--v2-ink);
-    animation: blink 1s step-end infinite;
-  }
-  @keyframes blink {
-    50% {
-      opacity: 0;
-    }
-  }
 
-  .qrc-found {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 14px;
-    color: var(--v2-kept);
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  .qrc-found-dot {
-    width: 17px;
-    height: 17px;
-    border-radius: 50%;
-    background: var(--v2-kept);
-    color: #fff;
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-  }
   .qrc-not-found {
     font-size: 14px;
     color: var(--v2-red);
@@ -924,57 +985,6 @@
     white-space: nowrap;
   }
 
-  .qrc-confirm {
-    overflow: hidden;
-    max-height: 0;
-    opacity: 0;
-    margin-top: 0;
-    transition:
-      max-height 0.35s ease,
-      opacity 0.35s ease,
-      margin 0.35s ease;
-  }
-  .qrc-confirm.visible {
-    max-height: 70px;
-    opacity: 1;
-    margin-top: 10px;
-  }
-  .qrc-confirm-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 11px 14px;
-    background: var(--v2-kept-soft);
-    border: 1px solid rgba(226, 92, 64, 0.2);
-    border-radius: 12px;
-  }
-  .qrc-confirm-name {
-    font-size: 13.5px;
-    font-weight: 600;
-    color: var(--v2-ink);
-  }
-  .qrc-confirm-sub {
-    font-size: 13.5px;
-    color: var(--v2-accent-ink);
-    margin-top: 1px;
-  }
-  .qrc-confirm-count {
-    text-align: right;
-  }
-  .qrc-confirm-num {
-    font-size: 14px;
-    font-weight: 600;
-    font-family: var(--v2-mono);
-    letter-spacing: -0.5px;
-    color: var(--v2-ink);
-  }
-  .qrc-confirm-unit {
-    font-size: 12.5px;
-    color: var(--v2-mute);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-weight: 500;
-  }
 
   .qrc-options {
     padding: 12px 22px 4px;
@@ -1451,6 +1461,41 @@
   }
   .radio-hint {
     font-size: 13px;
+    color: var(--v2-mute);
+  }
+
+  .geo-collections-list {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    max-height: 220px;
+    overflow: auto;
+    padding: 2px 2px 2px 0;
+  }
+  .geo-check {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 10px;
+    border: 1px solid var(--v2-line-soft, #f0f0f0);
+    border-radius: 8px;
+    cursor: pointer;
+    background: #fff;
+  }
+  .geo-check input[type='checkbox'] {
+    accent-color: var(--v2-accent);
+    flex-shrink: 0;
+  }
+  .geo-check-label {
+    flex: 1;
+    min-width: 0;
+    font-size: 13.5px;
+    color: var(--v2-ink);
+  }
+  .geo-tag-id {
+    font-family: var(--v2-mono);
+    font-size: 12px;
     color: var(--v2-mute);
   }
 
