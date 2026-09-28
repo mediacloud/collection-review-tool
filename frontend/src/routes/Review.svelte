@@ -1,33 +1,34 @@
 <script>
+  import * as rawIso3166 from 'iso-3166';
+  import iso3166 from 'iso-3166-2';
   import { onMount } from 'svelte';
+
+  import AllDecisionsModal from '../components/AllDecisionsModal.svelte';
+  import BaseModal from '../components/BaseModal.svelte';
+  import EditMetadataModal from '../components/EditMetadataModal.svelte';
+  import NewSourceModal from '../components/NewSourceModal.svelte';
+  import RemovalReasonModal from '../components/RemovalReasonModal.svelte';
+  import ReviewHeader from '../components/ReviewHeader.svelte';
+  import SkipNoteModal from '../components/SkipNoteModal.svelte';
+  import SourceViewer from '../components/SourceViewer.svelte';
   import {
-    getReview,
-    getReviewItems,
     decideItem,
-    proposeNewSource,
-    getReviewByQueueGuid,
-    getReviewItemsByQueueGuid,
-    getReviewItemByQueueGuid,
     decideQueueItem,
-    proposeNewSourceByQueueGuid,
-    getReviewQueueGuidelines,
+    getAddedSourcesExportUrl,
     getExportUrl,
     getRemovedSourcesExportUrl,
-    getAddedSourcesExportUrl,
+    getReview,
+    getReviewByQueueGuid,
     getReviewGuidelines,
+    getReviewItemByQueueGuid,
+    getReviewItems,
+    getReviewItemsByQueueGuid,
+    getReviewQueueGuidelines,
     getSourceDetails,
+    proposeNewSource,
+    proposeNewSourceByQueueGuid,
     updateReview,
   } from '../lib/api.js';
-  import iso3166 from 'iso-3166-2';
-  import * as rawIso3166 from 'iso-3166';
-  import ReviewHeader from '../components/ReviewHeader.svelte';
-  import SourceViewer from '../components/SourceViewer.svelte';
-  import RemovalReasonModal from '../components/RemovalReasonModal.svelte';
-  import SkipNoteModal from '../components/SkipNoteModal.svelte';
-  import NewSourceModal from '../components/NewSourceModal.svelte';
-  import AllDecisionsModal from '../components/AllDecisionsModal.svelte';
-  import EditMetadataModal from '../components/EditMetadataModal.svelte';
-  import BaseModal from '../components/BaseModal.svelte';
 
   let review = null;
   let currentItem = null;

@@ -1,13 +1,14 @@
 <script>
   import { onMount } from 'svelte';
+
   import {
+    getCompletedReviews,
+    getCountryCollections,
+    getGuidelineTemplates,
+    getInProgressReviews,
+    getReviewProjects,
     startReview,
     startReviewProject,
-    getInProgressReviews,
-    getCompletedReviews,
-    getGuidelineTemplates,
-    getReviewProjects,
-    getCountryCollections,
   } from '../lib/api.js';
 
   let collectionId = '';

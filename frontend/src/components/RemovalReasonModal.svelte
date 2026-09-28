@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+
   import BaseModal from './BaseModal.svelte';
 
   export let show = false;

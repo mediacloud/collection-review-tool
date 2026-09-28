@@ -1,9 +1,10 @@
 <script>
-  import Nav from './Nav.svelte';
-  import DecisionBar from './DecisionBar.svelte';
-  import { loadProject } from './projectStore.js';
-  import { getReviewItemsByQueueGuid, decideQueueItem } from '../../lib/api.js';
   import { onMount } from 'svelte';
+
+  import { decideQueueItem,getReviewItemsByQueueGuid } from '../../lib/api.js';
+  import DecisionBar from './DecisionBar.svelte';
+  import Nav from './Nav.svelte';
+  import { loadProject } from './projectStore.js';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';

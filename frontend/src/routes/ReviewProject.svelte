@@ -1,19 +1,20 @@
 <script>
   import { onMount } from 'svelte';
+
   import AllDecisionsModal from '../components/AllDecisionsModal.svelte';
   import ProjectExportPanel from '../components/ProjectExportPanel.svelte';
   import {
+    generateReviewProjectQueues,
     getReviewProject,
     getReviewProjectAllQueueItems,
-    generateReviewProjectQueues,
-    setReviewProjectName,
-    setReviewProjectEditMetadata,
-    setReviewProjectReviewerLandingVirtualQueues,
     getReviewProjectGuidelines,
-    setReviewProjectGuidelines,
-    publishReviewProject,
-    previewPublishReviewProject,
     MEDIACLOUD_SEARCH_BASE_URL,
+    previewPublishReviewProject,
+    publishReviewProject,
+    setReviewProjectEditMetadata,
+    setReviewProjectGuidelines,
+    setReviewProjectName,
+    setReviewProjectReviewerLandingVirtualQueues,
   } from '../lib/api.js';
 
   let projectGuid = null;
