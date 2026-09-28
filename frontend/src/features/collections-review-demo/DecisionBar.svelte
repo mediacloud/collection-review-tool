@@ -72,7 +72,7 @@
     display: flex;
     gap: 22px;
     margin-top: 10px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-body);
     flex-wrap: wrap;
   }

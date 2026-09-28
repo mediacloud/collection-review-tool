@@ -63,11 +63,17 @@
     /* Typography */
     --v2-sans: 'DM Sans', system-ui, sans-serif;
     --v2-mono: 'DM Mono', ui-monospace, monospace;
+    --v2-text-caption: 0.875rem;
+    --v2-text-secondary: 1.25rem;
+    --v2-text-control: 1.0625rem;
+    --v2-text-body: 1.25rem;
+    --v2-text-heading: 1.375rem;
 
     /* Shell */
     min-height: 100vh;
     background: var(--v2-bg);
     font-family: var(--v2-sans);
+    font-size: var(--v2-text-body);
     position: relative;
   }
 </style>

@@ -80,7 +80,7 @@
     margin-bottom: 0;
   }
   h3 {
-    font-size: 12px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
     color: var(--v2-mute, #9ca0a8);
     text-transform: uppercase;
@@ -88,7 +88,7 @@
     margin: 0 0 10px;
   }
   p {
-    font-size: 15px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body, #5a5e66);
     line-height: 1.65;
     margin: 0 0 8px;
@@ -97,7 +97,7 @@
   ul {
     margin: 6px 0 0;
     padding-left: 20px;
-    font-size: 15px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body, #5a5e66);
     line-height: 1.75;
   }
@@ -108,7 +108,7 @@
     margin-top: 8px;
   }
   .shortcuts > div {
-    font-size: 15px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body, #5a5e66);
     display: flex;
     align-items: center;
@@ -120,7 +120,7 @@
     border-radius: 5px;
     border: 1px solid #ddd;
     background: #f6f6f6;
-    font-size: 13px;
+    font-size: var(--v2-text-caption);
     font-family: var(--v2-mono, 'DM Mono', monospace);
   }
   .kept {

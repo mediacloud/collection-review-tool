@@ -92,7 +92,7 @@
     z-index: 1;
   }
   .modal-title {
-    font-size: 16px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
     color: var(--v2-ink, #1a1c1f);
   }

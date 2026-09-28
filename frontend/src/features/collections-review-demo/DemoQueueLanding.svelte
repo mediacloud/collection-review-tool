@@ -454,7 +454,7 @@
     padding: 32px 120px 0;
   }
   .hero-eyebrow {
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     margin-bottom: 10px;
@@ -480,7 +480,7 @@
     gap: 6px;
     padding: 3px 9px;
     border-radius: 999px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     font-weight: 500;
     font-family: var(--v2-sans);
   }
@@ -491,7 +491,7 @@
   .about-tool {
     margin: 18px 0 0;
     max-width: 920px;
-    font-size: 17px;
+    font-size: var(--v2-text-body);
     line-height: 1.6;
     color: var(--v2-body);
   }
@@ -535,11 +535,11 @@
     justify-content: space-between;
   }
   .card-title {
-    font-size: 18px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
   }
   .card-header-right {
-    font-size: 15px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
   }
@@ -554,7 +554,7 @@
     justify-content: space-between;
   }
   .progress-label {
-    font-size: 16.5px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
   }
   .mono {
@@ -563,7 +563,7 @@
     color: var(--v2-ink);
   }
   .progress-pct {
-    font-size: 15px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
   }
@@ -574,7 +574,7 @@
   /* ── Decision tiles ── */
   .browse-label {
     padding: 0 24px 6px;
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
   }
   .decision-grid {
@@ -587,7 +587,7 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-size: 16.5px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
     font-weight: 500;
   }
@@ -658,7 +658,7 @@
     border-left: 1px solid var(--v2-line-soft);
   }
   .ptotal-label {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -702,7 +702,7 @@
     gap: 18px;
   }
   .modal-title {
-    font-size: 19px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
     color: var(--v2-ink);
     display: flex;
@@ -710,13 +710,13 @@
     gap: 10px;
   }
   .modal-count {
-    font-size: 15px;
+    font-size: var(--v2-text-secondary);
     font-weight: 400;
     color: var(--v2-mute);
     font-family: var(--v2-mono);
   }
   .modal-subtitle {
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     margin-top: 3px;
   }
@@ -736,7 +736,7 @@
     padding: 32px 24px;
     text-align: center;
     color: var(--v2-mute);
-    font-size: 14px;
+    font-size: var(--v2-text-body);
   }
   .bucket-list {
     max-height: 400px;
@@ -761,18 +761,18 @@
     min-width: 0;
   }
   .bucket-source {
-    font-size: 14.5px;
+    font-size: var(--v2-text-body);
     font-weight: 500;
     color: var(--v2-ink);
   }
   .bucket-meta {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     margin-top: 2px;
   }
   .bucket-reason {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-body);
     font-style: italic;
     margin-top: 4px;
@@ -792,7 +792,7 @@
     border: 1px solid var(--v2-line);
     background: var(--v2-card);
     color: var(--v2-body);
-    font-size: 12.5px;
+    font-size: var(--v2-text-control);
     font-family: var(--v2-sans);
     cursor: pointer;
     transition:
@@ -813,7 +813,7 @@
     border: 1px solid var(--v2-line);
     border-radius: 8px;
     padding: 7px 10px;
-    font-size: 13px;
+    font-size: var(--v2-text-control);
     font-family: var(--v2-sans);
     color: var(--v2-ink);
     resize: none;

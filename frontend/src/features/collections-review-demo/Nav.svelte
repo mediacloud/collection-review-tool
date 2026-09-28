@@ -172,7 +172,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 17px;
+    font-size: var(--v2-text-body);
     font-weight: 600;
     letter-spacing: -0.2px;
     cursor: pointer;
@@ -212,7 +212,7 @@
   .nav-tab {
     padding: 7px 14px;
     border-radius: 999px;
-    font-size: 15.5px;
+    font-size: var(--v2-text-control);
     font-weight: 400;
     background: transparent;
     color: var(--v2-nav-mute);
@@ -242,7 +242,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-nav-mute);
     white-space: nowrap;
     flex-shrink: 0;

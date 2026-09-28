@@ -847,7 +847,7 @@
   }
   .hero-body {
     max-width: 480px;
-    font-size: 17px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
     line-height: 1.6;
     margin: 22px 0 0;
@@ -863,6 +863,7 @@
   .btn {
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
     transition: opacity 0.15s;
+    font-size: 1.25rem;
   }
   .btn-primary {
     background: var(--v2-ink);
@@ -908,12 +909,12 @@
     place-items: center;
   }
   .qrc-title {
-    font-size: 15px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
   }
   .qrc-hint {
     padding: 12px 22px 0;
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     margin: 0;
   }
@@ -921,7 +922,7 @@
     padding: 14px 22px 8px;
   }
   .qrc-input-label {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     letter-spacing: 0.5px;
     text-transform: uppercase;
@@ -953,14 +954,14 @@
     background: transparent;
     padding: 0;
     font-family: var(--v2-mono);
-    font-size: 22px;
+    font-size: var(--v2-text-heading);
     font-weight: 500;
     color: var(--v2-ink);
     letter-spacing: -0.3px;
   }
 
   .qrc-not-found {
-    font-size: 14px;
+    font-size: var(--v2-text-body);
     color: var(--v2-red);
     font-weight: 500;
     white-space: nowrap;
@@ -976,7 +977,7 @@
     background: #fff;
   }
   .qrc-option-label {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     letter-spacing: 0.5px;
     text-transform: uppercase;
@@ -987,7 +988,7 @@
     align-items: center;
     justify-content: space-between;
     margin-top: 6px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-control);
     font-weight: 500;
     color: var(--v2-ink);
   }
@@ -1002,7 +1003,7 @@
     cursor: pointer;
     width: 100%;
     font-family: var(--v2-sans);
-    font-size: 13.5px;
+    font-size: var(--v2-text-control);
     font-weight: 500;
     color: var(--v2-ink);
   }
@@ -1048,7 +1049,7 @@
     align-items: center;
   }
   .qrc-footer-hint {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
   }
   .hint-err {
@@ -1061,9 +1062,9 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 3px 9px;
+    padding: 6px 15px;
     border-radius: 999px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     font-weight: 500;
     font-family: var(--v2-sans);
   }
@@ -1107,7 +1108,7 @@
     gap: 14px;
   }
   .section-num {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     font-family: var(--v2-mono);
     color: var(--v2-mute);
     font-weight: 500;
@@ -1139,7 +1140,7 @@
   .projects-thead {
     display: grid;
     grid-template-columns: 42px 1.6fr 1fr 1.1fr 30px;
-    font-size: 16px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-weight: 500;
     letter-spacing: 0.5px;
@@ -1179,27 +1180,27 @@
     display: grid;
     place-items: center;
     font-weight: 600;
-    font-size: 14.5px;
+    font-size: var(--v2-text-body);
     flex-shrink: 0;
   }
   .project-meta {
     min-width: 0;
   }
   .project-name {
-    font-size: 16px;
+    font-size: var(--v2-text-body);
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .project-seeds {
-    font-size: 15px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     margin-top: 1px;
   }
   .project-queues {
-    font-size: 16px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
   }
 
@@ -1227,7 +1228,7 @@
     background: var(--v2-ink);
   }
   .progress-pct {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-body);
     font-family: var(--v2-mono);
     min-width: 36px;
@@ -1247,7 +1248,7 @@
     font-family: var(--v2-sans);
   }
   .pagination-counter {
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     flex: 1;
@@ -1280,13 +1281,13 @@
     gap: 14px;
   }
   .card-title {
-    font-size: 17.5px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
     color: var(--v2-ink);
   }
 
   .review-row {
-    padding: 14px 22px;
+    padding: 14px 48px 14px 22px;
     display: grid;
     grid-template-columns: 1.6fr 1fr 90px;
     gap: 14px;
@@ -1314,11 +1315,11 @@
     min-width: 0;
   }
   .review-name {
-    font-size: 15.5px;
+    font-size: var(--v2-text-body);
     font-weight: 500;
   }
   .review-id {
-    font-size: 15px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     margin-top: 1px;
@@ -1346,7 +1347,7 @@
   /* ── Modal content ── */
   .modal-subtitle {
     padding: 0 24px 4px;
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-sans);
     margin: 0;
@@ -1360,7 +1361,7 @@
   }
   .form-label {
     display: block;
-    font-size: 12px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     text-transform: uppercase;
     letter-spacing: 0.6px;
@@ -1375,7 +1376,7 @@
     border: 1.5px solid var(--v2-line, #e8e9eb);
     background: #fff;
     font-family: var(--v2-sans);
-    font-size: 14.5px;
+    font-size: var(--v2-text-control);
     color: var(--v2-ink);
     outline: none;
     box-sizing: border-box;
@@ -1395,7 +1396,7 @@
     border-color: var(--v2-accent);
   }
   .form-hint {
-    font-size: 12.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     margin-top: 5px;
   }
@@ -1435,12 +1436,12 @@
     gap: 2px;
   }
   .radio-label {
-    font-size: 14px;
+    font-size: var(--v2-text-control);
     font-weight: 500;
     color: var(--v2-ink);
   }
   .radio-hint {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
   }
 
@@ -1470,12 +1471,12 @@
   .geo-check-label {
     flex: 1;
     min-width: 0;
-    font-size: 13.5px;
+    font-size: var(--v2-text-control);
     color: var(--v2-ink);
   }
   .geo-tag-id {
     font-family: var(--v2-mono);
-    font-size: 12px;
+    font-size: var(--v2-text-caption);
     color: var(--v2-mute);
   }
 
@@ -1484,7 +1485,7 @@
     justify-content: center;
     border-radius: 12px;
     padding: 13px 22px;
-    font-size: 15px;
+    font-size: var(--v2-text-control);
     margin-top: 4px;
   }
 

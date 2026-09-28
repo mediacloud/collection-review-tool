@@ -102,7 +102,7 @@
     color: var(--v2-ink);
   }
   .section-count {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
   }
@@ -120,7 +120,7 @@
   .projects-thead {
     display: grid;
     grid-template-columns: 42px 1.6fr 1fr 1.1fr 30px;
-    font-size: 12px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-weight: 600;
     letter-spacing: 0.6px;
@@ -161,27 +161,27 @@
     display: grid;
     place-items: center;
     font-weight: 600;
-    font-size: 14.5px;
+    font-size: var(--v2-text-body);
     flex-shrink: 0;
   }
   .project-meta {
     min-width: 0;
   }
   .project-name {
-    font-size: 14.5px;
+    font-size: var(--v2-text-body);
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .project-seeds {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     margin-top: 1px;
   }
   .project-queues {
-    font-size: 14.5px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
   }
 
@@ -206,7 +206,7 @@
     background: var(--v2-skipped);
   }
   .progress-pct {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-body);
     font-family: var(--v2-mono);
     min-width: 36px;
