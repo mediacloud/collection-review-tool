@@ -494,18 +494,18 @@
         </button>
       {/each}
     </div>
+    {#if projectsTotal > 10}
+      <div class="pagination">
+        <button class="btn btn-sm" disabled={!hasPrevPage} on:click={() => projectsPage--}
+          >← Previous</button
+        >
+        <span class="pagination-counter">{projectsStart + 1}–{projectsEnd} of {projectsTotal}</span>
+        <button class="btn btn-sm" disabled={!hasNextPage} on:click={() => projectsPage++}
+          >Next →</button
+        >
+      </div>
+    {/if}
   </div>
-  {#if projectsTotal > 10}
-    <div class="pagination">
-      <button class="btn btn-sm" disabled={!hasPrevPage} on:click={() => projectsPage--}
-        >← Previous</button
-      >
-      <span class="pagination-counter">{projectsStart + 1}–{projectsEnd} of {projectsTotal}</span>
-      <button class="btn btn-sm" disabled={!hasNextPage} on:click={() => projectsPage++}
-        >Next 10 →</button
-      >
-    </div>
-  {/if}
 
   <!-- ─────────────── LOWER CARDS ─────────────── -->
   <div class="lower-section">
@@ -1097,7 +1097,7 @@
 
   /* ── Section heading ── */
   .section-header {
-    padding: 28px 120px 8px;
+    padding: 18px 120px 8px;
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
@@ -1243,8 +1243,8 @@
   .pagination {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px 22px 0;
+    gap: 40px;
+    padding: 22px 0 0;
     font-family: var(--v2-sans);
   }
   .pagination-counter {
@@ -1262,7 +1262,7 @@
 
   /* ── Lower section ── */
   .lower-section {
-    padding: 44px 120px 0;
+    padding: 22px 120px 0;
     display: flex;
     flex-direction: column;
     gap: 44px;
