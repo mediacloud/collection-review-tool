@@ -1,4 +1,4 @@
-import './styles/buttons.css';
+import './styles/global.css';
 
 import App from './App.svelte';
 

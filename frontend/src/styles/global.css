@@ -1,4 +1,9 @@
-/* Match Svelte's class + scope specificity; local variants load afterwards. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
 .demo-root .btn {
   display: inline-flex;
   align-items: center;
@@ -37,8 +42,8 @@
   font-family: var(--v2-sans);
   text-align: left;
   transition:
-      border-color 0.2s ease,
-      background 0.2s ease;
+    border-color 0.2s ease,
+    background 0.2s ease;
   width: 100%;
 }
 
