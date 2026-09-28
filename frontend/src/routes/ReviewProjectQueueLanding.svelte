@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte';
+
   import AllDecisionsModal from '../components/AllDecisionsModal.svelte';
-  import { getReviewProject, getReviewItemsByQueueGuid } from '../lib/api.js';
+  import { getReviewItemsByQueueGuid,getReviewProject } from '../lib/api.js';
 
   let projectGuid = null;
   let queueGuid = null;

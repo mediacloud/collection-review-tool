@@ -1,5 +1,5 @@
 <script>
-  import { getReviewProjectExportUrl, getReviewProjectAuditExportUrl } from '../lib/api.js';
+  import { getReviewProjectAuditExportUrl,getReviewProjectExportUrl } from '../lib/api.js';
 
   /** @type {string} */
   export let projectGuid = '';

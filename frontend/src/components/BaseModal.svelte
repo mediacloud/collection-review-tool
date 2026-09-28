@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onDestroy,onMount } from 'svelte';
 
   export let show = false;
   export let onClose = () => {};

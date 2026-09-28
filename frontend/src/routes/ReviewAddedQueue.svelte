@@ -1,20 +1,20 @@
 <script>
+  import * as rawIso3166 from 'iso-3166';
+  import iso3166 from 'iso-3166-2';
   import { onMount } from 'svelte';
 
-  import iso3166 from 'iso-3166-2';
-  import * as rawIso3166 from 'iso-3166';
+  import BaseModal from '../components/BaseModal.svelte';
   import EditMetadataModal from '../components/EditMetadataModal.svelte';
   import NewSourceModal from '../components/NewSourceModal.svelte';
-  import SourceViewer from '../components/SourceViewer.svelte';
-  import BaseModal from '../components/BaseModal.svelte';
   import RemovalReasonModal from '../components/RemovalReasonModal.svelte';
   import SkipNoteModal from '../components/SkipNoteModal.svelte';
+  import SourceViewer from '../components/SourceViewer.svelte';
   import {
-    getReviewProject,
+    decideQueueItem,
     getAddedItemsByProjectGuid,
+    getReviewProject,
     proposeNewSourceByQueueGuid,
     updateQueueItemSourceMetadata,
-    decideQueueItem,
   } from '../lib/api.js';
 
   let projectGuid = null;

@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { getReviewProject, getRemovedItemsByProjectGuid, decideQueueItem } from '../lib/api.js';
+
+  import { decideQueueItem,getRemovedItemsByProjectGuid, getReviewProject } from '../lib/api.js';
 
   let projectGuid = null;
   let project = null;

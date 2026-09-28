@@ -1,24 +1,25 @@
 <script>
   import { onMount } from 'svelte';
-  import Home from './routes/Home.svelte';
-  import DemoShell from './features/collections-review-demo/DemoShell.svelte';
-  import DemoIndex from './features/collections-review-demo/DemoIndex.svelte';
+
+  import DemoAllProjects from './features/collections-review-demo/DemoAllProjects.svelte';
+  import DemoDecisions from './features/collections-review-demo/DemoDecisions.svelte';
   import DemoHome from './features/collections-review-demo/DemoHome.svelte';
+  import DemoIndex from './features/collections-review-demo/DemoIndex.svelte';
   import DemoProject from './features/collections-review-demo/DemoProject.svelte';
   import DemoQueueLanding from './features/collections-review-demo/DemoQueueLanding.svelte';
   import DemoReview from './features/collections-review-demo/DemoReview.svelte';
-  import DemoAllProjects from './features/collections-review-demo/DemoAllProjects.svelte';
-  import DemoDecisions from './features/collections-review-demo/DemoDecisions.svelte';
+  import DemoShell from './features/collections-review-demo/DemoShell.svelte';
+  import Home from './routes/Home.svelte';
   import RootStatic from './routes/RootStatic.svelte';
 
   const DEMO_ON = import.meta.env.VITE_DEMO_MODE === 'true';
   import Review from './routes/Review.svelte';
-  import ReviewProject from './routes/ReviewProject.svelte';
-  import ReviewSkippedQueue from './routes/ReviewSkippedQueue.svelte';
   import ReviewAddedQueue from './routes/ReviewAddedQueue.svelte';
-  import ReviewRemovedQueue from './routes/ReviewRemovedQueue.svelte';
   import ReviewKeptQueue from './routes/ReviewKeptQueue.svelte';
+  import ReviewProject from './routes/ReviewProject.svelte';
   import ReviewProjectQueueLanding from './routes/ReviewProjectQueueLanding.svelte';
+  import ReviewRemovedQueue from './routes/ReviewRemovedQueue.svelte';
+  import ReviewSkippedQueue from './routes/ReviewSkippedQueue.svelte';
 
   let currentPath = window.location.pathname;
 

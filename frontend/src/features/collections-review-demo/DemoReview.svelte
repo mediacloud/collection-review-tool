@@ -1,14 +1,15 @@
 <script>
-  import Nav from './Nav.svelte';
+  import { onMount } from 'svelte';
+
   import {
+    decideQueueItem,
     getReviewByQueueGuid,
     getReviewItemsByQueueGuid,
-    decideQueueItem,
+    getReviewQueueGuidelines,
     proposeNewSourceByQueueGuid,
     updateQueueItemSourceMetadata,
-    getReviewQueueGuidelines,
   } from '../../lib/api.js';
-  import { onMount } from 'svelte';
+  import Nav from './Nav.svelte';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';

@@ -1,15 +1,20 @@
 <script>
   import { onMount } from 'svelte';
-  import Nav from './Nav.svelte';
-  import Modal from './Modal.svelte';
-  import HelpModal from './HelpModal.svelte';
+
   import {
-    projectsStore,
-    inProgressProjects,
+    generateReviewProjectQueues,
+    getCountryCollections,
+    startReviewProject,
+  } from '../../lib/api.js';
+  import HelpModal from './HelpModal.svelte';
+  import Modal from './Modal.svelte';
+  import Nav from './Nav.svelte';
+  import {
     completedProjects,
+    inProgressProjects,
     loadProjects,
+    projectsStore,
   } from './projectStore.js';
-  import { startReviewProject, generateReviewProjectQueues, getCountryCollections } from '../../lib/api.js';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';
@@ -23,9 +28,7 @@
 
   $: qrCollectionId = Number(qrId);
   $: qrHasValidId = Number.isInteger(qrCollectionId) && qrCollectionId > 0;
-  $: qrBorderColor = qrError || (qrStarted && !qrHasValidId)
-      ? 'var(--v2-red)'
-      : 'var(--v2-line)';
+  $: qrBorderColor = qrError || (qrStarted && !qrHasValidId) ? 'var(--v2-red)' : 'var(--v2-line)';
 
   function onQrType(e) {
     qrId = e.target.value.replace(/[^0-9]/g, '');
@@ -67,15 +70,13 @@
     } catch (error) {
       console.error(error);
 
-      qrError =
-        error.response?.data?.error || error.message || 'Could not start the quick review.';
+      qrError = error.response?.data?.error || error.message || 'Could not start the quick review.';
     } finally {
       qrStarting = false;
     }
   }
 
   onMount(() => {
-
     loadProjects().catch((error) => {
       console.error('Failed to load projects'), error;
     });
@@ -187,7 +188,9 @@
 
   function toggleCountryCollection(collectionId) {
     if (selectedCountryCollectionIds.includes(collectionId)) {
-      selectedCountryCollectionIds = selectedCountryCollectionIds.filter((id) => id !== collectionId);
+      selectedCountryCollectionIds = selectedCountryCollectionIds.filter(
+        (id) => id !== collectionId
+      );
     } else {
       selectedCountryCollectionIds = [...selectedCountryCollectionIds, collectionId];
     }
@@ -368,7 +371,6 @@
               <span class="qrc-not-found">Error</span>
             {/if}
           </div>
-
         </div>
 
         <!-- Options row -->
@@ -394,9 +396,9 @@
         <!-- Card footer -->
         <div class="qrc-footer">
           <span class="qrc-footer-hint">
-            {#if qrError}<span class="hint-err">{qrError}</span
-              >{:else if qrStarting}Creating review queue...{:else if qrStarted && !qrHasValidId}<span
-                class="hint-err">Enter a valid collection ID</span
+            {#if qrError}<span class="hint-err">{qrError}</span>{:else if qrStarting}Creating review
+              queue...{:else if qrStarted && !qrHasValidId}<span class="hint-err"
+                >Enter a valid collection ID</span
               >{:else}&nbsp;{/if}
           </span>
           <button class="btn btn-primary" disabled={qrStarting} on:click={startReview}>
@@ -984,7 +986,6 @@
     font-weight: 500;
     white-space: nowrap;
   }
-
 
   .qrc-options {
     padding: 12px 22px 4px;
