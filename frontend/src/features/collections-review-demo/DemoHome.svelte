@@ -861,19 +861,6 @@
 
   /* ── Buttons ── */
   .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border-radius: 999px;
-    background: var(--v2-card);
-    color: var(--v2-ink);
-    border: 1px solid var(--v2-line);
-    font-family: var(--v2-sans);
-    font-size: 13.5px;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
     transition: opacity 0.15s;
   }
@@ -888,14 +875,6 @@
   .btn-primary:disabled {
     opacity: 0.45;
     cursor: not-allowed;
-  }
-  .btn-lg {
-    padding: 12px 22px;
-    font-size: 15px;
-  }
-  .btn-sm {
-    padding: 7px 12px;
-    font-size: 12.5px;
   }
 
   /* ── QuickReviewCard ── */

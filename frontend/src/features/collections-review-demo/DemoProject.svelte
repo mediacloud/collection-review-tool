@@ -1456,19 +1456,6 @@
 
   /* ── Buttons ── */
   .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border-radius: 999px;
-    background: var(--v2-card);
-    color: var(--v2-ink);
-    border: 1px solid var(--v2-line);
-    font-family: var(--v2-sans);
-    font-size: 13.5px;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
   }
   .btn-primary {
@@ -1478,10 +1465,6 @@
     box-shadow:
       0 1px 0 rgba(0, 0, 0, 0.04),
       inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  }
-  .btn-sm {
-    padding: 7px 12px;
-    font-size: 12.5px;
   }
   .btn-dim {
     opacity: 0.45;
@@ -1556,22 +1539,6 @@
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 8px;
-  }
-  .decision-btn {
-    padding: 14px 16px;
-    border-radius: 12px;
-    border: 1px solid var(--v2-line);
-    background: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    font-family: var(--v2-sans);
-    text-align: left;
-    transition:
-      border-color 0.2s ease,
-      background 0.2s ease;
-    width: 100%;
   }
   .decision-label {
     display: inline-flex;

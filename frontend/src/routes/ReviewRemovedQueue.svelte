@@ -343,23 +343,6 @@
     align-items: center;
   }
 
-  .btn-inline {
-    padding: 6px 10px;
-    border-radius: 999px;
-    border: 1px solid #d0d7de;
-    background: #fff;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 12px;
-    color: #34495e;
-  }
 
-  .btn-inline:hover:not(:disabled) {
-    background-color: #f6f8fa;
-  }
 
-  .btn-inline:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
 </style>
