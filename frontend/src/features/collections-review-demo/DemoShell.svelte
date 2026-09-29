@@ -1,4 +1,6 @@
 <script>
+  import BackToTop from './BackToTop.svelte';
+
   // Layout wrapper: provides CSS tokens and fonts for all demo screens.
   // Screen routing is handled by App.svelte; use <slot> to render children.
 </script>
@@ -14,6 +16,7 @@
 
 <div class="demo-root">
   <slot />
+  <BackToTop />
 </div>
 
 <style>
