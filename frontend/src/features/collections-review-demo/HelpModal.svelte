@@ -124,12 +124,12 @@
     font-family: var(--v2-mono, 'DM Mono', monospace);
   }
   .kept {
-    color: #e25c40;
+    color: var(--v2-kept);
   }
   .removed {
-    color: #1a1c1f;
+    color: var(--v2-removed);
   }
   .skipped {
-    color: #9ca0a8;
+    color: var(--v2-skipped);
   }
 </style>

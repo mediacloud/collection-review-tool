@@ -415,7 +415,7 @@
         <h2 class="done-h2">Queue complete</h2>
         <p class="done-sub">You've reviewed all {items.length} sources in this demo session.</p>
         <div class="done-tally">
-          {#each [{ l: 'Kept', n: counts.totalKept, c: '#E25C40' }, { l: 'Removed', n: counts.totalRemoved, c: '#1A1C1F' }, { l: 'Skipped', n: counts.totalSkipped, c: '#9CA0A8' }, { l: 'Added', n: counts.totalAdded, c: '#F5A48A' }] as t}
+          {#each [{ l: 'Kept', n: counts.totalKept, c: 'var(--v2-kept)' }, { l: 'Removed', n: counts.totalRemoved, c: 'var(--v2-removed)' }, { l: 'Skipped', n: counts.totalSkipped, c: 'var(--v2-skipped)' }, { l: 'Added', n: counts.totalAdded, c: 'var(--v2-added)' }] as t}
             <div class="done-stat">
               <span class="done-dot" style:background={t.c}></span>
               <span class="done-n" style:color={t.c}>{t.n}</span>
@@ -548,10 +548,10 @@
               <h1 class="source-title">{src.title}</h1>
               {#if currentDecision}
                 {@const VCOLORS = {
-                  kept: '#E25C40',
-                  removed: '#1A1C1F',
-                  added: '#F5A48A',
-                  skipped: '#9CA0A8',
+                  kept: 'var(--v2-kept)',
+                  removed: 'var(--v2-removed)',
+                  added: 'var(--v2-added)',
+                  skipped: 'var(--v2-skipped)',
                 }}
                 {@const VLABELS = {
                   kept: 'Kept',
@@ -562,7 +562,7 @@
                 <div class="chips-row">
                   <span
                     class="chip chip-decided"
-                    style:background="{VCOLORS[currentDecision.verdict]}1a"
+                    style:background={`var(--v2-${currentDecision.verdict}-soft)`}
                     style:color={VCOLORS[currentDecision.verdict]}
                   >
                     <span class="chip-dot" style:background={VCOLORS[currentDecision.verdict]}
@@ -786,7 +786,7 @@
             <span class="sidebar-card-title">Status</span>
           </div>
           <div class="status-grid">
-            {#each [{ l: 'kept', n: counts.totalKept, color: '#E25C40' }, { l: 'removed', n: counts.totalRemoved, color: '#1A1C1F' }, { l: 'skipped', n: counts.totalSkipped, color: '#9CA0A8' }, { l: 'added', n: counts.totalAdded, color: '#F5A48A' }] as x}
+            {#each [{ l: 'kept', n: counts.totalKept, color: 'var(--v2-kept)' }, { l: 'removed', n: counts.totalRemoved, color: 'var(--v2-removed)' }, { l: 'skipped', n: counts.totalSkipped, color: 'var(--v2-skipped)' }, { l: 'added', n: counts.totalAdded, color: 'var(--v2-added)' }] as x}
               <div class="status-cell">
                 <div class="status-label">
                   <span class="status-dot" style:background={x.color}></span>
@@ -814,7 +814,7 @@
           <div>
             <div
               class="modal-title"
-              style:color={reasonModal.pendingVerdict === 'keep' ? '#E25C40' : '#1A1C1F'}
+              style:color={reasonModal.pendingVerdict === 'keep' ? 'var(--v2-kept)' : 'var(--v2-removed)'}
             >
               {reasonVerbLabel}: {src?.title}
             </div>
@@ -857,7 +857,7 @@
           <button
             class="btn btn-primary"
             class:btn-dim={!reasonCanConfirm}
-            style:background={reasonModal.pendingVerdict === 'keep' ? '#E25C40' : '#1A1C1F'}
+            style:background={reasonModal.pendingVerdict === 'keep' ? 'var(--v2-kept)' : 'var(--v2-removed)'}
             on:click={confirmReason}
           >
             Confirm {reasonVerbLabel}
@@ -1397,16 +1397,16 @@
   /* Active highlights for re-decide (Fix 3) */
   .dock-active-keep {
     box-shadow:
-      0 0 0 3px rgba(226, 92, 64, 0.35),
+      0 0 0 3px color-mix(in srgb, var(--v2-kept) 35%, transparent),
       inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
   }
   .dock-active-remove {
-    box-shadow: 0 0 0 3px rgba(26, 28, 31, 0.22) !important;
-    background: #f4f4f4 !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--v2-removed) 22%, transparent) !important;
+    background: var(--v2-removed-soft) !important;
   }
   .dock-active-skip {
-    box-shadow: 0 0 0 3px rgba(156, 160, 168, 0.35) !important;
-    background: #f7f7f8 !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--v2-skipped) 35%, transparent) !important;
+    background: var(--v2-skipped-soft) !important;
   }
   .kbd {
     padding: 1.5px 6px;

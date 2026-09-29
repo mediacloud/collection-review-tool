@@ -46,14 +46,14 @@
     --v2-accent-ink: #b8431f;
 
     /* Decision palette */
-    --v2-kept: #e25c40;
-    --v2-kept-soft: #fce5dd;
-    --v2-removed: #1a1c1f;
-    --v2-removed-soft: #e1e1de;
-    --v2-added: #f5a48a;
-    --v2-added-soft: #fdede5;
-    --v2-skipped: #9ca0a8;
-    --v2-skipped-soft: #e8e8e5;
+    --v2-kept: #40b36a;
+    --v2-kept-soft: #e8f3ec;
+    --v2-removed: #c8362f;
+    --v2-removed-soft: #f8e8e8;
+    --v2-added: #2257e6;
+    --v2-added-soft: #e8edfb;
+    --v2-skipped: #6b7280;
+    --v2-skipped-soft: #f0f1f3;
     --v2-undecided: #ebeae5;
 
     /* Status */

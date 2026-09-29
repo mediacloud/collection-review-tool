@@ -28,10 +28,10 @@
   $: heroTitle = isQueueLevel ? `${q?.id ?? 'Queue'} · Decisions` : 'All Decisions';
 
   const VERDICT_COLORS = {
-    kept: '#E25C40',
-    removed: '#1A1C1F',
-    added: '#F5A48A',
-    skipped: '#9CA0A8',
+    kept: 'var(--v2-kept)',
+    removed: 'var(--v2-removed)',
+    added: 'var(--v2-added)',
+    skipped: 'var(--v2-skipped)',
   };
 
   const VERDICT_LABELS = {
@@ -214,18 +214,18 @@
       <span class="chip chip-neutral">{allDecisions.length} total decisions</span>
       {#if counts.kept}<span
           class="chip"
-          style:background="rgba(226,92,64,.1)"
-          style:color="#E25C40">{counts.kept} kept</span
+          style:background="var(--v2-kept-soft)"
+          style:color="var(--v2-kept)">{counts.kept} kept</span
         >{/if}
-      {#if counts.removed}<span class="chip" style:background="#f0f0f0" style:color="#1A1C1F"
+      {#if counts.removed}<span class="chip" style:background="var(--v2-removed-soft)" style:color="var(--v2-removed)"
           >{counts.removed} removed</span
         >{/if}
       {#if counts.added}<span
           class="chip"
-          style:background="rgba(245,164,138,.18)"
-          style:color="#c04a2a">{counts.added} added</span
+          style:background="var(--v2-added-soft)"
+          style:color="var(--v2-added)">{counts.added} added</span
         >{/if}
-      {#if counts.skipped}<span class="chip" style:background="#f3f3f4" style:color="#9CA0A8"
+      {#if counts.skipped}<span class="chip" style:background="var(--v2-skipped-soft)" style:color="var(--v2-skipped)"
           >{counts.skipped} skipped</span
         >{/if}
     </div>
@@ -320,7 +320,7 @@
               <div>
                 <span
                   class="verdict-chip"
-                  style:background="{VERDICT_COLORS[d.verdict]}18"
+                  style:background={`var(--v2-${d.verdict}-soft)`}
                   style:color={VERDICT_COLORS[d.verdict]}
                 >
                   <span class="verdict-dot" style:background={VERDICT_COLORS[d.verdict]}></span>

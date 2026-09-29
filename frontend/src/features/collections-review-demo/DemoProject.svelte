@@ -80,16 +80,16 @@
 
   const VERDICT_LABELS = { kept: 'Kept', removed: 'Removed', added: 'Added', skipped: 'Skipped' };
   const VERDICT_COLORS = {
-    kept: '#E25C40',
-    removed: '#1A1C1F',
-    added: '#F5A48A',
-    skipped: '#9CA0A8',
+    kept: 'var(--v2-kept)',
+    removed: 'var(--v2-removed)',
+    added: 'var(--v2-added)',
+    skipped: 'var(--v2-skipped)',
   };
   const DECISION_TILES = [
-    { k: 'kept', label: 'Kept', color: '#E25C40' },
-    { k: 'removed', label: 'Removed', color: '#1A1C1F' },
-    { k: 'added', label: 'Added', color: '#F5A48A' },
-    { k: 'skipped', label: 'Skipped', color: '#9CA0A8' },
+    { k: 'kept', label: 'Kept', color: 'var(--v2-kept)' },
+    { k: 'removed', label: 'Removed', color: 'var(--v2-removed)' },
+    { k: 'added', label: 'Added', color: 'var(--v2-added)' },
+    { k: 'skipped', label: 'Skipped', color: 'var(--v2-skipped)' },
   ];
 
   $: projectStats = p?.stats ?? {
@@ -578,7 +578,7 @@
             <button
               class="decision-btn"
               style:border-color={highlight === d.k ? d.color : 'var(--v2-line)'}
-              style:background={highlight === d.k ? `${d.color}0e` : '#fff'}
+              style:background={highlight === d.k ? `color-mix(in srgb, ${d.color} 5.5%, transparent)` : '#fff'}
               on:mouseenter={() => (highlight = d.k)}
               on:mouseleave={() => (highlight = null)}
               on:focus={() => (highlight = d.k)}
