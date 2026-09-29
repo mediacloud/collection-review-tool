@@ -1557,6 +1557,7 @@
   /* ── Reason modal (Fix 5) ── */
   .reason-textarea {
     width: 100%;
+    box-sizing: border-box;
     padding: 12px 14px;
     border-radius: 10px;
     border: 1.5px solid var(--v2-line);
