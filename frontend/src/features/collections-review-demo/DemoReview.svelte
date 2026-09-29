@@ -1,4 +1,6 @@
 <script>
+  import DOMPurify from 'dompurify';
+  import { marked } from 'marked';
   import { onMount } from 'svelte';
 
   import {
@@ -25,6 +27,11 @@
   let loadError = '';
   let saving = false;
   let guidelines = '';
+  $: guidelinesHtml = DOMPurify.sanitize(marked.parse(guidelines, { async: false }), {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ['style'],
+    FORBID_ATTR: ['style'],
+  });
   let guidelinesLoading = true;
   let guidelinesError = '';
 
@@ -765,7 +772,7 @@
               </div>
             {:else if guidelines}
               <div class="guidelines-content">
-                {guidelines}
+                {@html guidelinesHtml}
               </div>
             {:else}
               <div class="guidelines-message">No guidelines provided.</div>
@@ -1446,13 +1453,52 @@
     gap: 6px;
   }
   .guidelines-content {
-    white-space: pre-wrap;
     overflow-wrap: anywhere;
     max-height: 320px;
     overflow-y: auto;
     font-size: var(--v2-text-body);
     line-height: 1.6;
     color: var(--v2-body);
+  }
+
+  .guidelines-content :global(h1),
+  .guidelines-content :global(h2),
+  .guidelines-content :global(h3),
+  .guidelines-content :global(h4),
+  .guidelines-content :global(h5),
+  .guidelines-content :global(h6) {
+    font-size: var(--v2-text-heading);
+    line-height: 1.3;
+    color: var(--v2-ink);
+    margin: 1em 0 0.5em;
+  }
+  .guidelines-content :global(p),
+  .guidelines-content :global(ul),
+  .guidelines-content :global(ol),
+  .guidelines-content :global(blockquote),
+  .guidelines-content :global(pre) {
+    margin: 0 0 0.75em;
+  }
+  .guidelines-content :global(ul),
+  .guidelines-content :global(ol) {
+    padding-left: 1.5em;
+  }
+  .guidelines-content :global(a) {
+    color: var(--v2-accent-ink);
+    text-decoration: underline;
+  }
+  .guidelines-content :global(blockquote) {
+    border-left: 2px solid var(--v2-line);
+    padding-left: 0.75em;
+  }
+  .guidelines-content :global(pre) {
+    white-space: pre-wrap;
+  }
+  .guidelines-content :global(code) {
+    font-family: var(--v2-mono);
+  }
+  .guidelines-content :global(> :first-child) {
+    margin-top: 0;
   }
 
   .guidelines-message {
