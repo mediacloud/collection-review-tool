@@ -30,7 +30,9 @@
     }
   }
 
-  $: unavailable = loading ? 'Loading projects and queues...' : loadError || (project ? 'No reviewer queues available.' : 'No review projects available.');
+  $: unavailable = loading
+    ? 'Loading projects and queues...'
+    : loadError || (project ? 'No reviewer queues available.' : 'No review projects available.');
 
   $: ROLES = [
     {
@@ -73,9 +75,7 @@
     <div class="index-header">
       <div class="eyebrow">V2 redesign · demo</div>
       <h1 class="index-h1">Collections Review Portal</h1>
-      <p class="index-sub">
-        Choose a role below to enter the interface.
-      </p>
+      <p class="index-sub">Choose a role below to enter the interface.</p>
     </div>
 
     <div class="roles-grid">
@@ -87,7 +87,11 @@
           </div>
           <div class="screens-list">
             {#each role.screens as s}
-              <button class="screen-card" disabled={!s.path} on:click={() => s.path && onNavigate(s.path)}>
+              <button
+                class="screen-card"
+                disabled={!s.path}
+                on:click={() => s.path && onNavigate(s.path)}
+              >
                 <div class="screen-card-left">
                   <div class="screen-title">{s.title}</div>
                   <div class="screen-sub">{s.sub}</div>
@@ -204,7 +208,7 @@
     padding: 0 4px;
   }
   .role-label {
-    font-size: var(--v2-text-secondary);
+    font-size: var(--v2-text-heading);
     font-family: var(--v2-mono);
     text-transform: uppercase;
     letter-spacing: 0.8px;
