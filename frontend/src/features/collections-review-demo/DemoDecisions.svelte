@@ -57,6 +57,7 @@
 
     return {
       id: item.id,
+      is_new_source: item.is_new_source === true,
       source: item.source_label || `Source ${item.source_id ?? item.id}`,
       homepage: item.source_homepage || '',
       country: metadata.pub_country || '—',
@@ -120,12 +121,20 @@
   let changing = null; // { source, queueId, currentVerdict, reason }
   let newVerdict = '';
   let newReason = '';
+  $: editVerdicts = allowedVerdicts(changing);
   $: reasonRequired = newVerdict === 'removed';
-  $: canConfirm = newVerdict && (!reasonRequired || newReason.trim());
+  $: canConfirm = editVerdicts.includes(newVerdict) && (!reasonRequired || newReason.trim());
+
+  function allowedVerdicts(decision) {
+    return decision?.is_new_source === true
+      ? ['kept', 'removed', 'added', 'skipped']
+      : ['kept', 'removed', 'skipped'];
+  }
 
   function openChange(decision) {
     changing = {
       id: decision.id,
+      is_new_source: decision.is_new_source,
       source: decision.source,
       queueGuid: decision.queueGuid,
       currentVerdict: decision.verdict,
@@ -142,7 +151,7 @@
   }
 
   async function confirmChange() {
-    if (!canConfirm || !changing) return;
+    if (!canConfirm || !changing || !allowedVerdicts(changing).includes(newVerdict)) return;
 
     const DECISION_TO_API = {
       kept: 'keep',
@@ -279,7 +288,7 @@
               </div>
               <div class="change-controls">
                 <div class="verdict-chips">
-                  {#each ['kept', 'removed', 'added', 'skipped'] as v}
+                  {#each editVerdicts as v}
                     <button
                       class="verdict-chip-btn"
                       class:verdict-chip-active={newVerdict === v}
