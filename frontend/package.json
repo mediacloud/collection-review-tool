@@ -14,8 +14,10 @@
   },
   "dependencies": {
     "axios": "^1.6.2",
+    "dompurify": "^3.4.16",
     "iso-3166": "^4.4.0",
     "iso-3166-2": "^1.0.0",
+    "marked": "^18.0.14",
     "svelte": "^4.2.7"
   },
   "devDependencies": {

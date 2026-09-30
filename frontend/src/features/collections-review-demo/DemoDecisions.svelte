@@ -1,13 +1,13 @@
 <script>
   import { onMount } from 'svelte';
-  import Nav from './Nav.svelte';
 
   import {
+    decideQueueItem,
+    getReviewItemsByQueueGuid,
     getReviewProject,
     getReviewProjectAllQueueItems,
-    getReviewItemsByQueueGuid,
-    decideQueueItem,
   } from '../../lib/api.js';
+  import Nav from './Nav.svelte';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';
@@ -28,10 +28,10 @@
   $: heroTitle = isQueueLevel ? `${q?.id ?? 'Queue'} · Decisions` : 'All Decisions';
 
   const VERDICT_COLORS = {
-    kept: '#E25C40',
-    removed: '#1A1C1F',
-    added: '#F5A48A',
-    skipped: '#9CA0A8',
+    kept: 'var(--v2-kept)',
+    removed: 'var(--v2-removed)',
+    added: 'var(--v2-added)',
+    skipped: 'var(--v2-skipped)',
   };
 
   const VERDICT_LABELS = {
@@ -57,6 +57,7 @@
 
     return {
       id: item.id,
+      is_new_source: item.is_new_source === true,
       source: item.source_label || `Source ${item.source_id ?? item.id}`,
       homepage: item.source_homepage || '',
       country: metadata.pub_country || '—',
@@ -120,12 +121,20 @@
   let changing = null; // { source, queueId, currentVerdict, reason }
   let newVerdict = '';
   let newReason = '';
+  $: editVerdicts = allowedVerdicts(changing);
   $: reasonRequired = newVerdict === 'removed';
-  $: canConfirm = newVerdict && (!reasonRequired || newReason.trim());
+  $: canConfirm = editVerdicts.includes(newVerdict) && (!reasonRequired || newReason.trim());
+
+  function allowedVerdicts(decision) {
+    return decision?.is_new_source === true
+      ? ['kept', 'removed', 'added', 'skipped']
+      : ['kept', 'removed', 'skipped'];
+  }
 
   function openChange(decision) {
     changing = {
       id: decision.id,
+      is_new_source: decision.is_new_source,
       source: decision.source,
       queueGuid: decision.queueGuid,
       currentVerdict: decision.verdict,
@@ -142,7 +151,7 @@
   }
 
   async function confirmChange() {
-    if (!canConfirm || !changing) return;
+    if (!canConfirm || !changing || !allowedVerdicts(changing).includes(newVerdict)) return;
 
     const DECISION_TO_API = {
       kept: 'keep',
@@ -214,18 +223,18 @@
       <span class="chip chip-neutral">{allDecisions.length} total decisions</span>
       {#if counts.kept}<span
           class="chip"
-          style:background="rgba(226,92,64,.1)"
-          style:color="#E25C40">{counts.kept} kept</span
+          style:background="var(--v2-kept-soft)"
+          style:color="var(--v2-kept)">{counts.kept} kept</span
         >{/if}
-      {#if counts.removed}<span class="chip" style:background="#f0f0f0" style:color="#1A1C1F"
+      {#if counts.removed}<span class="chip" style:background="var(--v2-removed-soft)" style:color="var(--v2-removed)"
           >{counts.removed} removed</span
         >{/if}
       {#if counts.added}<span
           class="chip"
-          style:background="rgba(245,164,138,.18)"
-          style:color="#c04a2a">{counts.added} added</span
+          style:background="var(--v2-added-soft)"
+          style:color="var(--v2-added)">{counts.added} added</span
         >{/if}
-      {#if counts.skipped}<span class="chip" style:background="#f3f3f4" style:color="#9CA0A8"
+      {#if counts.skipped}<span class="chip" style:background="var(--v2-skipped-soft)" style:color="var(--v2-skipped)"
           >{counts.skipped} skipped</span
         >{/if}
     </div>
@@ -279,7 +288,7 @@
               </div>
               <div class="change-controls">
                 <div class="verdict-chips">
-                  {#each ['kept', 'removed', 'added', 'skipped'] as v}
+                  {#each editVerdicts as v}
                     <button
                       class="verdict-chip-btn"
                       class:verdict-chip-active={newVerdict === v}
@@ -320,7 +329,7 @@
               <div>
                 <span
                   class="verdict-chip"
-                  style:background="{VERDICT_COLORS[d.verdict]}18"
+                  style:background={`var(--v2-${d.verdict}-soft)`}
                   style:color={VERDICT_COLORS[d.verdict]}
                 >
                   <span class="verdict-dot" style:background={VERDICT_COLORS[d.verdict]}></span>
@@ -373,7 +382,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     font-family: var(--v2-mono);
     color: var(--v2-mute);
     margin-bottom: 10px;
@@ -384,7 +393,7 @@
     padding: 0;
     cursor: pointer;
     color: var(--v2-ink);
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     font-family: var(--v2-mono);
   }
   .breadcrumb-link:hover {
@@ -413,7 +422,7 @@
     gap: 6px;
     padding: 3px 9px;
     border-radius: 999px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     font-weight: 500;
     font-family: var(--v2-sans);
   }
@@ -439,7 +448,7 @@
     color: var(--v2-body);
     border: 1px solid var(--v2-line);
     font-family: var(--v2-sans);
-    font-size: 13.5px;
+    font-size: var(--v2-text-control);
     font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
@@ -463,7 +472,7 @@
     flex-shrink: 0;
   }
   .filter-count {
-    font-size: 12.5px;
+    font-size: var(--v2-text-caption);
     font-family: var(--v2-mono);
     font-weight: 600;
     color: var(--v2-mute);
@@ -487,7 +496,7 @@
   .table-head {
     display: grid;
     padding: 12px 22px 8px;
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-weight: 600;
     letter-spacing: 0.6px;
@@ -509,12 +518,12 @@
   }
 
   .source-name {
-    font-size: 15.5px;
+    font-size: var(--v2-text-body);
     font-weight: 500;
     color: var(--v2-ink);
   }
   .source-url {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     overflow: hidden;
@@ -522,16 +531,16 @@
     white-space: nowrap;
   }
   .source-queue {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-body);
     font-family: var(--v2-mono);
   }
   .source-country {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-body);
   }
   .row-reason {
-    font-size: 12px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-style: italic;
     margin-top: 3px;
@@ -543,7 +552,7 @@
     gap: 5px;
     padding: 3px 9px;
     border-radius: 999px;
-    font-size: 13px;
+    font-size: var(--v2-text-body);
     font-weight: 600;
   }
   .verdict-dot {
@@ -603,7 +612,7 @@
     border: 1px solid var(--v2-line);
     background: var(--v2-card);
     color: var(--v2-body);
-    font-size: 13px;
+    font-size: var(--v2-text-control);
     font-family: var(--v2-sans);
     cursor: pointer;
     transition:
@@ -624,7 +633,7 @@
     border: 1px solid var(--v2-line);
     border-radius: 8px;
     padding: 8px 10px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-control);
     font-family: var(--v2-sans);
     color: var(--v2-ink);
     resize: none;
@@ -637,29 +646,10 @@
   }
 
   /* ── Buttons ── */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border-radius: 999px;
-    background: var(--v2-card);
-    color: var(--v2-ink);
-    border: 1px solid var(--v2-line);
-    font-family: var(--v2-sans);
-    font-size: 13.5px;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
-  }
   .btn-primary {
     background: var(--v2-ink);
     color: #fff;
     border: none;
-  }
-  .btn-sm {
-    padding: 7px 12px;
-    font-size: 12.5px;
   }
   .btn-dim {
     opacity: 0.45;
@@ -670,6 +660,6 @@
     padding: 48px 22px;
     text-align: center;
     color: var(--v2-mute);
-    font-size: 14.5px;
+    font-size: var(--v2-text-body);
   }
 </style>

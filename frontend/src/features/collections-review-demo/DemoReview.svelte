@@ -1,14 +1,17 @@
 <script>
-  import Nav from './Nav.svelte';
+  import DOMPurify from 'dompurify';
+  import { marked } from 'marked';
+  import { onMount } from 'svelte';
+
   import {
+    decideQueueItem,
     getReviewByQueueGuid,
     getReviewItemsByQueueGuid,
-    decideQueueItem,
+    getReviewQueueGuidelines,
     proposeNewSourceByQueueGuid,
     updateQueueItemSourceMetadata,
-    getReviewQueueGuidelines,
   } from '../../lib/api.js';
-  import { onMount } from 'svelte';
+  import Nav from './Nav.svelte';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';
@@ -24,6 +27,11 @@
   let loadError = '';
   let saving = false;
   let guidelines = '';
+  $: guidelinesHtml = DOMPurify.sanitize(marked.parse(guidelines, { async: false }), {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ['style'],
+    FORBID_ATTR: ['style'],
+  });
   let guidelinesLoading = true;
   let guidelinesError = '';
 
@@ -407,7 +415,7 @@
         <h2 class="done-h2">Queue complete</h2>
         <p class="done-sub">You've reviewed all {items.length} sources in this demo session.</p>
         <div class="done-tally">
-          {#each [{ l: 'Kept', n: counts.totalKept, c: '#E25C40' }, { l: 'Removed', n: counts.totalRemoved, c: '#1A1C1F' }, { l: 'Skipped', n: counts.totalSkipped, c: '#9CA0A8' }, { l: 'Added', n: counts.totalAdded, c: '#F5A48A' }] as t}
+          {#each [{ l: 'Kept', n: counts.totalKept, c: 'var(--v2-kept)' }, { l: 'Removed', n: counts.totalRemoved, c: 'var(--v2-removed)' }, { l: 'Skipped', n: counts.totalSkipped, c: 'var(--v2-skipped)' }, { l: 'Added', n: counts.totalAdded, c: 'var(--v2-added)' }] as t}
             <div class="done-stat">
               <span class="done-dot" style:background={t.c}></span>
               <span class="done-n" style:color={t.c}>{t.n}</span>
@@ -540,10 +548,10 @@
               <h1 class="source-title">{src.title}</h1>
               {#if currentDecision}
                 {@const VCOLORS = {
-                  kept: '#E25C40',
-                  removed: '#1A1C1F',
-                  added: '#F5A48A',
-                  skipped: '#9CA0A8',
+                  kept: 'var(--v2-kept)',
+                  removed: 'var(--v2-removed)',
+                  added: 'var(--v2-added)',
+                  skipped: 'var(--v2-skipped)',
                 }}
                 {@const VLABELS = {
                   kept: 'Kept',
@@ -554,7 +562,7 @@
                 <div class="chips-row">
                   <span
                     class="chip chip-decided"
-                    style:background="{VCOLORS[currentDecision.verdict]}1a"
+                    style:background={`var(--v2-${currentDecision.verdict}-soft)`}
                     style:color={VCOLORS[currentDecision.verdict]}
                   >
                     <span class="chip-dot" style:background={VCOLORS[currentDecision.verdict]}
@@ -764,7 +772,7 @@
               </div>
             {:else if guidelines}
               <div class="guidelines-content">
-                {guidelines}
+                {@html guidelinesHtml}
               </div>
             {:else}
               <div class="guidelines-message">No guidelines provided.</div>
@@ -778,7 +786,7 @@
             <span class="sidebar-card-title">Status</span>
           </div>
           <div class="status-grid">
-            {#each [{ l: 'kept', n: counts.totalKept, color: '#E25C40' }, { l: 'removed', n: counts.totalRemoved, color: '#1A1C1F' }, { l: 'skipped', n: counts.totalSkipped, color: '#9CA0A8' }, { l: 'added', n: counts.totalAdded, color: '#F5A48A' }] as x}
+            {#each [{ l: 'kept', n: counts.totalKept, color: 'var(--v2-kept)' }, { l: 'removed', n: counts.totalRemoved, color: 'var(--v2-removed)' }, { l: 'skipped', n: counts.totalSkipped, color: 'var(--v2-skipped)' }, { l: 'added', n: counts.totalAdded, color: 'var(--v2-added)' }] as x}
               <div class="status-cell">
                 <div class="status-label">
                   <span class="status-dot" style:background={x.color}></span>
@@ -806,7 +814,7 @@
           <div>
             <div
               class="modal-title"
-              style:color={reasonModal.pendingVerdict === 'keep' ? '#E25C40' : '#1A1C1F'}
+              style:color={reasonModal.pendingVerdict === 'keep' ? 'var(--v2-kept)' : 'var(--v2-removed)'}
             >
               {reasonVerbLabel}: {src?.title}
             </div>
@@ -849,7 +857,7 @@
           <button
             class="btn btn-primary"
             class:btn-dim={!reasonCanConfirm}
-            style:background={reasonModal.pendingVerdict === 'keep' ? '#E25C40' : '#1A1C1F'}
+            style:background={reasonModal.pendingVerdict === 'keep' ? 'var(--v2-kept)' : 'var(--v2-removed)'}
             on:click={confirmReason}
           >
             Confirm {reasonVerbLabel}
@@ -967,7 +975,7 @@
     margin: 0 0 8px;
   }
   .done-sub {
-    font-size: 15px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
     margin: 0 0 28px;
     line-height: 1.5;
@@ -983,7 +991,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 15px;
+    font-size: var(--v2-text-body);
   }
   .done-dot {
     width: 8px;
@@ -1036,7 +1044,7 @@
     background: var(--v2-surface);
     border: 1px solid var(--v2-line);
     border-radius: 8px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-body);
   }
   .progress-current {
     font-weight: 600;
@@ -1061,7 +1069,7 @@
     transition: width 0.2s;
   }
   .progress-pct-label {
-    font-size: 12.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     min-width: 28px;
@@ -1086,19 +1094,6 @@
 
   /* ── Buttons ── */
   .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border-radius: 999px;
-    background: var(--v2-card);
-    color: var(--v2-ink);
-    border: 1px solid var(--v2-line);
-    font-family: var(--v2-sans);
-    font-size: 13.5px;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
   }
   .btn-primary {
@@ -1113,10 +1108,6 @@
     background: var(--v2-accent);
     color: #fff;
     border: none;
-  }
-  .btn-sm {
-    padding: 7px 12px;
-    font-size: 12.5px;
   }
   .btn-dim {
     opacity: 0.5;
@@ -1181,7 +1172,7 @@
     gap: 6px;
     padding: 3px 9px;
     border-radius: 999px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     font-weight: 500;
   }
   .chip-decided {
@@ -1207,7 +1198,7 @@
     align-items: center;
     gap: 22px;
     margin-top: 12px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     flex-wrap: wrap;
   }
   .source-link-static {
@@ -1229,7 +1220,7 @@
   }
   .prev-reason {
     margin-top: 8px;
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-style: italic;
   }
@@ -1244,11 +1235,11 @@
     justify-content: space-between;
   }
   .meta-heading {
-    font-size: 18px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
   }
   .meta-hint {
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
   }
   .meta-grid {
@@ -1263,14 +1254,14 @@
     border-right: 1px solid var(--v2-line-soft);
   }
   .meta-label {
-    font-size: 15.5px;
+    font-size: var(--v2-text-body);
     color: var(--v2-mute);
     letter-spacing: 0.5px;
     text-transform: uppercase;
     font-weight: 500;
   }
   .meta-value {
-    font-size: 16.5px;
+    font-size: var(--v2-text-body);
     font-weight: 600;
     letter-spacing: -0.4px;
     margin-top: 6px;
@@ -1287,7 +1278,7 @@
     padding: 7px 10px;
     border: 1.5px solid var(--v2-accent);
     border-radius: 8px;
-    font-size: 15px;
+    font-size: var(--v2-text-control);
     font-weight: 500;
     font-family: var(--v2-sans);
     outline: none;
@@ -1303,7 +1294,7 @@
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    font-size: 14px;
+    font-size: var(--v2-text-control);
     color: var(--v2-body);
     cursor: pointer;
     background: none;
@@ -1330,7 +1321,7 @@
   }
   .meta-local-note {
     padding: 8px 28px 14px;
-    font-size: 12.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     display: flex;
     align-items: flex-start;
@@ -1351,7 +1342,7 @@
     gap: 10px;
   }
   .dock-label {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     letter-spacing: 0.5px;
     text-transform: uppercase;
@@ -1369,7 +1360,7 @@
     padding: 13px 14px;
     border-radius: 12px;
     font-family: var(--v2-sans);
-    font-size: 15.5px;
+    font-size: var(--v2-text-control);
     font-weight: 500;
     cursor: pointer;
     transition:
@@ -1406,22 +1397,22 @@
   /* Active highlights for re-decide (Fix 3) */
   .dock-active-keep {
     box-shadow:
-      0 0 0 3px rgba(226, 92, 64, 0.35),
+      0 0 0 3px color-mix(in srgb, var(--v2-kept) 35%, transparent),
       inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
   }
   .dock-active-remove {
-    box-shadow: 0 0 0 3px rgba(26, 28, 31, 0.22) !important;
-    background: #f4f4f4 !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--v2-removed) 22%, transparent) !important;
+    background: var(--v2-removed-soft) !important;
   }
   .dock-active-skip {
-    box-shadow: 0 0 0 3px rgba(156, 160, 168, 0.35) !important;
-    background: #f7f7f8 !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--v2-skipped) 35%, transparent) !important;
+    background: var(--v2-skipped-soft) !important;
   }
   .kbd {
     padding: 1.5px 6px;
     background: rgba(0, 0, 0, 0.07);
     border-radius: 4px;
-    font-size: 12.5px;
+    font-size: var(--v2-text-caption);
     font-family: var(--v2-mono);
     font-weight: 500;
     color: inherit;
@@ -1449,7 +1440,7 @@
     border-bottom: 1px solid var(--v2-line-soft);
   }
   .sidebar-card-title {
-    font-size: 15.5px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
   }
   .header-icon {
@@ -1462,17 +1453,56 @@
     gap: 6px;
   }
   .guidelines-content {
-    white-space: pre-wrap;
     overflow-wrap: anywhere;
     max-height: 320px;
     overflow-y: auto;
-    font-size: 13.5px;
+    font-size: var(--v2-text-body);
     line-height: 1.6;
     color: var(--v2-body);
   }
 
+  .guidelines-content :global(h1),
+  .guidelines-content :global(h2),
+  .guidelines-content :global(h3),
+  .guidelines-content :global(h4),
+  .guidelines-content :global(h5),
+  .guidelines-content :global(h6) {
+    font-size: var(--v2-text-heading);
+    line-height: 1.3;
+    color: var(--v2-ink);
+    margin: 1em 0 0.5em;
+  }
+  .guidelines-content :global(p),
+  .guidelines-content :global(ul),
+  .guidelines-content :global(ol),
+  .guidelines-content :global(blockquote),
+  .guidelines-content :global(pre) {
+    margin: 0 0 0.75em;
+  }
+  .guidelines-content :global(ul),
+  .guidelines-content :global(ol) {
+    padding-left: 1.5em;
+  }
+  .guidelines-content :global(a) {
+    color: var(--v2-accent-ink);
+    text-decoration: underline;
+  }
+  .guidelines-content :global(blockquote) {
+    border-left: 2px solid var(--v2-line);
+    padding-left: 0.75em;
+  }
+  .guidelines-content :global(pre) {
+    white-space: pre-wrap;
+  }
+  .guidelines-content :global(code) {
+    font-family: var(--v2-mono);
+  }
+  .guidelines-content :global(> :first-child) {
+    margin-top: 0;
+  }
+
   .guidelines-message {
-    font-size: 13.5px;
+    font-size: var(--v2-text-body);
     line-height: 1.6;
     color: var(--v2-mute);
   }
@@ -1496,7 +1526,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 12.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     text-transform: uppercase;
     letter-spacing: 0.6px;
@@ -1509,7 +1539,7 @@
     flex-shrink: 0;
   }
   .status-val {
-    font-size: 15px;
+    font-size: var(--v2-text-body);
     font-weight: 600;
     letter-spacing: -0.5px;
     font-family: var(--v2-mono);
@@ -1517,7 +1547,7 @@
     transition: color 0.2s;
   }
   .position-note {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     text-align: center;
     font-family: var(--v2-mono);
@@ -1527,10 +1557,11 @@
   /* ── Reason modal (Fix 5) ── */
   .reason-textarea {
     width: 100%;
+    box-sizing: border-box;
     padding: 12px 14px;
     border-radius: 10px;
     border: 1.5px solid var(--v2-line);
-    font-size: 15px;
+    font-size: var(--v2-text-control);
     font-family: var(--v2-sans);
     color: var(--v2-ink);
     outline: none;
@@ -1575,11 +1606,11 @@
     gap: 14px;
   }
   .modal-title {
-    font-size: 16px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
   }
   .modal-subtitle {
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     margin-top: 4px;
     line-height: 1.4;
@@ -1613,7 +1644,7 @@
     gap: 6px;
   }
   .field-label {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     font-weight: 500;
     color: var(--v2-body);
   }
@@ -1621,7 +1652,7 @@
     padding: 10px 14px;
     border-radius: 10px;
     border: 1.5px solid var(--v2-line);
-    font-size: 15px;
+    font-size: var(--v2-text-control);
     font-family: var(--v2-sans);
     color: var(--v2-ink);
     outline: none;
@@ -1641,7 +1672,7 @@
     border-radius: 999px;
     background: var(--v2-ink);
     color: #fff;
-    font-size: 14px;
+    font-size: var(--v2-text-body);
     font-weight: 500;
     font-family: var(--v2-sans);
     box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.28);

@@ -1,16 +1,17 @@
 <script>
-  import { onMount } from 'svelte';
-  import iso3166 from 'iso-3166-2';
   import * as rawIso3166 from 'iso-3166';
-  import SourceViewer from '../components/SourceViewer.svelte';
+  import iso3166 from 'iso-3166-2';
+  import { onMount } from 'svelte';
+
   import BaseModal from '../components/BaseModal.svelte';
+  import EditMetadataModal from '../components/EditMetadataModal.svelte';
   import RemovalReasonModal from '../components/RemovalReasonModal.svelte';
   import SkipNoteModal from '../components/SkipNoteModal.svelte';
-  import EditMetadataModal from '../components/EditMetadataModal.svelte';
+  import SourceViewer from '../components/SourceViewer.svelte';
   import {
+    decideQueueItem,
     getReviewProject,
     getSkippedItemsByProjectGuid,
-    decideQueueItem,
     updateQueueItemSourceMetadata,
   } from '../lib/api.js';
 
@@ -647,25 +648,8 @@
     max-width: 320px;
   }
 
-  .btn-inline {
-    padding: 6px 10px;
-    border-radius: 999px;
-    border: 1px solid #d0d7de;
-    background: #fff;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 12px;
-    color: #34495e;
-  }
 
-  .btn-inline:hover:not(:disabled) {
-    background-color: #f6f8fa;
-  }
 
-  .btn-inline:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
 
   .item-edit-modal-wrap {
     width: min(1120px, 96vw);
@@ -681,24 +665,6 @@
     margin: 0 0 8px 0;
   }
 
-  .item-nav-button {
-    width: 34px;
-    height: 34px;
-    border-radius: 999px;
-    border: 1px solid #d0d7de;
-    background: #fff;
-    color: #34495e;
-    font-size: 16px;
-    font-weight: 700;
-    cursor: pointer;
-  }
 
-  .item-nav-button:hover:not(:disabled) {
-    background: #f6f8fa;
-  }
 
-  .item-nav-button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
 </style>

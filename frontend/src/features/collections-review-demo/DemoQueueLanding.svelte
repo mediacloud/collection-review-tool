@@ -1,9 +1,10 @@
 <script>
-  import Nav from './Nav.svelte';
-  import DecisionBar from './DecisionBar.svelte';
-  import { loadProject } from './projectStore.js';
-  import { getReviewItemsByQueueGuid, decideQueueItem } from '../../lib/api.js';
   import { onMount } from 'svelte';
+
+  import { decideQueueItem,getReviewItemsByQueueGuid } from '../../lib/api.js';
+  import DecisionBar from './DecisionBar.svelte';
+  import Nav from './Nav.svelte';
+  import { loadProject } from './projectStore.js';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';
@@ -66,18 +67,18 @@
   $: projectUndecided = projectStats.undecided;
 
   const DECISION_TILES = [
-    { k: 'kept', label: 'Kept', color: '#E25C40' },
-    { k: 'removed', label: 'Removed', color: '#1A1C1F' },
-    { k: 'added', label: 'Added', color: '#F5A48A' },
-    { k: 'skipped', label: 'Skipped', color: '#9CA0A8' },
+    { k: 'kept', label: 'Kept', color: 'var(--v2-kept)' },
+    { k: 'removed', label: 'Removed', color: 'var(--v2-removed)' },
+    { k: 'added', label: 'Added', color: 'var(--v2-added)' },
+    { k: 'skipped', label: 'Skipped', color: 'var(--v2-skipped)' },
   ];
 
   const VERDICT_LABELS = { kept: 'Kept', removed: 'Removed', added: 'Added', skipped: 'Skipped' };
   const VERDICT_COLORS = {
-    kept: '#E25C40',
-    removed: '#1A1C1F',
-    added: '#F5A48A',
-    skipped: '#9CA0A8',
+    kept: 'var(--v2-kept)',
+    removed: 'var(--v2-removed)',
+    added: 'var(--v2-added)',
+    skipped: 'var(--v2-skipped)',
   };
 
   let highlight = null;
@@ -246,7 +247,7 @@
             <button
               class="decision-btn"
               style:border-color={highlight === b.k ? b.color : 'var(--v2-line)'}
-              style:background={highlight === b.k ? `${b.color}0e` : '#fff'}
+              style:background={highlight === b.k ? `color-mix(in srgb, ${b.color} 5.5%, transparent)` : '#fff'}
               on:mouseenter={() => (highlight = b.k)}
               on:mouseleave={() => (highlight = null)}
               on:focus={() => (highlight = b.k)}
@@ -325,7 +326,7 @@
           </span>
         </div>
         <div class="project-totals">
-          {#each [{ label: 'Total', value: projectTotal, color: 'var(--v2-ink)' }, { label: 'Kept', value: projectStats.kept, color: '#E25C40' }, { label: 'Added', value: projectStats.added, color: '#F5A48A' }, { label: 'Removed', value: projectStats.removed, color: '#1A1C1F' }, { label: 'Skipped', value: projectStats.skipped, color: '#9CA0A8' }, { label: 'Undecided', value: projectUndecided, color: 'var(--v2-mute)' }] as t, i}
+          {#each [{ label: 'Total', value: projectTotal, color: 'var(--v2-ink)' }, { label: 'Kept', value: projectStats.kept, color: 'var(--v2-kept)' }, { label: 'Added', value: projectStats.added, color: 'var(--v2-added)' }, { label: 'Removed', value: projectStats.removed, color: 'var(--v2-removed)' }, { label: 'Skipped', value: projectStats.skipped, color: 'var(--v2-skipped)' }, { label: 'Undecided', value: projectUndecided, color: 'var(--v2-mute)' }] as t, i}
             <div class="ptotal-col" class:has-divider={i > 0}>
               <div class="ptotal-label" style:color={t.color}>{t.label}</div>
               <div class="ptotal-value" style:color={t.color}>{t.value.toLocaleString()}</div>
@@ -453,7 +454,7 @@
     padding: 32px 120px 0;
   }
   .hero-eyebrow {
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     margin-bottom: 10px;
@@ -479,7 +480,7 @@
     gap: 6px;
     padding: 3px 9px;
     border-radius: 999px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     font-weight: 500;
     font-family: var(--v2-sans);
   }
@@ -490,7 +491,7 @@
   .about-tool {
     margin: 18px 0 0;
     max-width: 920px;
-    font-size: 17px;
+    font-size: var(--v2-text-body);
     line-height: 1.6;
     color: var(--v2-body);
   }
@@ -534,11 +535,11 @@
     justify-content: space-between;
   }
   .card-title {
-    font-size: 18px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
   }
   .card-header-right {
-    font-size: 15px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
   }
@@ -553,7 +554,7 @@
     justify-content: space-between;
   }
   .progress-label {
-    font-size: 16.5px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
   }
   .mono {
@@ -562,7 +563,7 @@
     color: var(--v2-ink);
   }
   .progress-pct {
-    font-size: 15px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
   }
@@ -573,7 +574,7 @@
   /* ── Decision tiles ── */
   .browse-label {
     padding: 0 24px 6px;
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
   }
   .decision-grid {
@@ -582,27 +583,11 @@
     grid-template-columns: repeat(4, 1fr);
     gap: 10px;
   }
-  .decision-btn {
-    padding: 14px 16px;
-    border-radius: 12px;
-    border: 1px solid var(--v2-line);
-    background: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    font-family: var(--v2-sans);
-    text-align: left;
-    transition:
-      border-color 0.2s ease,
-      background 0.2s ease;
-    width: 100%;
-  }
   .decision-label-row {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-size: 16.5px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
     font-weight: 500;
   }
@@ -632,19 +617,6 @@
 
   /* ── Buttons ── */
   .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border-radius: 999px;
-    background: var(--v2-card);
-    color: var(--v2-ink);
-    border: 1px solid var(--v2-line);
-    font-family: var(--v2-sans);
-    font-size: 13.5px;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
   }
   .btn-primary {
@@ -654,14 +626,6 @@
     box-shadow:
       0 1px 0 rgba(0, 0, 0, 0.04),
       inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  }
-  .btn-sm {
-    padding: 7px 12px;
-    font-size: 12.5px;
-  }
-  .btn-lg {
-    padding: 12px 22px;
-    font-size: 15px;
   }
   .btn-dim {
     opacity: 0.45;
@@ -694,7 +658,7 @@
     border-left: 1px solid var(--v2-line-soft);
   }
   .ptotal-label {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -738,7 +702,7 @@
     gap: 18px;
   }
   .modal-title {
-    font-size: 19px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
     color: var(--v2-ink);
     display: flex;
@@ -746,13 +710,13 @@
     gap: 10px;
   }
   .modal-count {
-    font-size: 15px;
+    font-size: var(--v2-text-secondary);
     font-weight: 400;
     color: var(--v2-mute);
     font-family: var(--v2-mono);
   }
   .modal-subtitle {
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     margin-top: 3px;
   }
@@ -772,7 +736,7 @@
     padding: 32px 24px;
     text-align: center;
     color: var(--v2-mute);
-    font-size: 14px;
+    font-size: var(--v2-text-body);
   }
   .bucket-list {
     max-height: 400px;
@@ -797,18 +761,18 @@
     min-width: 0;
   }
   .bucket-source {
-    font-size: 14.5px;
+    font-size: var(--v2-text-body);
     font-weight: 500;
     color: var(--v2-ink);
   }
   .bucket-meta {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     margin-top: 2px;
   }
   .bucket-reason {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-body);
     font-style: italic;
     margin-top: 4px;
@@ -828,7 +792,7 @@
     border: 1px solid var(--v2-line);
     background: var(--v2-card);
     color: var(--v2-body);
-    font-size: 12.5px;
+    font-size: var(--v2-text-control);
     font-family: var(--v2-sans);
     cursor: pointer;
     transition:
@@ -849,7 +813,7 @@
     border: 1px solid var(--v2-line);
     border-radius: 8px;
     padding: 7px 10px;
-    font-size: 13px;
+    font-size: var(--v2-text-control);
     font-family: var(--v2-sans);
     color: var(--v2-ink);
     resize: none;

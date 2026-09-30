@@ -1,15 +1,20 @@
 <script>
   import { onMount } from 'svelte';
-  import Nav from './Nav.svelte';
-  import Modal from './Modal.svelte';
-  import HelpModal from './HelpModal.svelte';
+
   import {
-    projectsStore,
-    inProgressProjects,
+    generateReviewProjectQueues,
+    getCountryCollections,
+    startReviewProject,
+  } from '../../lib/api.js';
+  import HelpModal from './HelpModal.svelte';
+  import Modal from './Modal.svelte';
+  import Nav from './Nav.svelte';
+  import {
     completedProjects,
+    inProgressProjects,
     loadProjects,
+    projectsStore,
   } from './projectStore.js';
-  import { startReviewProject, generateReviewProjectQueues, getCountryCollections } from '../../lib/api.js';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';
@@ -23,9 +28,7 @@
 
   $: qrCollectionId = Number(qrId);
   $: qrHasValidId = Number.isInteger(qrCollectionId) && qrCollectionId > 0;
-  $: qrBorderColor = qrError || (qrStarted && !qrHasValidId)
-      ? 'var(--v2-red)'
-      : 'var(--v2-line)';
+  $: qrBorderColor = qrError || (qrStarted && !qrHasValidId) ? 'var(--v2-red)' : 'var(--v2-line)';
 
   function onQrType(e) {
     qrId = e.target.value.replace(/[^0-9]/g, '');
@@ -67,15 +70,13 @@
     } catch (error) {
       console.error(error);
 
-      qrError =
-        error.response?.data?.error || error.message || 'Could not start the quick review.';
+      qrError = error.response?.data?.error || error.message || 'Could not start the quick review.';
     } finally {
       qrStarting = false;
     }
   }
 
   onMount(() => {
-
     loadProjects().catch((error) => {
       console.error('Failed to load projects'), error;
     });
@@ -187,7 +188,9 @@
 
   function toggleCountryCollection(collectionId) {
     if (selectedCountryCollectionIds.includes(collectionId)) {
-      selectedCountryCollectionIds = selectedCountryCollectionIds.filter((id) => id !== collectionId);
+      selectedCountryCollectionIds = selectedCountryCollectionIds.filter(
+        (id) => id !== collectionId
+      );
     } else {
       selectedCountryCollectionIds = [...selectedCountryCollectionIds, collectionId];
     }
@@ -368,7 +371,6 @@
               <span class="qrc-not-found">Error</span>
             {/if}
           </div>
-
         </div>
 
         <!-- Options row -->
@@ -394,9 +396,9 @@
         <!-- Card footer -->
         <div class="qrc-footer">
           <span class="qrc-footer-hint">
-            {#if qrError}<span class="hint-err">{qrError}</span
-              >{:else if qrStarting}Creating review queue...{:else if qrStarted && !qrHasValidId}<span
-                class="hint-err">Enter a valid collection ID</span
+            {#if qrError}<span class="hint-err">{qrError}</span>{:else if qrStarting}Creating review
+              queue...{:else if qrStarted && !qrHasValidId}<span class="hint-err"
+                >Enter a valid collection ID</span
               >{:else}&nbsp;{/if}
           </span>
           <button class="btn btn-primary" disabled={qrStarting} on:click={startReview}>
@@ -492,18 +494,18 @@
         </button>
       {/each}
     </div>
+    {#if projectsTotal > 10}
+      <div class="pagination">
+        <button class="btn btn-sm" disabled={!hasPrevPage} on:click={() => projectsPage--}
+          >← Previous</button
+        >
+        <span class="pagination-counter">{projectsStart + 1}–{projectsEnd} of {projectsTotal}</span>
+        <button class="btn btn-sm" disabled={!hasNextPage} on:click={() => projectsPage++}
+          >Next →</button
+        >
+      </div>
+    {/if}
   </div>
-  {#if projectsTotal > 10}
-    <div class="pagination">
-      <button class="btn btn-sm" disabled={!hasPrevPage} on:click={() => projectsPage--}
-        >← Previous</button
-      >
-      <span class="pagination-counter">{projectsStart + 1}–{projectsEnd} of {projectsTotal}</span>
-      <button class="btn btn-sm" disabled={!hasNextPage} on:click={() => projectsPage++}
-        >Next 10 →</button
-      >
-    </div>
-  {/if}
 
   <!-- ─────────────── LOWER CARDS ─────────────── -->
   <div class="lower-section">
@@ -845,7 +847,7 @@
   }
   .hero-body {
     max-width: 480px;
-    font-size: 17px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
     line-height: 1.6;
     margin: 22px 0 0;
@@ -859,21 +861,9 @@
 
   /* ── Buttons ── */
   .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border-radius: 999px;
-    background: var(--v2-card);
-    color: var(--v2-ink);
-    border: 1px solid var(--v2-line);
-    font-family: var(--v2-sans);
-    font-size: 13.5px;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
     transition: opacity 0.15s;
+    font-size: 1.25rem;
   }
   .btn-primary {
     background: var(--v2-ink);
@@ -886,14 +876,6 @@
   .btn-primary:disabled {
     opacity: 0.45;
     cursor: not-allowed;
-  }
-  .btn-lg {
-    padding: 12px 22px;
-    font-size: 15px;
-  }
-  .btn-sm {
-    padding: 7px 12px;
-    font-size: 12.5px;
   }
 
   /* ── QuickReviewCard ── */
@@ -927,12 +909,12 @@
     place-items: center;
   }
   .qrc-title {
-    font-size: 15px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
   }
   .qrc-hint {
     padding: 12px 22px 0;
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     margin: 0;
   }
@@ -940,7 +922,7 @@
     padding: 14px 22px 8px;
   }
   .qrc-input-label {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     letter-spacing: 0.5px;
     text-transform: uppercase;
@@ -972,19 +954,18 @@
     background: transparent;
     padding: 0;
     font-family: var(--v2-mono);
-    font-size: 22px;
+    font-size: var(--v2-text-heading);
     font-weight: 500;
     color: var(--v2-ink);
     letter-spacing: -0.3px;
   }
 
   .qrc-not-found {
-    font-size: 14px;
+    font-size: var(--v2-text-body);
     color: var(--v2-red);
     font-weight: 500;
     white-space: nowrap;
   }
-
 
   .qrc-options {
     padding: 12px 22px 4px;
@@ -996,7 +977,7 @@
     background: #fff;
   }
   .qrc-option-label {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     letter-spacing: 0.5px;
     text-transform: uppercase;
@@ -1007,7 +988,7 @@
     align-items: center;
     justify-content: space-between;
     margin-top: 6px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-control);
     font-weight: 500;
     color: var(--v2-ink);
   }
@@ -1022,7 +1003,7 @@
     cursor: pointer;
     width: 100%;
     font-family: var(--v2-sans);
-    font-size: 13.5px;
+    font-size: var(--v2-text-control);
     font-weight: 500;
     color: var(--v2-ink);
   }
@@ -1068,7 +1049,7 @@
     align-items: center;
   }
   .qrc-footer-hint {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
   }
   .hint-err {
@@ -1081,9 +1062,9 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 3px 9px;
+    padding: 6px 15px;
     border-radius: 999px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     font-weight: 500;
     font-family: var(--v2-sans);
   }
@@ -1116,7 +1097,7 @@
 
   /* ── Section heading ── */
   .section-header {
-    padding: 28px 120px 8px;
+    padding: 18px 120px 8px;
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
@@ -1127,7 +1108,7 @@
     gap: 14px;
   }
   .section-num {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     font-family: var(--v2-mono);
     color: var(--v2-mute);
     font-weight: 500;
@@ -1159,7 +1140,7 @@
   .projects-thead {
     display: grid;
     grid-template-columns: 42px 1.6fr 1fr 1.1fr 30px;
-    font-size: 16px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-weight: 500;
     letter-spacing: 0.5px;
@@ -1199,27 +1180,27 @@
     display: grid;
     place-items: center;
     font-weight: 600;
-    font-size: 14.5px;
+    font-size: var(--v2-text-body);
     flex-shrink: 0;
   }
   .project-meta {
     min-width: 0;
   }
   .project-name {
-    font-size: 16px;
+    font-size: var(--v2-text-body);
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .project-seeds {
-    font-size: 15px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     margin-top: 1px;
   }
   .project-queues {
-    font-size: 16px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
   }
 
@@ -1247,7 +1228,7 @@
     background: var(--v2-ink);
   }
   .progress-pct {
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-body);
     font-family: var(--v2-mono);
     min-width: 36px;
@@ -1262,12 +1243,12 @@
   .pagination {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px 22px 0;
+    gap: 40px;
+    padding: 22px 0 0;
     font-family: var(--v2-sans);
   }
   .pagination-counter {
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     flex: 1;
@@ -1281,7 +1262,7 @@
 
   /* ── Lower section ── */
   .lower-section {
-    padding: 44px 120px 0;
+    padding: 22px 120px 0;
     display: flex;
     flex-direction: column;
     gap: 44px;
@@ -1300,13 +1281,13 @@
     gap: 14px;
   }
   .card-title {
-    font-size: 17.5px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
     color: var(--v2-ink);
   }
 
   .review-row {
-    padding: 14px 22px;
+    padding: 14px 48px 14px 22px;
     display: grid;
     grid-template-columns: 1.6fr 1fr 90px;
     gap: 14px;
@@ -1334,11 +1315,11 @@
     min-width: 0;
   }
   .review-name {
-    font-size: 15.5px;
+    font-size: var(--v2-text-body);
     font-weight: 500;
   }
   .review-id {
-    font-size: 15px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     margin-top: 1px;
@@ -1366,7 +1347,7 @@
   /* ── Modal content ── */
   .modal-subtitle {
     padding: 0 24px 4px;
-    font-size: 14px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-sans);
     margin: 0;
@@ -1380,7 +1361,7 @@
   }
   .form-label {
     display: block;
-    font-size: 12px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     text-transform: uppercase;
     letter-spacing: 0.6px;
@@ -1395,7 +1376,7 @@
     border: 1.5px solid var(--v2-line, #e8e9eb);
     background: #fff;
     font-family: var(--v2-sans);
-    font-size: 14.5px;
+    font-size: var(--v2-text-control);
     color: var(--v2-ink);
     outline: none;
     box-sizing: border-box;
@@ -1415,7 +1396,7 @@
     border-color: var(--v2-accent);
   }
   .form-hint {
-    font-size: 12.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     margin-top: 5px;
   }
@@ -1455,12 +1436,12 @@
     gap: 2px;
   }
   .radio-label {
-    font-size: 14px;
+    font-size: var(--v2-text-control);
     font-weight: 500;
     color: var(--v2-ink);
   }
   .radio-hint {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
   }
 
@@ -1490,12 +1471,12 @@
   .geo-check-label {
     flex: 1;
     min-width: 0;
-    font-size: 13.5px;
+    font-size: var(--v2-text-control);
     color: var(--v2-ink);
   }
   .geo-tag-id {
     font-family: var(--v2-mono);
-    font-size: 12px;
+    font-size: var(--v2-text-caption);
     color: var(--v2-mute);
   }
 
@@ -1504,7 +1485,7 @@
     justify-content: center;
     border-radius: 12px;
     padding: 13px 22px;
-    font-size: 15px;
+    font-size: var(--v2-text-control);
     margin-top: 4px;
   }
 

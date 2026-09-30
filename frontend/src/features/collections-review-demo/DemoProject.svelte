@@ -19,8 +19,8 @@
     setReviewProjectReviewerLandingVirtualQueues,
   } from '../../lib/api.js';
   import DecisionBar from './DecisionBar.svelte';
-  import { loadProject } from './projectStore.js';
   import Nav from './Nav.svelte';
+  import { loadProject } from './projectStore.js';
 
   export let onNavigate = () => {};
   export let navVariant = 'glass';
@@ -80,16 +80,16 @@
 
   const VERDICT_LABELS = { kept: 'Kept', removed: 'Removed', added: 'Added', skipped: 'Skipped' };
   const VERDICT_COLORS = {
-    kept: '#E25C40',
-    removed: '#1A1C1F',
-    added: '#F5A48A',
-    skipped: '#9CA0A8',
+    kept: 'var(--v2-kept)',
+    removed: 'var(--v2-removed)',
+    added: 'var(--v2-added)',
+    skipped: 'var(--v2-skipped)',
   };
   const DECISION_TILES = [
-    { k: 'kept', label: 'Kept', color: '#E25C40' },
-    { k: 'removed', label: 'Removed', color: '#1A1C1F' },
-    { k: 'added', label: 'Added', color: '#F5A48A' },
-    { k: 'skipped', label: 'Skipped', color: '#9CA0A8' },
+    { k: 'kept', label: 'Kept', color: 'var(--v2-kept)' },
+    { k: 'removed', label: 'Removed', color: 'var(--v2-removed)' },
+    { k: 'added', label: 'Added', color: 'var(--v2-added)' },
+    { k: 'skipped', label: 'Skipped', color: 'var(--v2-skipped)' },
   ];
 
   $: projectStats = p?.stats ?? {
@@ -289,7 +289,9 @@
       }
       publishResult = await publishReviewProject(projectGuid, payload);
     } catch (error) {
-      const message = error.response?.data?.error || 'Could not confirm publishing. The operation may have partially completed. Check the target collection before retrying.';
+      const message =
+        error.response?.data?.error ||
+        'Could not confirm publishing. The operation may have partially completed. Check the target collection before retrying.';
       publishPreviewError = String(message).split(apiToken).join('[redacted]');
     } finally {
       publishPreviewLoading = false;
@@ -576,7 +578,9 @@
             <button
               class="decision-btn"
               style:border-color={highlight === d.k ? d.color : 'var(--v2-line)'}
-              style:background={highlight === d.k ? `${d.color}0e` : '#fff'}
+              style:background={highlight === d.k
+                ? `color-mix(in srgb, ${d.color} 5.5%, transparent)`
+                : '#fff'}
               on:mouseenter={() => (highlight = d.k)}
               on:mouseleave={() => (highlight = null)}
               on:focus={() => (highlight = d.k)}
@@ -635,6 +639,7 @@
         <span class="queues-title">Reviewer queues</span>
         <button
           class="btn btn-sm"
+          class:btn-disabled-neutral={(p?.queues?.length ?? 0) > 0 && !queueGenerating}
           disabled={(p?.queues?.length ?? 0) > 0 || queueGenerating}
           title={(p?.queues?.length ?? 0) > 0
             ? 'Reviewer queues have already been generated.'
@@ -996,18 +1001,15 @@
 {/if}
 
 {#if showPublishPreview && p}
-  <div
-    class="modal-overlay"
-    role="dialog"
-    aria-modal="true"
-  >
+  <div class="modal-overlay" role="dialog" aria-modal="true">
     <div class="modal modal-wide">
       <div class="modal-header">
         <div>
           <div class="modal-title">{publishMode ? 'Publish' : 'Preview publish'}</div>
           <div class="modal-subtitle">
             {#if publishMode}
-              Publish decisions for {p.name} to Media Cloud. A new collection is created if no publish target exists.
+              Publish decisions for {p.name} to Media Cloud. A new collection is created if no publish
+              target exists.
             {:else}
               Build a read-only Media Cloud publish plan for {p.name}.
             {/if}
@@ -1038,7 +1040,11 @@
         <div class="setting-row">
           <div class="setting-info">
             <div class="setting-title">Media Cloud API token</div>
-            <div class="setting-desc">{publishMode ? 'Used to publish to Media Cloud.' : 'Used only for preview preflight. This does not publish.'}</div>
+            <div class="setting-desc">
+              {publishMode
+                ? 'Used to publish to Media Cloud.'
+                : 'Used only for preview preflight. This does not publish.'}
+            </div>
           </div>
           <div class="setting-control">
             <input
@@ -1071,24 +1077,23 @@
 
         {#if publishMode && publishResult}
           <div role="status" class="setting-title">
-            {publishResult.summary.errors.length ? 'Publish completed with errors' : publishResult.summary.warnings.length ? 'Publish completed with warnings' : 'Publish completed'}
+            {publishResult.summary.errors.length
+              ? 'Publish completed with errors'
+              : publishResult.summary.warnings.length
+                ? 'Publish completed with warnings'
+                : 'Publish completed'}
           </div>
           <div class="preview-summary">
             <div class="preview-summary-item">
-              <span class="preview-summary-label">{publishResult.created_collection ? 'Created collection' : 'Existing collection'}</span>
+              <span class="preview-summary-label"
+                >{publishResult.created_collection
+                  ? 'Created collection'
+                  : 'Existing collection'}</span
+              >
               <span class="preview-summary-value">{publishResult.collection_id}</span>
               <span>{publishMessage(publishResult.collection_name)}</span>
             </div>
-            {#each [
-              ['Processed items', 'processed_items'],
-              ['Ensured associations', 'ensured_associations'],
-              ['Removed associations', 'removed_associations'],
-              ['Created sources', 'created_sources'],
-              ['No-op items', 'noop_items'],
-              ['Metadata updates attempted', 'metadata_updates_attempted'],
-              ['Metadata updates succeeded', 'metadata_updates_succeeded'],
-              ['Metadata updates failed', 'metadata_updates_failed'],
-            ] as [label, key]}
+            {#each [['Processed items', 'processed_items'], ['Ensured associations', 'ensured_associations'], ['Removed associations', 'removed_associations'], ['Created sources', 'created_sources'], ['No-op items', 'noop_items'], ['Metadata updates attempted', 'metadata_updates_attempted'], ['Metadata updates succeeded', 'metadata_updates_succeeded'], ['Metadata updates failed', 'metadata_updates_failed']] as [label, key]}
               <div class="preview-summary-item">
                 <span class="preview-summary-label">{label}</span>
                 <span class="preview-summary-value">{publishResult.summary[key]}</span>
@@ -1098,13 +1103,21 @@
           {#if publishResult.summary.errors.length}
             <div class="preview-error" role="alert">
               <strong>Errors</strong>
-              <ul>{#each publishResult.summary.errors as message}<li>{publishMessage(message)}</li>{/each}</ul>
+              <ul>
+                {#each publishResult.summary.errors as message}<li>
+                    {publishMessage(message)}
+                  </li>{/each}
+              </ul>
             </div>
           {/if}
           {#if publishResult.summary.warnings.length}
             <div class="setting-desc">
               <strong>Warnings</strong>
-              <ul>{#each publishResult.summary.warnings as message}<li>{publishMessage(message)}</li>{/each}</ul>
+              <ul>
+                {#each publishResult.summary.warnings as message}<li>
+                    {publishMessage(message)}
+                  </li>{/each}
+              </ul>
             </div>
           {/if}
         {/if}
@@ -1187,10 +1200,18 @@
         </button>
         <button
           class="btn btn-primary"
-          disabled={publishPreviewLoading || !publishPreviewToken.trim() || (publishMode && !!publishResult)}
+          disabled={publishPreviewLoading ||
+            !publishPreviewToken.trim() ||
+            (publishMode && !!publishResult)}
           on:click={publishMode ? handlePublish : handlePublishPreview}
         >
-          {publishMode ? (publishPreviewLoading ? 'Publishing...' : 'Publish') : (publishPreviewLoading ? 'Previewing...' : 'Preview publish')}
+          {publishMode
+            ? publishPreviewLoading
+              ? 'Publishing...'
+              : 'Publish'
+            : publishPreviewLoading
+              ? 'Previewing...'
+              : 'Preview publish'}
         </button>
       </div>
     </div>
@@ -1349,7 +1370,7 @@
     padding: 32px 120px 0;
   }
   .breadcrumb {
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     margin-bottom: 10px;
@@ -1360,7 +1381,7 @@
     padding: 0;
     cursor: pointer;
     color: var(--v2-ink);
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     font-family: var(--v2-mono);
   }
   .breadcrumb-link:hover {
@@ -1396,9 +1417,9 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 3px 9px;
+    padding: 3px 12px;
     border-radius: 999px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     font-weight: 500;
   }
   .chip-neutral {
@@ -1428,7 +1449,7 @@
   .about-tool {
     margin: 18px 0 0;
     max-width: 760px;
-    font-size: 17px;
+    font-size: var(--v2-text-body);
     line-height: 1.6;
     color: var(--v2-body);
   }
@@ -1456,19 +1477,6 @@
 
   /* ── Buttons ── */
   .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border-radius: 999px;
-    background: var(--v2-card);
-    color: var(--v2-ink);
-    border: 1px solid var(--v2-line);
-    font-family: var(--v2-sans);
-    font-size: 13.5px;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
   }
   .btn-primary {
@@ -1478,10 +1486,6 @@
     box-shadow:
       0 1px 0 rgba(0, 0, 0, 0.04),
       inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  }
-  .btn-sm {
-    padding: 7px 12px;
-    font-size: 12.5px;
   }
   .btn-dim {
     opacity: 0.45;
@@ -1512,7 +1516,7 @@
     gap: 22px;
   }
   .stats-label {
-    font-size: 17.5px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
     font-weight: 500;
   }
@@ -1525,7 +1529,7 @@
     color: var(--v2-ink);
   }
   .stats-total {
-    font-size: 16.5px;
+    font-size: var(--v2-text-body);
     color: var(--v2-mute);
     font-weight: 400;
   }
@@ -1533,7 +1537,7 @@
     text-align: right;
   }
   .stats-undecided {
-    font-size: 17.5px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
   }
   .mono-num {
@@ -1542,7 +1546,7 @@
     color: var(--v2-ink);
   }
   .stats-pct {
-    font-size: 15px;
+    font-size: var(--v2-text-body);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     margin-top: 4px;
@@ -1557,27 +1561,11 @@
     grid-template-columns: repeat(4, 1fr);
     gap: 8px;
   }
-  .decision-btn {
-    padding: 14px 16px;
-    border-radius: 12px;
-    border: 1px solid var(--v2-line);
-    background: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    font-family: var(--v2-sans);
-    text-align: left;
-    transition:
-      border-color 0.2s ease,
-      background 0.2s ease;
-    width: 100%;
-  }
   .decision-label {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-size: 16.5px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
     font-weight: 500;
   }
@@ -1600,8 +1588,8 @@
   .seed-row {
     padding: 16px 22px;
     display: flex;
-    align-items: flex-start;
-    gap: 24px;
+    align-items: center;
+    gap: 52px;
   }
   .seed-label-col {
     flex-shrink: 0;
@@ -1609,7 +1597,7 @@
     width: 104px;
   }
   .seed-label {
-    font-size: 12.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     letter-spacing: 0.6px;
     text-transform: uppercase;
@@ -1629,12 +1617,12 @@
     padding: 6px 14px;
     background: var(--v2-line-soft);
     border-radius: 999px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-body);
     border: 1px solid var(--v2-line);
   }
   .seed-hint {
-    font-size: 12px;
+    font-size: var(--v2-text-secondary);
     color: #9a9ca2;
     margin: 12px 0 0;
     line-height: 1.5;
@@ -1656,7 +1644,7 @@
     padding: 4px 4px 12px;
   }
   .queues-title {
-    font-size: 22px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
   }
   .queues-list {
@@ -1682,11 +1670,11 @@
     gap: 10px;
   }
   .queue-id {
-    font-size: 20px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
   }
   .queue-pct {
-    font-size: 16px;
+    font-size: var(--v2-text-body);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
   }
@@ -1694,7 +1682,7 @@
     padding: 0 18px 10px;
     display: flex;
     gap: 22px;
-    font-size: 16px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
     flex-wrap: wrap;
   }
@@ -1729,7 +1717,7 @@
     padding: 32px 24px;
     text-align: center;
     color: var(--v2-mute);
-    font-size: 14px;
+    font-size: var(--v2-text-body);
   }
   .bucket-list {
     max-height: 420px;
@@ -1754,18 +1742,18 @@
     min-width: 0;
   }
   .bucket-source {
-    font-size: 14.5px;
+    font-size: var(--v2-text-body);
     font-weight: 500;
     color: var(--v2-ink);
   }
   .bucket-meta {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-family: var(--v2-mono);
     margin-top: 2px;
   }
   .bucket-reason {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-body);
     font-style: italic;
     margin-top: 4px;
@@ -1785,7 +1773,7 @@
     border: 1px solid var(--v2-line);
     background: var(--v2-card);
     color: var(--v2-body);
-    font-size: 12.5px;
+    font-size: var(--v2-text-control);
     font-family: var(--v2-sans);
     cursor: pointer;
     transition:
@@ -1806,7 +1794,7 @@
     border: 1px solid var(--v2-line);
     border-radius: 8px;
     padding: 7px 10px;
-    font-size: 13px;
+    font-size: var(--v2-text-control);
     font-family: var(--v2-sans);
     color: var(--v2-ink);
     resize: none;
@@ -1853,7 +1841,7 @@
     gap: 18px;
   }
   .modal-title {
-    font-size: 19px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
     color: var(--v2-ink);
     display: flex;
@@ -1861,13 +1849,13 @@
     gap: 10px;
   }
   .modal-count {
-    font-size: 15px;
+    font-size: var(--v2-text-secondary);
     font-weight: 400;
     color: var(--v2-mute);
     font-family: var(--v2-mono);
   }
   .modal-subtitle {
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     margin-top: 3px;
   }
@@ -1901,7 +1889,7 @@
     border-radius: 8px;
     background: #fff1f0;
     color: #b42318;
-    font-size: 13.5px;
+    font-size: var(--v2-text-body);
   }
   .preview-summary {
     margin-top: 16px;
@@ -1921,13 +1909,13 @@
   }
   .preview-summary-label {
     display: block;
-    font-size: 12px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     margin-bottom: 4px;
   }
   .preview-summary-value {
     display: block;
-    font-size: 14px;
+    font-size: var(--v2-text-body);
     font-weight: 600;
     color: var(--v2-ink);
     overflow: hidden;
@@ -1943,7 +1931,7 @@
   .preview-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13.5px;
+    font-size: var(--v2-text-body);
   }
   .preview-table th,
   .preview-table td {
@@ -1953,7 +1941,7 @@
     vertical-align: top;
   }
   .preview-table th {
-    font-size: 12px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     font-weight: 600;
     background: var(--v2-neutral);
@@ -1967,13 +1955,13 @@
   }
   .preview-source-sub {
     margin-top: 2px;
-    font-size: 12px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     word-break: break-all;
   }
   .saved-note {
     margin-right: auto;
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     font-weight: 500;
     color: var(--v2-accent-ink);
   }
@@ -1997,12 +1985,12 @@
     min-width: 0;
   }
   .setting-title {
-    font-size: 14.5px;
+    font-size: var(--v2-text-body);
     font-weight: 600;
     color: var(--v2-ink);
   }
   .setting-desc {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     margin-top: 2px;
     line-height: 1.5;
@@ -2018,7 +2006,7 @@
     border: 1px solid var(--v2-line);
     border-radius: 10px;
     padding: 10px 12px;
-    font-size: 14px;
+    font-size: var(--v2-text-control);
     font-family: var(--v2-sans);
     color: var(--v2-ink);
     outline: none;
@@ -2029,7 +2017,7 @@
     border: 1px solid var(--v2-line);
     border-radius: 10px;
     padding: 10px 12px;
-    font-size: 13.5px;
+    font-size: var(--v2-text-control);
     font-family: var(--v2-mono);
     color: var(--v2-body);
     outline: none;
@@ -2077,7 +2065,7 @@
     border-radius: 999px;
     background: var(--v2-ink);
     color: #fff;
-    font-size: 14px;
+    font-size: var(--v2-text-body);
     font-weight: 500;
     font-family: var(--v2-sans);
     box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.28);
@@ -2095,12 +2083,12 @@
     gap: 12px;
   }
   .not-seeded-title {
-    font-size: 20px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
     color: var(--v2-ink);
   }
   .not-seeded-body {
-    font-size: 15px;
+    font-size: var(--v2-text-body);
     color: var(--v2-mute);
     max-width: 420px;
     line-height: 1.6;

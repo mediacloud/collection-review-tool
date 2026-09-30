@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+
   import { getReviewProject, getReviewProjects } from '../../lib/api.js';
 
   export let onNavigate = () => {};
@@ -29,7 +30,9 @@
     }
   }
 
-  $: unavailable = loading ? 'Loading projects and queues...' : loadError || (project ? 'No reviewer queues available.' : 'No review projects available.');
+  $: unavailable = loading
+    ? 'Loading projects and queues...'
+    : loadError || (project ? 'No reviewer queues available.' : 'No review projects available.');
 
   $: ROLES = [
     {
@@ -72,9 +75,7 @@
     <div class="index-header">
       <div class="eyebrow">V2 redesign · demo</div>
       <h1 class="index-h1">Collections Review Portal</h1>
-      <p class="index-sub">
-        Choose a role below to enter the interface.
-      </p>
+      <p class="index-sub">Choose a role below to enter the interface.</p>
     </div>
 
     <div class="roles-grid">
@@ -86,7 +87,11 @@
           </div>
           <div class="screens-list">
             {#each role.screens as s}
-              <button class="screen-card" disabled={!s.path} on:click={() => s.path && onNavigate(s.path)}>
+              <button
+                class="screen-card"
+                disabled={!s.path}
+                on:click={() => s.path && onNavigate(s.path)}
+              >
                 <div class="screen-card-left">
                   <div class="screen-title">{s.title}</div>
                   <div class="screen-sub">{s.sub}</div>
@@ -155,7 +160,7 @@
     margin-bottom: 52px;
   }
   .eyebrow {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     font-family: var(--v2-mono);
     color: var(--v2-mute);
     text-transform: uppercase;
@@ -171,7 +176,7 @@
     color: var(--v2-ink);
   }
   .index-sub {
-    font-size: 16px;
+    font-size: var(--v2-text-body);
     color: var(--v2-body);
     line-height: 1.55;
     margin: 0;
@@ -203,7 +208,7 @@
     padding: 0 4px;
   }
   .role-label {
-    font-size: 11px;
+    font-size: var(--v2-text-heading);
     font-family: var(--v2-mono);
     text-transform: uppercase;
     letter-spacing: 0.8px;
@@ -212,7 +217,7 @@
     margin-bottom: 6px;
   }
   .role-desc {
-    font-size: 13.5px;
+    font-size: var(--v2-text-body);
     color: var(--v2-mute);
     line-height: 1.5;
     margin: 0;
@@ -252,12 +257,12 @@
   }
 
   .screen-title {
-    font-size: 15px;
+    font-size: var(--v2-text-heading);
     font-weight: 600;
     color: var(--v2-ink);
   }
   .screen-sub {
-    font-size: 13.5px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
     margin-top: 3px;
   }
@@ -275,7 +280,7 @@
     width: 100%;
   }
   .footer-note {
-    font-size: 13px;
+    font-size: var(--v2-text-secondary);
     color: var(--v2-mute);
   }
 </style>

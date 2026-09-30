@@ -1,6 +1,6 @@
 <script>
-  import iso3166 from 'iso-3166-2';
   import * as rawIso3166 from 'iso-3166';
+  import iso3166 from 'iso-3166-2';
 
   export let item;
   export let onKeep;
