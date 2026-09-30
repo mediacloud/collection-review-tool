@@ -578,7 +578,9 @@
             <button
               class="decision-btn"
               style:border-color={highlight === d.k ? d.color : 'var(--v2-line)'}
-              style:background={highlight === d.k ? `color-mix(in srgb, ${d.color} 5.5%, transparent)` : '#fff'}
+              style:background={highlight === d.k
+                ? `color-mix(in srgb, ${d.color} 5.5%, transparent)`
+                : '#fff'}
               on:mouseenter={() => (highlight = d.k)}
               on:mouseleave={() => (highlight = null)}
               on:focus={() => (highlight = d.k)}
@@ -637,6 +639,7 @@
         <span class="queues-title">Reviewer queues</span>
         <button
           class="btn btn-sm"
+          class:btn-disabled-neutral={(p?.queues?.length ?? 0) > 0 && !queueGenerating}
           disabled={(p?.queues?.length ?? 0) > 0 || queueGenerating}
           title={(p?.queues?.length ?? 0) > 0
             ? 'Reviewer queues have already been generated.'

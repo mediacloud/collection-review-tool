@@ -20,6 +20,12 @@ body {
   white-space: nowrap;
 }
 
+.demo-root .btn.btn-disabled-neutral:disabled {
+  background: var(--v2-neutral);
+  color: var(--v2-mute);
+  cursor: not-allowed;
+}
+
 .demo-root .btn-sm {
   padding: 7px 12px;
   font-size: var(--v2-text-secondary);
