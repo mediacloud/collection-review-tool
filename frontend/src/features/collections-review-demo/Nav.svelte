@@ -26,7 +26,11 @@
           ]
         : role === 'queue'
           ? [
-              { n: 'My queue', to: queueGuid ? `/demo/reviews/${queueGuid}` : '/demo/projects', active: true },
+              {
+                n: 'My queue',
+                to: queueGuid ? `/demo/reviews/${queueGuid}` : '/demo/projects',
+                active: true,
+              },
               {
                 n: 'Decisions',
                 to: `/demo/review-projects/${projectGuid}/queues/${queueGuid}/decisions`,
@@ -55,11 +59,7 @@
   $: isSticky = variant === 'glass';
 
   function logoClick() {
-    if (role === 'queue' || role === 'queue-decisions') {
-      onNavigate(`/demo/review-projects/${projectGuid}/queues/${queueGuid}`);
-    } else {
-      onNavigate('/demo/manage');
-    }
+    onNavigate('/demo');
   }
 </script>
 
