@@ -9,10 +9,10 @@ load_dotenv()
 class Config:
     """Base configuration class."""
     # Database configuration
-    # Normalize postgres URLs from older schemes (e.g. dokku/postgres)
+    # Normalize PostgreSQL URLs to use the installed psycopg2 driver.
     _raw_db_url = os.getenv('DATABASE_URL', 'sqlite:///reviews.db')
-    if _raw_db_url.startswith('postgres://'):
-        _raw_db_url = _raw_db_url.replace('postgres://', 'postgresql://', 1)
+    if _raw_db_url.startswith(('postgres://', 'postgresql://')):
+        _raw_db_url = 'postgresql+psycopg2://' + _raw_db_url.split('://', 1)[1]
     DATABASE_URL = _raw_db_url
     
     # MediaCloud API configuration
